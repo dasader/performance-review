@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>전략기술 논문성과 분석 서비스 — 설계 (1/2)</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --fg: #1c1b19; --muted: #6b6862; --line: #e2ded6;
+    --card: #fff; --accent: #b45309; --code-bg: #f3f0ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16151a; --fg:#e9e6e0; --muted:#9a958c; --line:#2e2c33;
+            --card:#1e1d23; --accent:#f0a45a; --code-bg:#25242b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font: 16px/1.7 -apple-system, "Pretendard", "Noto Sans KR", system-ui, sans-serif; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 48px 24px 120px; }
+  h1 { font-size: 1.9rem; line-height:1.3; margin:0 0 .3em; letter-spacing:-.02em; }
+  h2 { font-size: 1.25rem; margin: 2.6em 0 .8em; padding-bottom:.4em;
+       border-bottom:1px solid var(--line); letter-spacing:-.01em; }
+  h3 { font-size: 1rem; margin: 1.8em 0 .5em; }
+  .sub { color: var(--muted); margin:0 0 2em; font-size:.95rem; }
+  .badge { display:inline-block; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
+           color:var(--accent); border:1px solid var(--accent); border-radius:99px;
+           padding:.15em .7em; margin-bottom:1em; }
+  table { width:100%; border-collapse:collapse; margin:1em 0; font-size:.92rem; }
+  th, td { text-align:left; padding:.6em .7em; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:.82rem; text-transform:uppercase; letter-spacing:.05em; }
+  .scroll { overflow-x:auto; }
+  pre { background:var(--code-bg); padding:1em 1.1em; border-radius:8px; overflow-x:auto;
+        font-size:.85rem; line-height:1.6; }
+  code { background:var(--code-bg); padding:.1em .35em; border-radius:4px; font-size:.88em; }
+  pre code { background:none; padding:0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px;
+          padding:1.1em 1.3em; margin:1em 0; }
+  .card.pick { border-color:var(--accent); border-width:1.5px; }
+  .card h3 { margin-top:0; }
+  .tag { font-size:.72rem; color:var(--accent); font-weight:700; letter-spacing:.05em; }
+  ul { padding-left:1.2em; } li { margin:.3em 0; }
+  .note { color:var(--muted); font-size:.9rem; }
+  .q { background:var(--card); border-left:3px solid var(--accent); padding:.8em 1.1em;
+       margin:1.4em 0; border-radius:0 8px 8px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<span class="badge">설계 검토 · 1/2</span>
+<h1>전략기술 분야별 논문성과 분석 서비스</h1>
+<p class="sub">
+OpenAlex · KCI에서 전략기술 분야별 한국 논문을 검색하고, abstract 기반으로
+주요 기술적 성과를 종합 정리해 마크다운/PDF 보고서로 출력하는 서비스.<br>
+레퍼런스: <code>references/17_Spec-investigation</code> (TechSpec) — 검색 에이전트·Gemini 호출·Docker 구성 재활용.
+</p>
+
+<h2>확정된 요구사항</h2>
+<div class="scroll">
+<table>
+<tr><th>항목</th><th>결정</th></tr>
+<tr><td>분야 정의</td><td>12대 국가전략기술 프리셋을 seed로 넣고, <b>하위 세부기술 단위까지 관리자가 관리</b></td></tr>
+<tr><td>한국 성과 판정</td><td>KCI 전수 + OpenAlex <code>authorships.institutions.country_code = KR</code> 포함 논문</td></tr>
+<tr><td>비용 절감</td><td>Gemini <b>Batch API</b> + 결과 DB 캐시</td></tr>
+<tr><td>인프라</td><td>FastAPI + PostgreSQL + 내장 asyncio 백그라운드 루프 (Celery/Redis 없음)</td></tr>
+<tr><td>보고서 구성</td><td>① 기본 통계 ② 주요 기술적 성과 서술 ③ 세부기술별 주제 클러스터링<br><span class="note">(연도간 변화·부상 키워드는 이번 범위에서 제외)</span></td></tr>
+<tr><td>LLM</td><td>Gemini 3.1 Flash-Lite — <b>map 단계 thinking low / reduce 단계 thinking high</b><br><span class="note">논문 1건 성과 추출은 추론 부담이 낮음. 전 단계 high 대비 비용 3~5배 절감</span></td></tr>
+</table>
+</div>
+
+<h2>핵심 선택지 — 논문 N건 → 분야 보고서</h2>
+
+<div class="card pick">
+  <span class="tag">추천 · 채택안</span>
+  <h3>A. 논문단위 map → 분야단위 reduce</h3>
+  <ul>
+    <li><b>map</b>: 논문 1건 = Batch 요청 1개. <code>title + abstract</code> →
+        <code>{세부기술 태그, 기술적 성과 요약 1~2문장, 성과유형(신소자/공정/알고리즘/성능향상…), 정량수치}</code> 구조화 추출</li>
+    <li><b>reduce</b>: 분야별로 map 결과(논문당 ~50토큰)를 한 번에 투입해 보고서 서술 + 클러스터링 (동기 1~2콜)</li>
+    <li>캐시가 <b>논문 단위</b>라 재분석·당해연도 갱신 시 신규 논문만 과금. 근거 논문 역추적 가능</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h3>B. 청크 요약 (30건씩 묶어 요약 → 요약 합성)</h3>
+  <p class="note">호출 수 1/30로 가장 저렴. 그러나 캐시 단위가 청크라 논문 1건만 늘어도 청크 전체 재호출 —
+  "동일 내용 검색 시 API 재호출 금지" 요구와 충돌. 근거 추적도 흐려짐.</p>
+</div>
+
+<div class="card">
+  <h3>C. abstract 전량을 1콜에 투입</h3>
+  <p class="note">구현 최단. 수천 건이면 컨텍스트 초과 + 누락·환각 위험, 캐시 불가.</p>
+</div>
+
+<p><b>결론:</b> A 채택. Batch API 50% 할인과 논문단위 캐시가 맞물려야 재호출 방지 요구가 실제로 성립.</p>
+
+<h3>규모 검증 — 한 세부기술에 논문 3,000건인 경우</h3>
+<div class="scroll">
+<table>
+<tr><th>단계</th><th>3,000건 기준</th></tr>
+<tr><td>사전 필터</td><td>DOI/title 중복 제거 · 한국 소속 필터 · 추출 캐시 히트 제외 → 실제 LLM 대상은 그보다 작음. 재실행 시엔 신규분만</td></tr>
+<tr><td>map 요청</td><td>3,000개 → JSONL 파일 업로드, 1,000건 단위 분할 제출</td></tr>
+<tr><td>map 토큰</td><td>입력 ~700/건 = 2.1M · 출력 ~250/건(thinking low) = 0.75M</td></tr>
+<tr><td>map 비용</td><td>Flash-Lite batch 기준 <b>대략 $0.2~0.4</b> <span class="note">(추정 · 구현 시 실단가 확인)</span></td></tr>
+<tr><td>소요</td><td>보통 수십 분, 상한 24h</td></tr>
+</table>
+</div>
+<p><b>병목은 map이 아니라 reduce.</b> 3,000건 요약을 한 콜에 넣으면 ~180K 토큰이라 컨텍스트에는 들어가도 종합 품질이 떨어짐.
+계층 구조가 이를 자연히 해소:</p>
+<pre><code>세부기술 A (300건) → reduce 1콜 (~18K)  ┐
+세부기술 B (250건) → reduce 1콜         ├→ 대분류 합성 1콜 (~20K)
+   … 세부기술 10개                      ┘</code></pre>
+<p>한 세부기술이 <b>500건을 넘으면</b> 성과유형/클러스터별 그룹 요약을 끼워 3단 reduce로 자동 분기.</p>
+<p>실행 전 관리자 화면에 <b>예상 규모·비용을 먼저 표시</b>하고 확정을 받음
+(검색만 선행 → “신규 1,240건, 예상 $0.4, 실행?”).</p>
+
+<h2>Rate limit 제어</h2>
+<p>Batch와 동기 호출은 제한 체계가 다르므로 경로를 분리해 다룬다.</p>
+<div class="scroll">
+<table>
+<tr><th>경로</th><th>실제 걸리는 제한</th><th>대응</th></tr>
+<tr><td>Batch 제출 (map)</td><td>RPM 아님 — 모델별 <b>enqueued token 총량</b>, 동시 batch job 수, 입력 파일 2GB</td><td>제출 전 토큰 합산 → 슬롯 게이트</td></tr>
+<tr><td>동기 호출 (reduce)</td><td>RPM · TPM</td><td>토큰버킷 2종 + 429 지수 백오프</td></tr>
+<tr><td>검색 API</td><td>OpenAlex polite pool ~10 req/s · KCI 동시성 3</td><td><code>asyncio.Semaphore</code></td></tr>
+</table>
+</div>
+
+<h3>사전 체크 (pre-flight)</h3>
+<ul>
+  <li>제출 대상 논문 리스트로 <b>예상 입력 토큰을 먼저 합산</b>. 추정식은 <code>문자수 / 4</code>
+      <span class="note">— <code>count_tokens</code> API를 논문마다 부르면 그 자체가 호출 낭비. 게이트 판단엔 ±20% 오차로 충분</span></li>
+  <li>진행 중 batch job의 enqueued 토큰 합 + 신규 예상치가 한도 이내일 때만 제출.
+      초과하면 <b>대기 큐</b>에 두고 백그라운드 루프가 슬롯이 비는 대로 순차 제출</li>
+  <li>파일당 요청 수 상한(<code>BATCH_MAX_REQUESTS_PER_FILE</code>, 기본 1,000)으로 분할</li>
+  <li>관리자 실행 확정 화면에 <b>예상 토큰·비용·제출 청크 수</b>를 함께 표시</li>
+</ul>
+
+<h3>런타임 방어 (사전 체크만으로는 부족)</h3>
+<p class="note">동일 프로젝트 쿼터를 다른 분야 작업·타 서비스가 함께 소비하므로 429는 어차피 발생한다. 게이트와 재시도를 <b>둘 다</b> 둔다.</p>
+<ul>
+  <li>429 / <code>RESOURCE_EXHAUSTED</code> → 지수 백오프(1·2·4·8·16초, 최대 5회), <code>Retry-After</code> 헤더 우선</li>
+  <li>동기 호출은 RPM·TPM 두 개의 토큰버킷을 모두 통과해야 발사</li>
+  <li>재시도 소진 시 해당 청크만 <code>failed</code> 표시 후 계속 진행 — 전체 잡을 죽이지 않음. 관리자 화면에서 실패분만 재실행</li>
+</ul>
+<p>한도값은 모델·티어별로 달라지므로 <b>전부 <code>.env</code></b>:
+<code>BATCH_MAX_ENQUEUED_TOKENS</code>, <code>BATCH_MAX_CONCURRENT_JOBS</code>,
+<code>BATCH_MAX_REQUESTS_PER_FILE</code>, <code>SYNC_RPM</code>, <code>SYNC_TPM</code>.
+코드에 하드코딩하지 않는다.</p>
+
+<h2>데이터 모델</h2>
+<pre><code>fields (12대 대분류)
+  └ subfields (세부기술)          ← 검색식(query)을 여기에 보유
+       └ analyses (subfield_id, year, status, report_md, stats_json)
+            └ analysis_papers (analysis_id, paper_id)
+
+papers (paper_key, title, abstract, year, journal, authors, source, korea_flag)
+    paper_key = DOI ‖ kci_id ‖ openalex_id
+
+paper_extractions (paper_key, subfield_id, tech_summary,
+                   achievement_type, metrics_json, model_ver)</code></pre>
+
+<h2>캐시 전략 (3중 키)</h2>
+<div class="scroll">
+<table>
+<tr><th>단계</th><th>캐시 키</th><th>효과</th></tr>
+<tr><td>① 검색</td><td><code>hash(query + year + source)</code></td><td>히트 시 OpenAlex/KCI API 재호출 없음</td></tr>
+<tr><td>② 추출</td><td><code>papers.paper_key</code> (+ <code>model_ver</code>)</td><td>논문당 Gemini 추출 평생 1회</td></tr>
+<tr><td>③ 보고서</td><td><code>analyses(subfield_id, year)</code></td><td>동일 분야·연도 재요청 시 저장본 반환</td></tr>
+</table>
+</div>
+
+<h3>연도 처리 — 프리즈 없음 (전량 증분 갱신)</h3>
+<p>과거연도 freeze는 <b>폐기</b>. 전년도 논문이 올해 새로 포착되는 경로가 여러 개이기 때문:</p>
+<div class="scroll">
+<table>
+<tr><th>요소</th><th>영향</th></tr>
+<tr><td>색인 지연</td><td>KCI 발행 후 3~6개월, OpenAlex는 Crossref 경유로 수주~수개월. 2025-12 발행 논문이 2026-03에야 검색됨</td></tr>
+<tr><td>online-first 연도 재배정</td><td>선공개 후 정식 호 게재 시 <code>publication_year</code>가 사후 변경</td></tr>
+<tr><td>메타데이터 사후 보정</td><td>저자 소속(=한국 판정 근거)·abstract가 나중에 채워짐. 최초엔 제외됐던 논문이 이후 KR로 확정</td></tr>
+<tr><td>검색식 변경</td><td>관리자가 검색식을 고치면 과거연도 보고서도 stale. 프리즈면 낡은 결과가 그대로 남음</td></tr>
+<tr><td>인용수</td><td>계속 증가하는 값 → “언제 기준”인지 명시 필요</td></tr>
+</table>
+</div>
+<ul>
+  <li><b>모든 연도가 증분 재실행 대상.</b> 캐시가 논문 단위라 재실행 비용은 신규분에만 발생 — 프리즈로 얻는 이득이 거의 없음</li>
+  <li><code>analyses</code>에 <b><code>snapshot_at</code></b>(최종 수집 시점)과 <b><code>query_hash</code></b> 기록.
+      검색식이 바뀌면 해시 불일치로 해당 연도가 자동 <b>“갱신 필요”</b> 표시</li>
+  <li>관리자 화면에 연도별 <code>최종수집일 / 논문수 / 상태(최신·갱신필요)</code>를 노출, 실행 대상 연도를 체크해 실행</li>
+  <li>기본 실행 범위는 <b>최근 3개년</b>으로 제한해 습관적 전량 재실행 방지</li>
+  <li>인용수 통계에는 <code>snapshot_at</code> 기준임을 보고서에 명시</li>
+  <li><b>분야(대분류) 보고서</b>: 하위 세부기술 보고서들을 상위 합성 1콜로 결합</li>
+</ul>
+
+<div class="q">
+<b>1/2 확정 사항</b>
+<ul>
+  <li>✅ A안(map→reduce) 채택 · map thinking low / reduce thinking high</li>
+  <li>✅ 검색식은 <b>세부기술(중점기술)에만</b> 보유 — 대분류는 하위 합성만 담당</li>
+  <li>✅ 과거연도 프리즈 폐기 → <code>snapshot_at</code> + <code>query_hash</code> 기반 증분 갱신</li>
+  <li>✅ Rate limit — 제출 전 토큰 게이트 + 429 백오프 병행, 한도값은 전부 <code>.env</code></li>
+</ul>
+다음 <b>(2/2)</b>: 파이프라인 상세 · 관리자 기능(admin-key) · 통계 항목 · UI/PDF · Docker/.env 구성.
+</div>
+
+<hr style="border:none;border-top:1px solid var(--line);margin:4em 0 3em">
+
+<span class="badge">설계 검토 · 2/2</span>
+<h1 style="font-size:1.5rem">파이프라인 · 관리자 · UI · 배포</h1>
+
+<h2>파이프라인 (6단계)</h2>
+<div class="scroll">
+<table>
+<tr><th>#</th><th>단계</th><th>내용</th><th>LLM</th></tr>
+<tr><td>1</td><td><code>search</code></td><td>세부기술 검색식 → OpenAlex(연도+KR 필터) · KCI 병렬 검색. DOI/title 정규화 후 중복 제거 → <code>papers</code> upsert</td><td>—</td></tr>
+<tr><td>2</td><td><code>filter</code></td><td>한국 판정(KCI 전수 / OpenAlex <code>country_code=KR</code>), abstract 없는 레코드 제외, <code>paper_extractions</code> 캐시 히트 제외 → <b>실제 map 대상 확정</b></td><td>—</td></tr>
+<tr><td>3</td><td><code>map</code></td><td>Batch JSONL 제출 → 폴링 → 결과 파싱 → <code>paper_extractions</code> 저장</td><td>Flash-Lite<br>thinking <b>low</b></td></tr>
+<tr><td>4</td><td><code>stats</code></td><td>기본 통계 전량 <b>코드로 집계</b> (LLM 미사용 — 숫자를 모델에 맡기면 틀림)</td><td>—</td></tr>
+<tr><td>5</td><td><code>reduce</code></td><td>세부기술별 보고서: 주요 기술적 성과 서술 + 주제 클러스터링. 500건 초과 시 그룹 요약 삽입(3단)</td><td>Flash-Lite<br>thinking <b>high</b></td></tr>
+<tr><td>6</td><td><code>rollup</code></td><td>대분류 보고서 = 하위 세부기술 보고서 합성 1콜</td><td>동일</td></tr>
+</table>
+</div>
+
+<h3>잡 상태 머신 · 재시작 안전성</h3>
+<pre><code>pending → searching → extracting → reducing → done
+                          │            │
+                          └──→ failed ←┘   (실패 청크만 격리, 부분 재실행 가능)</code></pre>
+<p><b>Batch는 최대 24h이므로 컨테이너 재시작이 반드시 걸린다.</b> 진행 상태·batch job id를 전부 DB에 두고,
+FastAPI startup의 백그라운드 루프가 <b>미완 잡을 스캔해 이어받는다</b>. 메모리에 상태를 남기지 않는다.</p>
+
+<h2>관리자 기능</h2>
+<h3>인증</h3>
+<p><code>.env</code>의 <code>ADMIN_KEY</code> 단일 값. 관리자 API는 <code>X-Admin-Key</code> 헤더 검증,
+프론트는 입력받아 <code>sessionStorage</code> 보관.
+<span class="note">— 사용자 계정/역할 체계는 만들지 않는다. 운영자 1인 전제.</span></p>
+
+<h3>화면</h3>
+<div class="scroll">
+<table>
+<tr><th>화면</th><th>기능</th></tr>
+<tr><td>분야 관리</td><td>대분류 12개 seed. 세부기술 CRUD(추가·수정·삭제·활성화)</td></tr>
+<tr><td>검색식 편집</td><td>세부기술별 <code>query</code>(공통) + <code>query_kci</code>(선택 override, 비면 공통값 사용)<br><b>미리보기 버튼</b>: 검색만 실행해 소스별 건수·샘플 20건 표시 — <b>LLM 미호출 = 비용 0</b></td></tr>
+<tr><td>실행 대시보드</td><td>세부기술 × 연도 격자에 <code>최종수집일 / 논문수 / 상태(최신·갱신필요·미실행)</code>. 대상 체크 → 실행</td></tr>
+<tr><td>실행 확정</td><td>검색 선행 후 <b>신규 논문 수 · 예상 토큰 · 예상 비용 · 제출 청크 수</b> 표시 → 확정 버튼</td></tr>
+<tr><td>실행 이력</td><td>잡 목록·진행률·소요시간·실제 토큰 사용량, 실패분 재실행</td></tr>
+</table>
+</div>
+
+<h2>기본 통계 항목 (코드 집계)</h2>
+<ul>
+  <li>연도별 논문 수 · 소스 구성(KCI 국내지 vs 국제지 비율)</li>
+  <li>상위 기관 20 · 상위 저널 20 · 상위 저자 20</li>
+  <li>국제공동연구 비율 (KR 외 국가 소속 공저자 포함 논문 비중) · 주요 협력국</li>
+  <li>인용수 분포 (중앙값 · 상위 10% 임계값 · 피인용 상위 논문 리스트)</li>
+  <li>세부기술별 논문 분포 · 성과유형별 분포(신소자/공정/알고리즘/성능향상…)</li>
+</ul>
+<p class="note">인용수는 시간에 따라 변하는 값이므로 보고서에 <code>snapshot_at</code> 기준임을 명시한다.</p>
+
+<h2>프론트엔드 · PDF</h2>
+<ul>
+  <li>공개 화면 3개: <b>분야 목록</b> → <b>분야 상세</b>(연도 선택) → <b>보고서</b>(통계 표·차트 + 성과 서술 + 클러스터 표)</li>
+  <li>URL 공유가 필요하므로 <code>react-router</code> 최소 사용 (레퍼런스의 step-state 방식은 공유 불가라 미채택)</li>
+  <li>차트: Recharts (레퍼런스와 동일 스택)</li>
+  <li>디자인: <code>/frontend</code> 스킬 + <code>../trade-ews</code> 패밀리룩</li>
+</ul>
+<h3>PDF 출력</h3>
+<p>보고서 페이지에 <code>@media print</code> 스타일을 적용하고 <code>window.print()</code> → “PDF로 저장”.
+<span class="note">— 레퍼런스에서 weasyprint 서버사이드 생성이 실패했던 전례가 있고, 브라우저 인쇄는 의존성 0에 한글 폰트·차트 렌더링이 그대로 재현된다.
+서버사이드 PDF 파일이 꼭 필요하면 Playwright 컨테이너 추가가 대안이지만 이미지 용량이 크게 늘어난다.</span></p>
+
+<h2>배포 구성</h2>
+<p><b>포트 NN = 03</b> — PORTS.md에서 비어 있는 가장 작은 번호는 00이지만,
+<code>80</code>+<code>00</code> = 8000을 nst-wiki가 이미 점유 중(위험 기본값)이라 회피.</p>
+<div class="scroll">
+<table>
+<tr><th>컨테이너</th><th>호스트 포트</th><th>비고</th></tr>
+<tr><td><code>api</code> (FastAPI + 백그라운드 루프)</td><td>8003</td><td>Celery 없음 — 루프가 api 프로세스 내부에 상주</td></tr>
+<tr><td><code>web</code> (nginx + React 빌드)</td><td>8103</td><td></td></tr>
+<tr><td><code>db</code> (PostgreSQL 16)</td><td>5403</td><td></td></tr>
+</table>
+</div>
+<p>PORTS.md 레지스트리에 <code>03 | performance-review</code> 한 줄 추가.</p>
+
+<h3>.env</h3>
+<pre><code>GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.1-flash-lite
+THINKING_MAP=low
+THINKING_REDUCE=high
+
+KCI_API_KEY=
+OPENALEX_MAILTO=            # polite pool
+
+ADMIN_KEY=
+DATABASE_URL=
+
+BATCH_MAX_ENQUEUED_TOKENS=
+BATCH_MAX_CONCURRENT_JOBS=2
+BATCH_MAX_REQUESTS_PER_FILE=1000
+SYNC_RPM=
+SYNC_TPM=
+
+REDUCE_GROUP_THRESHOLD=500  # 초과 시 3단 reduce
+DEFAULT_YEAR_RANGE=3        # 기본 실행 범위(최근 N개년)</code></pre>
+
+<h2>테스트 범위</h2>
+<p class="note">프레임워크·픽스처 없이 <code>pytest</code> 소수만. 깨지면 조용히 돈이 새는 로직에 한정.</p>
+<ul>
+  <li>증분 로직 — 캐시 히트 논문이 map 대상에서 제외되는가</li>
+  <li><code>query_hash</code> 변경 시 “갱신 필요” 판정</li>
+  <li>rate 게이트 — 한도 초과 시 제출이 대기 큐로 가는가</li>
+  <li>한국 판정 필터 (KCI 전수 / OpenAlex KR 포함)</li>
+</ul>
+
+<div class="q">
+<b>2/2에서 확인 부탁드리는 부분</b>
+<ul>
+  <li>PDF를 <b>브라우저 인쇄</b>로 갈지, 서버사이드 PDF 파일 생성이 꼭 필요한지</li>
+  <li>검색식을 <b>공통 <code>query</code> + KCI override</b> 구조로 두는 게 맞는지 (OpenAlex는 불리언 문법, KCI는 키워드 위주라 완전 동일 문자열은 어려움)</li>
+  <li>포트 NN=03 배정</li>
+  <li>통계 항목 중 빠진 것 / 뺄 것</li>
+</ul>
+</div>
+
+</div>
+</body>
+</html>
