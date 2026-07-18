@@ -121,9 +121,86 @@ OpenAlex · KCI에서 전략기술 분야별 한국 논문을 검색하고, abst
 <tr><th>경로</th><th>실제 걸리는 제한</th><th>대응</th></tr>
 <tr><td>Batch 제출 (map)</td><td>RPM 아님 — 모델별 <b>enqueued token 총량</b>, 동시 batch job 수, 입력 파일 2GB</td><td>제출 전 토큰 합산 → 슬롯 게이트</td></tr>
 <tr><td>동기 호출 (reduce)</td><td>RPM · TPM</td><td>토큰버킷 2종 + 429 지수 백오프</td></tr>
-<tr><td>검색 API</td><td>OpenAlex polite pool ~10 req/s · KCI 동시성 3</td><td><code>asyncio.Semaphore</code></td></tr>
+<tr><td>검색 API</td><td>OpenAlex — <b>일일 비용 예산 $1/day</b>가 실질 제약 (초당 100req는 여유) · KCI 문서화된 한도 없음</td><td>예산 게이트 + 헤더 실측 · KCI 동시성 3</td></tr>
 </table>
 </div>
+
+<h3>OpenAlex — 2026년 현행 기준</h3>
+<div class="scroll">
+<table>
+<tr><th>항목</th><th>현행</th></tr>
+<tr><td>인증</td><td><b>API 키 필수</b> (2026-02-13~). 쿼리 파라미터 <code>api_key=</code></td></tr>
+<tr><td>mailto / polite pool</td><td><b>폐지.</b> <code>mailto</code> 파라미터는 무시됨</td></tr>
+<tr><td>과금 단위</td><td><b>요청 건당</b> — 반환 레코드 수와 무관</td></tr>
+<tr><td>단가</td><td>singleton(ID/DOI 단건) 무료 · list+filter <code>$0.0001</code> · <b>full-text search <code>$0.001</code></b> · content download <code>$0.01</code></td></tr>
+<tr><td>무료 한도</td><td><b>$1/day</b> (UTC 자정 리셋) = filter 약 10,000콜 또는 search 약 1,000콜</td></tr>
+<tr><td>rate limit</td><td>100 req/s — 병목 아님</td></tr>
+<tr><td><code>per_page</code></td><td>최대 <b>100</b>. basic paging 상한 10,000건, 초과 시 cursor</td></tr>
+<tr><td>잔여 확인</td><td>응답 <code>X-RateLimit-*</code> 헤더 11종 + <code>meta</code>에 해당 요청 비용 포함</td></tr>
+</table>
+</div>
+
+<h4>공유 키 대응</h4>
+<p>동일 키를 다른 서비스와 공유하므로 일일 $1 예산을 나눠 쓴다.
+<b>잔여를 추정하지 않는다</b> — 매 응답의 <code>X-RateLimit-Remaining</code>에 타 서비스 소비분까지 반영된 실측값이 온다.</p>
+<ul>
+  <li><code>OPENALEX_DAILY_BUDGET_USD</code>(기본 0.5) — 자체 누적 사용액이 넘으면 신규 검색 중단</li>
+  <li>실행 확정 화면에 <b>예상 콜수·비용·현재 잔여 예산</b> 표시. 부족하면 실행 거부 + UTC 리셋 시각 안내</li>
+  <li>429는 두 종류 — 초당 한도 초과(일시적)만 지수 백오프, <b>크레딧 소진은 잡을 <code>paused</code> 처리 후 다음날 재개</b>.
+      <code>X-RateLimit-Remaining</code>으로 판별</li>
+</ul>
+
+<h4>콜수 절감</h4>
+<ul>
+  <li><b>연도 범위를 한 번에</b> — <code>publication_year:2024-2026</code> 페이징 후 코드에서 연도 분할 → 콜수 1/3</li>
+  <li><code>per_page=100</code> 고정, 10,000건 초과분만 cursor</li>
+  <li>검색 결과 캐시(<code>query_hash</code>)로 재실행 0콜</li>
+  <li><code>papers</code> 전역 테이블로 세부기술 간·연도 간 중복 논문 재조회 없음</li>
+  <li>DOI 단건 보강은 singleton이라 <b>무료</b></li>
+</ul>
+
+<h4>실측 확인 <span class="note">(2026-07-18 · live API)</span></h4>
+<div class="scroll">
+<table>
+<tr><th>확인 항목</th><th>결과</th></tr>
+<tr><td>abstract 취득 비용</td><td><b>추가 콜 0.</b> list 응답에 <code>abstract_inverted_index</code> 인라인 포함.
+  <code>select=</code>에 넣으면 함께 반환 — <b>3,000건 = 30콜에 abstract까지 전부 확보</b>.
+  단어→위치 역색인이라 코드에서 문자열 복원 필요</td></tr>
+<tr><td><code>title_and_abstract.search</code> 단가</td><td><code>cost_usd</code> <b>0.001</b> — <code>search=</code>와 동일.
+  <b>search 계열은 어떻게 감싸도 $0.001</b>. $0.0001은 검색어 없는 순수 메타 필터에만 적용
+  <span class="note">(앞서 세운 “10배 절감 가능” 가설은 기각)</span></td></tr>
+<tr><td><code>per_page=200</code></td><td>실제로 200건 반환(<code>meta.per_page: 200</code>). 문서상 상한은 100.
+  미문서화 동작이므로 <b>기본 100</b> + <code>OPENALEX_PER_PAGE</code>로 조정</td></tr>
+<tr><td>abstract 누락률</td><td>표본 100건 중 82건만 보유 → <b>약 18% 누락</b> (출판사 정책, 특히 Elsevier)</td></tr>
+</table>
+</div>
+<p><b>abstract 누락 대응</b>: 해당 논문은 map 대상에서 빠지므로 보고서에
+<b>“검색 M건 / 분석 대상 N건 (abstract 미보유 제외)”</b>를 반드시 명시해 통계 신뢰도를 유지한다.
+KCI 결과와 병합되며 일부 보완됨.</p>
+<p><b>재계산된 검색 비용</b>: 3,000건 = 30콜 × $0.001 = <b>$0.03</b>.</p>
+<p class="note">여전히 확인 불가(구현 중 응답으로 검증): 헤더 방식 키 전달 지원, 429의 <code>Retry-After</code> 제공 여부.</p>
+<p class="note">KCI는 공개된 rate 문서가 없어 동시성 3으로 보수적 제한.</p>
+
+<h3>대규모 검색 결과 대응 <span class="note">(한 세부기술 40,000편 급)</span></h3>
+<div class="scroll">
+<table>
+<tr><th>측면</th><th>40,000편 기준</th></tr>
+<tr><td>OA 콜</td><td>400콜 × $0.001 = <b>$0.40</b> — 일일 예산 $1의 40%를 한 기술이 소진</td></tr>
+<tr><td>OA 페이징</td><td>basic paging 10,000 상한 초과 → <b>cursor 필수</b></td></tr>
+<tr><td>map</td><td>입력 28M / 출력 10M 토큰 → 대략 <b>$3~5</b>, batch 24h 상한에 근접</td></tr>
+<tr><td>reduce</td><td>요약만 2M 토큰 → 3단 reduce로도 빠듯</td></tr>
+</table>
+</div>
+<p><b>파이프라인을 무한 확장하는 방향으로 대응하지 않는다.</b> 한 세부기술에서 40,000편이 나오는 것은
+검색식이 너무 넓다는 신호이지 처리해야 할 정상 부하가 아니며, 견디게 만들면 잘못된 검색식이 조용히 통과한다.</p>
+<ul>
+  <li><b>하드 가드</b> — <code>MAX_PAPERS_PER_ANALYSIS</code>(기본 5,000) 초과 시 실행 차단 +
+      “검색식을 좁히거나 세부기술을 분할하라” 안내. 미리보기가 실행 전 건수를 보여주므로 여기서 걸린다</li>
+  <li><b>통계와 LLM 분석의 모집단 분리</b> — 통계는 검색 콜만으로 메타데이터가 확보되므로 <b>전수로 내도 추가 비용 0</b>.
+      비싼 것은 map뿐이므로 강행 시 <b>성과 서술만 표본</b>(인용수 상위 N + 최신 N)으로 처리하고
+      보고서에 “성과 서술은 상위 N건 기준, 통계는 전수”를 명시</li>
+  <li><b>cursor 페이징</b> — 10,000건 상한 때문에 가드와 무관하게 구현</li>
+</ul>
 
 <h3>사전 체크 (pre-flight)</h3>
 <ul>
@@ -287,7 +364,8 @@ THINKING_MAP=low
 THINKING_REDUCE=high
 
 KCI_API_KEY=
-OPENALEX_MAILTO=            # polite pool
+OPENALEX_API_KEY=              # 필수 (mailto/polite pool 폐지)
+OPENALEX_DAILY_BUDGET_USD=0.5  # 공유 키에서 이 서비스 몫
 
 ADMIN_KEY=
 DATABASE_URL=
@@ -298,8 +376,10 @@ BATCH_MAX_REQUESTS_PER_FILE=1000
 SYNC_RPM=
 SYNC_TPM=
 
-REDUCE_GROUP_THRESHOLD=500  # 초과 시 3단 reduce
-DEFAULT_YEAR_RANGE=3        # 기본 실행 범위(최근 N개년)</code></pre>
+OPENALEX_PER_PAGE=100          # 문서상 상한. 200도 실동작하나 미문서화
+MAX_PAPERS_PER_ANALYSIS=5000   # 초과 시 실행 차단(검색식 축소 유도)
+REDUCE_GROUP_THRESHOLD=500     # 초과 시 3단 reduce
+DEFAULT_YEAR_RANGE=3           # 기본 실행 범위(최근 N개년)</code></pre>
 
 <h2>테스트 범위</h2>
 <p class="note">프레임워크·픽스처 없이 <code>pytest</code> 소수만. 깨지면 조용히 돈이 새는 로직에 한정.</p>
