@@ -111,6 +111,7 @@ def test_defaults_match_spec():
     assert s.thinking_reduce == "high"
     assert s.openalex_per_page == 100
     assert s.openalex_daily_budget_usd == 0.5
+    assert s.openalex_search_cost_usd == 0.001
     assert s.max_papers_per_analysis == 5000
     assert s.reduce_group_threshold == 500
     assert s.default_year_range == 3
@@ -136,6 +137,7 @@ class Settings(BaseSettings):
     openalex_api_key: str
     openalex_per_page: int = 100
     openalex_daily_budget_usd: float = 0.5
+    openalex_search_cost_usd: float = 0.001  # search 계열 요청 1건 단가
     kci_api_key: str = ""
     kci_concurrency: int = 3
 
@@ -269,6 +271,7 @@ THINKING_REDUCE=high
 OPENALEX_API_KEY=
 OPENALEX_PER_PAGE=100
 OPENALEX_DAILY_BUDGET_USD=0.5
+OPENALEX_SEARCH_COST_USD=0.001
 KCI_API_KEY=
 KCI_CONCURRENCY=3
 
@@ -2029,6 +2032,16 @@ def test_group_splits_by_achievement_type_over_threshold(monkeypatch):
     assert len(groups["공정"]) == 3
 
 
+def test_group_resplits_a_type_that_still_exceeds_threshold(monkeypatch):
+    """성과유형이 하나뿐이면 유형 분할만으로는 임계값 아래로 내려가지 않는다."""
+    monkeypatch.setattr(settings, "reduce_group_threshold", 2)
+    ext = [_ext(f"a{i}", "공정") for i in range(5)]
+    groups = reducer.group_for_reduce(ext)
+    assert len(groups) == 3
+    assert all(len(items) <= 2 for items in groups.values())
+    assert sum(len(items) for items in groups.values()) == 5
+
+
 def test_format_includes_title_year_and_summary():
     papers = {"k1": Paper(paper_key="k1", title="HBM 논문", year=2025, journal="J",
                           abstract="A", source="openalex", citations=4)}
@@ -2207,11 +2220,23 @@ def group_for_reduce(extractions: list[PaperExtraction]) -> dict[str, list[Paper
     if len(extractions) <= settings.reduce_group_threshold:
         return {"전체": extractions}
 
-    groups: dict[str, list[PaperExtraction]] = defaultdict(list)
+    by_type: dict[str, list[PaperExtraction]] = defaultdict(list)
     for e in extractions:
-        groups[e.achievement_type or "기타"].append(e)
+        by_type[e.achievement_type or "기타"].append(e)
+
+    # 한 성과유형에 전부 몰리면 유형 분할만으로는 임계값 아래로 내려가지 않는다.
+    # 그런 그룹은 임계값 크기로 다시 쪼갠다.
+    size = settings.reduce_group_threshold
+    groups: dict[str, list[PaperExtraction]] = {}
+    for name, items in by_type.items():
+        if len(items) <= size:
+            groups[name] = items
+            continue
+        for i in range(0, len(items), size):
+            groups[f"{name} ({i // size + 1})"] = items[i:i + size]
+
     logger.info("[reduce] %d건 → %d개 그룹으로 분할", len(extractions), len(groups))
-    return dict(groups)
+    return groups
 
 
 async def reduce_subfield(
@@ -2534,6 +2559,11 @@ async def _do_extract(db: Session, analysis: Analysis) -> None:
             return
         mapper.save_results(db, analysis, results or [])
         analysis.batch_job_id = None
+        db.commit()
+        # 청크가 여러 개면 아직 제출 못한 논문이 남아 있다. reducing으로 넘기지 않고
+        # extracting에 머물러 다음 루프에서 다음 청크를 제출한다.
+        if mapper.pending_papers(db, analysis, _analysis_papers(db, analysis)):
+            return
         analysis.status = "reducing"
         db.commit()
         return
@@ -2938,7 +2968,7 @@ async def preview(payload: PreviewIn, db: Session = Depends(get_db)):
             for p in sample.papers[:20]
         ],
         "estimated_pages": pages,
-        "estimated_cost_usd": round(pages * 0.001, 4),
+        "estimated_cost_usd": round(pages * settings.openalex_search_cost_usd, 4),
         "budget_spent": round(budget.spent_today(db), 4),
         "budget_limit": settings.openalex_daily_budget_usd,
         "over_limit": count > settings.max_papers_per_analysis,
