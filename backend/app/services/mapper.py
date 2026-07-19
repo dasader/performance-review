@@ -10,10 +10,16 @@ from app.prompts import MAP_INSTRUCTION, MAP_SCHEMA, map_user_text
 
 logger = logging.getLogger(__name__)
 
+# MAP_SCHEMA(prompts.py)에 필드를 추가/변경할 때마다 이 값을 올릴 것 — model_ver에
+# 섞여 들어가 기존 추출 결과를 자동으로 재추출 대상(superseded)으로 만든다. 기존
+# 행은 지우지 않는다(pending_papers가 새 model_ver로만 조회하므로 자연히 무시된다).
+EXTRACTION_SCHEMA_VERSION = 2
+
 
 def model_ver() -> str:
-    """모델이나 thinking 설정이 바뀌면 캐시를 무효화해야 하므로 버전 문자열에 함께 넣는다."""
-    return f"{settings.gemini_model}/{settings.thinking_map}"
+    """모델·thinking 설정·추출 스키마 버전이 바뀌면 캐시를 무효화해야 하므로
+    버전 문자열에 함께 넣는다."""
+    return f"{settings.gemini_model}/{settings.thinking_map}/v{EXTRACTION_SCHEMA_VERSION}"
 
 
 def pending_papers(db: Session, analysis: Analysis, papers: list[Paper]) -> list[Paper]:
@@ -155,6 +161,8 @@ def save_results(db: Session, analysis: Analysis, results: list[dict]) -> int:
         row.tech_summary = item.get("tech_summary", "")
         row.achievement_type = item.get("achievement_type")
         row.metrics_json = item.get("metrics") or []
+        row.approach = item.get("approach") or ""
+        row.improvement = item.get("improvement") or ""
         saved += 1
     db.commit()
     return saved

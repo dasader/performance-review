@@ -99,7 +99,8 @@ _SAMPLE_MAX_CHARS = 300
 
 
 def _download_results(job) -> list[dict]:
-    """결과 JSONL을 파싱해 [{key, tech_summary, achievement_type, metrics}] 로 정규화한다.
+    """결과 JSONL을 파싱해 [{key, tech_summary, achievement_type, metrics, approach,
+    improvement}] 로 정규화한다.
 
     개별 요청이 실패했거나 JSON이 깨진 건은 건너뛴다 — 논문 한 편 때문에 전체
     분석을 죽이지는 않되, 총 건수 대비 스킵 건수를 집계해 호출자가 눈치채지
@@ -151,6 +152,8 @@ def _download_results(job) -> list[dict]:
             "tech_summary": payload.get("tech_summary", ""),
             "achievement_type": payload.get("achievement_type"),
             "metrics": payload.get("metrics") or [],
+            "approach": payload.get("approach", ""),
+            "improvement": payload.get("improvement", ""),
         })
 
     if skipped:

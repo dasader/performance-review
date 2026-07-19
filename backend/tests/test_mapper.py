@@ -53,6 +53,25 @@ def test_pending_excludes_cache_hits(ctx):
     assert mapper.pending_papers(db, a, [p1]) == []
 
 
+def test_model_ver_includes_extraction_schema_version(ctx):
+    assert f"v{mapper.EXTRACTION_SCHEMA_VERSION}" in mapper.model_ver()
+
+
+def test_pending_reextracts_when_schema_version_differs(ctx, monkeypatch):
+    """스키마 버전이 바뀌면 옛 model_ver로 저장된 추출은 캐시 히트가 아니라
+    재추출 대상이어야 한다 — 기존 행은 지우지 않고 그대로 둔 채(superseded)."""
+    db, a = ctx
+    p1 = _paper(db, "k1", "있음")
+    old_ver = f"{mapper.settings.gemini_model}/{mapper.settings.thinking_map}/v1"
+    db.add(PaperExtraction(paper_key="k1", subfield_id=a.subfield_id,
+                           tech_summary="옛 스키마 결과", model_ver=old_ver))
+    db.commit()
+
+    assert [p.paper_key for p in mapper.pending_papers(db, a, [p1])] == ["k1"]
+    # 옛 행은 지워지지 않고 남아 있어야 한다.
+    assert db.query(PaperExtraction).filter(PaperExtraction.model_ver == old_ver).count() == 1
+
+
 def test_pending_ignores_extraction_from_another_subfield(ctx):
     db, a = ctx
     p1 = _paper(db, "k1", "있음")
@@ -83,6 +102,11 @@ def test_build_requests_serializes_sdk_types_into_expected_wire_shape(ctx):
     assert req["generationConfig"]["responseMimeType"] == "application/json"
     assert req["generationConfig"]["responseSchema"] == MAP_SCHEMA
     assert req["generationConfig"]["thinkingConfig"]["thinkingLevel"] == "LOW"
+    # approach/improvement가 요청 스키마에 실려 있어야 새 필드를 모델에 요구할 수 있다.
+    assert "approach" in MAP_SCHEMA["properties"]
+    assert "improvement" in MAP_SCHEMA["properties"]
+    assert "approach" in MAP_SCHEMA["required"]
+    assert "improvement" in MAP_SCHEMA["required"]
     # 손으로 만든 snake_case 키가 남아있지 않은지 확인
     assert "system_instruction" not in req
     assert "generation_config" not in req
@@ -108,13 +132,29 @@ def test_save_results_writes_extractions(ctx):
     _paper(db, "k1", "있음")
     saved = mapper.save_results(db, a, [
         {"key": "k1", "tech_summary": "TSV 피치 개선", "achievement_type": "공정",
-         "metrics": [{"name": "피치", "value": "20", "unit": "um"}]},
+         "metrics": [{"name": "피치", "value": "20", "unit": "um"}],
+         "approach": "저온 본딩 공정 적용", "improvement": "기존 대비 피치 절반 축소"},
     ])
     assert saved == 1
     row = db.query(PaperExtraction).one()
     assert row.tech_summary == "TSV 피치 개선"
     assert row.achievement_type == "공정"
     assert row.metrics_json[0]["unit"] == "um"
+    assert row.approach == "저온 본딩 공정 적용"
+    assert row.improvement == "기존 대비 피치 절반 축소"
+
+
+def test_save_results_defaults_approach_and_improvement_to_empty_when_missing(ctx):
+    """응답에 approach/improvement가 없어도(구 모델 응답 등) 저장이 실패하지 않고
+    빈 문자열로 채워져야 한다."""
+    db, a = ctx
+    _paper(db, "k1", "있음")
+    mapper.save_results(db, a, [
+        {"key": "k1", "tech_summary": "A", "achievement_type": "공정", "metrics": []},
+    ])
+    row = db.query(PaperExtraction).one()
+    assert row.approach == ""
+    assert row.improvement == ""
 
 
 def test_save_results_is_idempotent(ctx):

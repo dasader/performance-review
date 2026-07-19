@@ -15,9 +15,10 @@ class _FakeGenerate:
         return self.return_value
 
 
-def _ext(key, atype):
+def _ext(key, atype, approach="", improvement=""):
     return PaperExtraction(paper_key=key, subfield_id=1, tech_summary=f"{key} 성과",
-                           achievement_type=atype, metrics_json=[], model_ver="m")
+                           achievement_type=atype, metrics_json=[], model_ver="m",
+                           approach=approach, improvement=improvement)
 
 
 def test_group_returns_single_bucket_under_threshold():
@@ -57,6 +58,24 @@ def test_format_includes_title_year_and_summary():
 def test_format_skips_extractions_without_a_matching_paper():
     text = reducer.format_extractions([_ext("missing", "공정")], {})
     assert text == ""
+
+
+def test_format_includes_approach_and_improvement_when_present():
+    papers = {"k1": Paper(paper_key="k1", title="HBM 논문", year=2025, journal="J",
+                          abstract="A", source="openalex", citations=4)}
+    ext = _ext("k1", "공정", approach="저온 본딩 공정 적용", improvement="기존 대비 피치 절반 축소")
+    text = reducer.format_extractions([ext], papers)
+    assert "접근: 저온 본딩 공정 적용" in text
+    assert "개선점: 기존 대비 피치 절반 축소" in text
+
+
+def test_format_omits_empty_approach_and_improvement():
+    """빈 approach/improvement는 토큰 낭비이므로 줄에 아예 나오면 안 된다."""
+    papers = {"k1": Paper(paper_key="k1", title="HBM 논문", year=2025, journal="J",
+                          abstract="A", source="openalex", citations=4)}
+    text = reducer.format_extractions([_ext("k1", "공정")], papers)
+    assert "접근:" not in text
+    assert "개선점:" not in text
 
 
 async def test_reduce_subfield_skips_llm_when_body_empty_single_group(monkeypatch):

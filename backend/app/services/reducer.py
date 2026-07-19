@@ -25,6 +25,10 @@ def format_extractions(
             f"{m.get('name')} {m.get('value')}{m.get('unit', '')}" for m in (e.metrics_json or [])
         )
         line = f"- [{paper.year or '연도미상'}] {paper.title} | {e.achievement_type or '기타'} | {e.tech_summary}"
+        if e.approach:
+            line += f" | 접근: {e.approach}"
+        if e.improvement:
+            line += f" | 개선점: {e.improvement}"
         if metrics:
             line += f" | 수치: {metrics}"
         lines.append(line)

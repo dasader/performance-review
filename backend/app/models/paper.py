@@ -35,4 +35,6 @@ class PaperExtraction(Base):
     tech_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
     achievement_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     metrics_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    approach: Mapped[str | None] = mapped_column(Text, nullable=True)
+    improvement: Mapped[str | None] = mapped_column(Text, nullable=True)
     model_ver: Mapped[str] = mapped_column(String(80), nullable=False)

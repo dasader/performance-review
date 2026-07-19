@@ -175,3 +175,31 @@ def test_download_results_logs_problem_line_samples(monkeypatch, caplog):
     assert len(sample_logs) == 1
     # 최대 3건만 샘플로 남겨야 한다(5건 전부 남기지 않음).
     assert sample_logs[0].count('"key"') <= 3
+
+
+def test_download_results_passes_through_approach_and_improvement(monkeypatch):
+    payload = json.dumps({
+        "tech_summary": "요약", "achievement_type": "공정", "metrics": [],
+        "approach": "저온 본딩 공정 적용", "improvement": "기존 대비 피치 절반 축소",
+    })
+    line = json.dumps({
+        "key": "k1",
+        "response": {"candidates": [{"content": {"parts": [{"text": payload}]}}]},
+    })
+    monkeypatch.setattr(gemini_batch, "_get_client", lambda: _fake_client_with_download(line))
+
+    results = gemini_batch._download_results(_FakeJob())
+
+    assert results[0]["approach"] == "저온 본딩 공정 적용"
+    assert results[0]["improvement"] == "기존 대비 피치 절반 축소"
+
+
+def test_download_results_defaults_approach_and_improvement_when_absent(monkeypatch):
+    """모델 응답에 approach/improvement가 없어도(구 응답 등) 빈 문자열로 채워야
+    save_results로 넘어가는 데이터가 KeyError 없이 안전해야 한다."""
+    monkeypatch.setattr(gemini_batch, "_get_client", lambda: _fake_client_with_download(_good_line("k1")))
+
+    results = gemini_batch._download_results(_FakeJob())
+
+    assert results[0]["approach"] == ""
+    assert results[0]["improvement"] == ""
