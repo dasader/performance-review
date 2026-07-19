@@ -1,6 +1,8 @@
+from typing import Annotated
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field as PydanticField, StringConstraints, model_validator
 from sqlalchemy.orm import Session
 
 from app.clients import kci, openalex
@@ -13,25 +15,36 @@ from app.services import budget, runner
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
+NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
+class _YearRangeMixin(BaseModel):
+    year_from: int = PydanticField(ge=1900, le=2100)
+    year_to: int = PydanticField(ge=1900, le=2100)
+
+    @model_validator(mode="after")
+    def _check_year_range(self):
+        if self.year_from > self.year_to:
+            raise ValueError(
+                f"시작 연도({self.year_from})가 종료 연도({self.year_to})보다 늦습니다."
+            )
+        return self
+
 
 class SubfieldIn(BaseModel):
     field_id: int
-    name: str
-    query: str
+    name: NonBlankStr
+    query: NonBlankStr
     query_kci: str | None = None
     active: bool = True
 
 
-class PreviewIn(BaseModel):
+class PreviewIn(_YearRangeMixin):
     subfield_id: int
-    year_from: int
-    year_to: int
 
 
-class RunIn(BaseModel):
-    subfield_ids: list[int]
-    year_from: int
-    year_to: int
+class RunIn(_YearRangeMixin):
+    subfield_ids: list[int] = PydanticField(min_length=1)
     force: bool = False
 
 
@@ -76,6 +89,15 @@ def delete_subfield(subfield_id: int, db: Session = Depends(get_db)):
     row = db.get(Subfield, subfield_id)
     if not row:
         raise HTTPException(status_code=404, detail="세부기술을 찾을 수 없습니다.")
+    history_count = db.query(Analysis).filter(Analysis.subfield_id == subfield_id).count()
+    if history_count:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"분석 이력이 {history_count}건 있어 삭제할 수 없습니다. "
+                f"목록에서 감추려면 비활성화(active=false)하세요."
+            ),
+        )
     db.delete(row)
     db.commit()
     return {"ok": True}
@@ -87,6 +109,11 @@ async def preview(payload: PreviewIn, db: Session = Depends(get_db)):
     subfield = db.get(Subfield, payload.subfield_id)
     if not subfield:
         raise HTTPException(status_code=404, detail="세부기술을 찾을 수 없습니다.")
+
+    try:
+        budget.check_budget(db, 2 * settings.openalex_search_cost_usd)
+    except budget.BudgetExceeded as e:
+        raise HTTPException(status_code=429, detail=str(e)) from e
 
     async with httpx.AsyncClient() as client:
         count, cost = await openalex.count_only(
@@ -104,7 +131,8 @@ async def preview(payload: PreviewIn, db: Session = Depends(get_db)):
 
     return {
         "openalex_count": count,
-        "kci_count": len(kci_papers),
+        "kci_sample_count": len(kci_papers),
+        "kci_sample_truncated": len(kci_papers) >= 20,
         "samples": [
             {"title": p["title"], "year": p["year"], "journal": p["journal"],
              "has_abstract": bool(p["abstract"])}
@@ -121,6 +149,15 @@ async def preview(payload: PreviewIn, db: Session = Depends(get_db)):
 
 @router.post("/run")
 def run(payload: RunIn, db: Session = Depends(get_db)):
+    if budget.spent_today(db) >= settings.openalex_daily_budget_usd:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"OpenAlex 일일 예산이 이미 소진되었습니다. "
+                f"UTC {budget.reset_time_utc():%Y-%m-%d %H:%M} 이후 재시도하세요."
+            ),
+        )
+
     queued, blocked = [], []
     for subfield_id in payload.subfield_ids:
         subfield = db.get(Subfield, subfield_id)
