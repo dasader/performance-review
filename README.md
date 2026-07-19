@@ -57,7 +57,7 @@ NN=03. 레지스트리는 `../PORTS.md` 참고 — NN=00은 backend 포트가 80
 | `OPENALEX_API_KEY` | (빈 값) | 2026-02-13부터 필수 |
 | `OPENALEX_DAILY_BUDGET_USD` | `0.5` | 이 서비스가 쓸 몫의 상한(키 자체는 다른 서비스와 공유, 전체 한도 $1/day) |
 | `OPENALEX_SEARCH_COST_USD` | `0.001` | search 계열 요청 1건 단가(참고용 — 실비용은 응답 `meta.cost_usd`로 집계) |
-| `KCI_API_KEY` | (빈 값) | |
+| `KCI_API_KEY` | (빈 값) | **비우면 KCI를 건너뛰고 OpenAlex만 사용한다(의도적 skip). 설정했는데 API가 에러를 돌려주면 분석이 실패한다** — 아래 "KCI 실패는 조용히 넘어가지 않는다" 참고 |
 | `KCI_MAX_PAGES` | `20` | KCI는 연도 필터 API가 없어 코드에서 걸러내는데, 대상 연도 논문이 적으면 페이지를 무한정 넘길 수 있어 상한을 둠. 도달 시 결과가 잘릴 수 있고 경고 로그가 남는다 |
 | `ADMIN_KEY` | (빈 값) | 관리자 API/화면 인증용 단일 키 |
 | `MAX_PAPERS_PER_ANALYSIS` | `5000` | 검색 결과가 이 값을 넘으면 실행 자체를 차단(하드 가드) |
@@ -90,5 +90,12 @@ NN=03. 레지스트리는 `../PORTS.md` 참고 — NN=00은 backend 포트가 80
   재시작되어도 진행 상태와 batch job id가 DB에 있으므로 잡은 이어서 처리된다.
 - **KCI 페이지 상한**: KCI는 연도 필터 API가 없어 코드에서 걸러내며, 대상 연도 논문이 적은 검색식이면
   `KCI_MAX_PAGES`(기본 20)에 먼저 걸려 결과가 잘릴 수 있다.
+- **KCI 실패는 조용히 넘어가지 않는다**: KCI는 키 만료·한도 초과를 HTTP 200 + 본문
+  `<resultMsg>`(예: "사용기간이 종료되었습니다.")로 알린다. 이를 "결과 0건"으로 처리하면
+  보고서가 국내지 성과를 0건으로 **단정**하게 되므로, 이 경우 `KciApiError`로 분석을 실패시킨다.
+  KCI 없이 돌리려면 `KCI_API_KEY`를 비워 명시적으로 skip 모드를 택한다.
+- **KCI 검색식은 한글로 넣어야 한다**: KCI는 국내 학술지 색인이라 영문 키워드로는 거의 걸리지 않는다.
+  세부기술의 `query`(OpenAlex용, 영문)와 별도로 `query_kci`(한글)를 채워야 국내지 성과가 잡힌다.
+  비워 두면 `query`를 그대로 쓰므로 영문 검색식이 KCI에 그대로 들어간다.
 - **`thinking_level` 허용값 미확정**: `gemini-3.1-flash-lite`의 `thinking_level` 허용값이 공식 문서에
   명시돼 있지 않다. API가 `.env`의 `THINKING_MAP`(`low`)을 거부하면 `.env`에서 값을 조정한다(코드 변경 불필요).

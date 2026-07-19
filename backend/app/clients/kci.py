@@ -34,11 +34,37 @@ def _int_or(text: str | None, default: int) -> int:
         return default
 
 
+class KciApiError(RuntimeError):
+    """KCI가 HTTP 200으로 돌려주는 본문 에러(키 만료·한도 초과 등).
+
+    이걸 잡지 않으면 "결과 0건"과 구분되지 않아, 보고서가 국내지 성과를
+    0건으로 단정하게 된다. 실제로는 API가 죽어 있는 상황이다.
+    """
+
+
+def _check_result_error(root: ET.Element) -> None:
+    """`<outputData><result><resultMsg>`에 담겨 오는 에러를 검출한다.
+
+    실측 응답 예(키 만료):
+        <outputData><result><resultMsg>사용기간이 종료되었습니다.</resultMsg></result></outputData>
+    정상 응답에는 `<record>`가 있고 이 `result` 블록이 없다.
+    """
+    msg_el = root.find("outputData/result/resultMsg")
+    if msg_el is None:
+        return
+    message = (msg_el.text or "").strip()
+    if not message:
+        return
+    raise KciApiError(f"KCI API 오류: {message}")
+
+
 def _parse_search_xml(xml_text: str) -> list[dict]:
     try:
         root = ET.fromstring(xml_text)
     except ET.ParseError as e:
         raise RuntimeError(f"KCI XML 파싱 실패: {e}") from e
+
+    _check_result_error(root)
 
     papers: list[dict] = []
     for record in root.iter("record"):
@@ -83,6 +109,11 @@ async def search(
     query: str, year_from: int, year_to: int, *, client: httpx.AsyncClient, limit: int
 ) -> list[dict]:
     """KCI 키워드 검색. 키 미설정 시 조용히 빈 리스트(graceful no-op).
+
+    반대로 키가 **설정돼 있는데 API가 에러를 돌려주면** `KciApiError`를 올려 분석을
+    실패시킨다. 이 서비스의 한국 논문 판정은 "KCI 전수 + OpenAlex KR"이므로, KCI가
+    죽은 채 낸 결과는 국내지 성과를 0건으로 단정하게 되어 체계적으로 틀린다.
+    KCI 없이 돌리려면 `KCI_API_KEY`를 비워 명시적으로 skip 모드를 택한다.
 
     KCI는 연도 필터 파라미터가 없어 응답을 받은 뒤 코드에서 연도를 거른다.
     """

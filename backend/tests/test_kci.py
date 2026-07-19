@@ -82,3 +82,24 @@ async def test_search_stops_at_kci_max_pages(monkeypatch, caplog):
     assert papers == []
     assert call_count == settings.kci_max_pages
     assert any("상한" in r.message for r in caplog.records)
+
+
+def test_result_error_is_raised_not_swallowed():
+    """KCI는 키 만료 등을 HTTP 200 + 본문 resultMsg로 알린다.
+
+    이걸 "결과 0건"으로 삼키면 보고서가 국내지 성과를 0건으로 단정하게 된다.
+    실측 응답 형태(2026-07, 키 만료 시).
+    """
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+<MetaData>
+  <inputData><key>x</key><apiCode>articleSearch</apiCode></inputData>
+  <outputData><result><resultMsg>사용기간이 종료되었습니다.</resultMsg></result></outputData>
+</MetaData>"""
+    with pytest.raises(kci.KciApiError) as e:
+        kci._parse_search_xml(xml)
+    assert "사용기간이 종료" in str(e.value)
+
+
+def test_normal_response_does_not_raise():
+    """정상 응답에는 result/resultMsg 블록이 없으므로 그대로 파싱돼야 한다."""
+    assert len(kci._parse_search_xml(XML)) == 2
