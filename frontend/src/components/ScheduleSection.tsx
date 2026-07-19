@@ -133,7 +133,7 @@ export default function ScheduleSection({
       {data && draft && (
         <>
           {/* 설정 편집 */}
-          <div className="mt-5 border-t border-border pt-4">
+          <div className="mt-5">
             <h3 className="text-sm font-medium text-ink-light">설정 편집</h3>
             <div className="mt-3 flex flex-wrap items-end gap-4">
               <div>
@@ -189,8 +189,10 @@ export default function ScheduleSection({
               </div>
             </div>
 
-            <div className="mt-4 flex items-center justify-end gap-3">
-              {saveError && <p className="text-sm text-danger">{saveError}</p>}
+            {/* 두 버튼을 한 줄에 세로 정렬한다. 성격이 다르므로(값 저장 vs 되돌릴 수 없는
+                실행) 좌우로 갈라 놓고, 즉시 실행 쪽에만 경고색 테두리를 줘 구분한다.
+                박스로 감싸면 카드 안에 카드가 생겨 오히려 산만해진다. */}
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
                 disabled={saving}
@@ -199,35 +201,27 @@ export default function ScheduleSection({
               >
                 {saving ? "저장 중…" : "설정 저장"}
               </button>
-            </div>
-          </div>
-
-          {/* 즉시 실행 — 설정 저장과 성격이 다르다(되돌릴 수 없는 실행 vs 값 저장이라
-              나란히 두면 오조작하기 쉽다). 경고색 박스로 공간을 분리한다. */}
-          <div className="mt-5 border border-warning/30 bg-warning/5 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-ink">지금 즉시 실행</p>
-                <p className="mt-0.5 text-xs text-ink-light">
-                  스케줄 시각과 무관하게 활성 세부기술 전체를 지금 강제로 재분석합니다. 이미 완료된
-                  연도도 다시 큐잉되며, 되돌릴 수 없습니다.
-                </p>
-              </div>
               <button
                 type="button"
                 disabled={runningNow}
                 onClick={handleRunNow}
-                className="shrink-0 border border-warning/50 px-4 py-2 text-sm font-medium text-warning transition-colors hover:bg-warning/10 disabled:opacity-40"
+                className="border border-warning/50 px-4 py-2 text-sm font-medium text-warning transition-colors hover:bg-warning/10 disabled:opacity-40"
               >
                 {runningNow ? "실행 요청 중…" : "지금 실행"}
               </button>
             </div>
+
+            <p className="mt-2 text-right text-xs text-muted">
+              지금 실행은 스케줄 시각과 무관하게 활성 세부기술 전체를 재분석하며 되돌릴 수 없습니다.
+            </p>
+
+            {saveError && <p className="mt-2 text-sm text-danger">{saveError}</p>}
             {runNowResult && (
-              <p className="mt-2 text-sm text-positive">
+              <p className="mt-2 text-right text-sm text-positive">
                 {runNowResult.queued_count.toLocaleString()}건이 대기열에 추가되었습니다.
               </p>
             )}
-            {runNowError && <p className="mt-2 text-sm text-danger">{runNowError}</p>}
+            {runNowError && <p className="mt-2 text-right text-sm text-danger">{runNowError}</p>}
           </div>
 
           {/* 실행 이력 */}
@@ -238,10 +232,10 @@ export default function ScheduleSection({
             )}
             {data.history.length > 0 && (
               <>
-                <div className="mt-2 overflow-x-auto border-t border-border">
+                <div className="mt-2 overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-border text-left text-xs text-muted">
+                      <tr className="border-b border-border-light text-left text-xs text-muted">
                         <th className="py-2 pr-3 font-medium">월</th>
                         <th className="py-2 pr-3 font-medium">실행 시각</th>
                         <th className="py-2 pr-3 font-medium">종류</th>
@@ -251,7 +245,7 @@ export default function ScheduleSection({
                     </thead>
                     <tbody>
                       {visibleHistory.map((h) => (
-                        <tr key={h.run_month} className="border-b border-border-light">
+                        <tr key={h.run_month}>
                           <td className="py-3 pr-3 font-mono text-xs tabular-nums text-ink-light">
                             {h.run_month.slice(0, 7)}
                           </td>
