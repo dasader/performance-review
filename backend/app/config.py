@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     # API가 값을 거부하면 .env에서 조정한다 — 코드 변경 불필요.
     thinking_map: str = "low"
     thinking_reduce: str = "high"
+    # 모델 기본 출력 상한에 기대지 않고 명시한다. reduce는 깊이 있는 서술형 보고서를
+    # 요구하므로(주제별 다단락 서술 + 표 여러 개) 넉넉히 잡는다. thinking 토큰도 이
+    # 상한에 포함되어 과금/차감된다.
+    gemini_max_output_tokens: int = 16000
 
     openalex_api_key: str
     openalex_per_page: int = 100

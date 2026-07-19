@@ -65,6 +65,7 @@ async def generate(system: str, user: str, *, thinking: str, max_retries: int = 
     config = types.GenerateContentConfig(
         system_instruction=system,
         thinking_config=types.ThinkingConfig(thinking_level=thinking),
+        max_output_tokens=settings.gemini_max_output_tokens,
     )
 
     def _call():
