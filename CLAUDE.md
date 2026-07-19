@@ -6,9 +6,9 @@
 ## 실행 명령어
 
 ```bash
-# 스택 기동
+# 스택 기동 — api 컨테이너 entrypoint(docker-entrypoint.sh)가 uvicorn 전에
+# alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0003
 docker compose up -d --build
-docker compose exec api alembic upgrade head   # 현재 head: 0002
 
 # 로그
 docker compose logs -f api

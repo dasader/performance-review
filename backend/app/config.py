@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     http_max_attempts: int = 5
     http_timeout_seconds: float = 60.0
 
+    # M16: 관리자 인증이 정적 헤더 하나뿐이라 CORS를 "*"로 열면 방어선이 사실상 없다.
+    # 쉼표 구분 오리진 목록. 기본값은 web(nginx) 컨테이너가 서비스되는 오리진으로 좁힌다.
+    cors_origins: str = "http://localhost:8103"
+
     model_config = SettingsConfigDict(env_file=".env")
 
 

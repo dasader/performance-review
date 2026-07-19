@@ -30,6 +30,22 @@ _FIRST_NONEMPTY_WINS = ("journal", "doi", "year")  # 둘 다 있으면 먼저 �
 _LONGER_LIST_WINS = ("authors", "institutions", "countries")  # 원소 더 많은 쪽
 
 
+def combine_source(existing_source: str | None, new_source: str | None) -> str:
+    """I10: 어느 소스에서 발견됐는지를 잃지 않게 소스 라벨을 합성한다.
+
+    양쪽에서 같은 논문이 발견되면 "both"로 남긴다. Paper.source는 단일 문자열
+    컬럼이라 새 컬럼 없이 값의 의미를 "양쪽에서 발견됨"까지 확장하는 쪽을 택했다 —
+    stats.by_source가 openalex-only / kci-only / both를 그대로 Counter로 구분할 수 있다.
+    한쪽만 다시 검색돼도(예: 재수집 시 KCI가 이번엔 안 걸림) 기존 "both" 판정이
+    깎이면 안 되므로 이미 both면 그대로 both를 유지한다.
+    """
+    if not existing_source:
+        return new_source or ""
+    if not new_source or new_source == existing_source:
+        return existing_source
+    return "both"
+
+
 def merge_papers(*sources: list[dict]) -> list[dict]:
     """paper_key 기준으로 필드 단위 병합한다 (레코드 통째 선택이 아님).
 
@@ -58,7 +74,8 @@ def merge_papers(*sources: list[dict]) -> list[dict]:
                     existing[field] = paper[field]
             existing["citations"] = max(existing.get("citations") or 0, paper.get("citations") or 0)
             existing["korea_flag"] = bool(existing.get("korea_flag")) or bool(paper.get("korea_flag"))
-            # source, paper_key: 먼저 온 소스(existing)를 그대로 유지한다.
+            existing["source"] = combine_source(existing.get("source"), paper.get("source"))
+            # paper_key: 먼저 온 소스(existing)를 그대로 유지한다(식별자라 병합 대상 아님).
     return list(merged.values())
 
 
@@ -126,6 +143,12 @@ def upsert_papers(db: Session, papers: list[dict]) -> list[Paper]:
         for field in _FIELDS:
             attr = _JSON_MAP.get(field, field)
             new_value = paper.get(field)
+            if field == "source":
+                # I10: 단일 collect() 호출 안의 병합(merge_papers)뿐 아니라, 서로 다른
+                # 시점의 재검색에 걸쳐서도 "양쪽에서 발견됨" 판정이 유지돼야 한다 —
+                # 그러지 않으면 이번 회차에 KCI가 안 걸렸다는 이유로 both가 openalex로
+                # 조용히 되돌아간다.
+                new_value = combine_source(row.source, new_value)
             if new_value or not getattr(row, attr, None):
                 setattr(row, attr, new_value)
         rows.append(row)

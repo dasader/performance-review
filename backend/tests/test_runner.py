@@ -25,6 +25,14 @@ def ctx():
     return db, sf
 
 
+def _search_paper(key, **kw):
+    base = {"paper_key": key, "title": "T", "abstract": "A", "year": 2025, "journal": None,
+            "doi": None, "authors": [], "institutions": [], "countries": [],
+            "citations": 0, "source": "openalex", "korea_flag": True}
+    base.update(kw)
+    return base
+
+
 def test_enqueue_creates_one_analysis_per_year(ctx):
     db, sf = ctx
     created = runner.enqueue(db, sf, 2024, 2026, force=False)
@@ -252,7 +260,10 @@ async def test_extract_submits_when_slot_available(ctx, monkeypatch):
     db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
     db.commit()
 
-    async def fake_submit_async(requests):
+    seen = {}
+
+    async def fake_submit_async(requests, analysis_id=None):
+        seen["analysis_id"] = analysis_id
         return "job-ok"
 
     monkeypatch.setattr(runner.gemini_batch, "submit_async", fake_submit_async)
@@ -260,6 +271,8 @@ async def test_extract_submits_when_slot_available(ctx, monkeypatch):
     await runner.advance(db, a)
     db.refresh(a)
     assert a.batch_job_id == "job-ok"
+    # M17: 잡↔분석 역추적을 위해 analysis id가 submit_async까지 전달돼야 한다.
+    assert seen["analysis_id"] == a.id
 
 
 async def test_search_attempts_increments_on_transient_rate_limit(ctx, monkeypatch):
@@ -314,6 +327,89 @@ async def test_search_attempts_fails_after_max_and_resets_on_success(ctx, monkey
     db.refresh(a2)
     assert a2.search_attempts == 0
     assert a2.status == "extracting"
+
+
+async def test_do_search_searched_count_is_cumulative_not_just_latest(ctx, monkeypatch):
+    """I7: searched_count는 이번 검색 결과 건수가 아니라 AnalysisPaper 누적 링크 수여야
+    stats.compute(_analysis_papers 기준)와 같은 값을 낸다. 검색식을 좁혀 재실행해도(이번
+    결과가 더 적어도) 과거에 걸렸던 논문은 증분 정책상 계속 링크돼 있어야 한다."""
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="searching", query_hash="h")
+    db.add(a)
+    db.commit()
+
+    async def fake_collect_first(db, subfield, year_from, year_to, *, client):
+        return search.SearchResult(
+            papers=[_search_paper("k1"), _search_paper("k2")], total_count=2
+        )
+
+    monkeypatch.setattr(runner.search, "collect", fake_collect_first)
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert a.searched_count == 2
+
+    a.status = "searching"
+    db.commit()
+
+    async def fake_collect_second(db, subfield, year_from, year_to, *, client):
+        # 검색식이 좁아져 이번 결과는 1건뿐이라고 가정.
+        return search.SearchResult(papers=[_search_paper("k1")], total_count=1)
+
+    monkeypatch.setattr(runner.search, "collect", fake_collect_second)
+    await runner.advance(db, a)
+    db.refresh(a)
+    # k1, k2 모두 여전히 링크돼 있어야 한다(프리즈 없는 증분 갱신 정책).
+    assert a.searched_count == 2
+    linked = {r.paper_id for r in db.query(AnalysisPaper.paper_id).filter(
+        AnalysisPaper.analysis_id == a.id
+    )}
+    assert len(linked) == 2
+
+
+def test_enqueue_clears_analysis_papers_when_query_changed(ctx):
+    """I7: 검색식이 바뀌어(query_hash 불일치) 되살아나는 경우, 옛 검색식으로만 걸리던
+    논문이 모집단에 영구히 남지 않도록 기존 AnalysisPaper 링크를 비워야 한다."""
+    db, sf = ctx
+    first = runner.enqueue(db, sf, 2025, 2025, force=False)[0]
+    p = Paper(paper_key="old", title="T", abstract="A", year=2025, source="openalex",
+               korea_flag=True)
+    db.add(p)
+    db.commit()
+    db.add(AnalysisPaper(analysis_id=first.id, paper_id=p.id))
+    first.status = "done"
+    first.searched_count = 1
+    db.commit()
+
+    sf.query = "quantum error correction"  # 검색식 변경 → query_hash 불일치
+    db.commit()
+
+    again = runner.enqueue(db, sf, 2025, 2025, force=False)
+    assert len(again) == 1
+    assert db.query(AnalysisPaper).filter(
+        AnalysisPaper.analysis_id == again[0].id
+    ).count() == 0
+    # papers 테이블 자체와 캐시 자산은 건드리지 않는다.
+    assert db.query(Paper).filter(Paper.paper_key == "old").count() == 1
+
+
+def test_enqueue_keeps_analysis_papers_when_force_rerun_with_same_query(ctx):
+    """검색식이 그대로인데 force로 재실행하는 경우는 증분 갱신이므로 기존 링크를
+    지우면 안 된다(I7의 정리는 query_hash 불일치 상황에만 적용)."""
+    db, sf = ctx
+    first = runner.enqueue(db, sf, 2025, 2025, force=False)[0]
+    p = Paper(paper_key="old", title="T", abstract="A", year=2025, source="openalex",
+               korea_flag=True)
+    db.add(p)
+    db.commit()
+    db.add(AnalysisPaper(analysis_id=first.id, paper_id=p.id))
+    first.status = "done"
+    db.commit()
+
+    again = runner.enqueue(db, sf, 2025, 2025, force=True)
+    assert len(again) == 1
+    assert db.query(AnalysisPaper).filter(
+        AnalysisPaper.analysis_id == again[0].id
+    ).count() == 1
 
 
 def test_enqueue_resets_extract_and_search_attempts_on_revival(ctx):

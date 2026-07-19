@@ -15,10 +15,11 @@ cp .env.example .env
 # 키가 비어 있어도 컨테이너는 기동된다(Gemini 클라이언트는 지연 생성) — 실제 분석 실행 시에만 필요.
 
 docker compose up -d --build
-docker compose exec api alembic upgrade head
 ```
 
-세 컨테이너(`api` / `web` / `db`)가 모두 `running`이 되면 준비 완료.
+`api` 컨테이너는 기동 시 entrypoint에서 `alembic upgrade head`를 자동으로 실행한 뒤에야
+uvicorn을 띄운다(수동 실행 불필요) — 새 마이그레이션이 추가된 채 재배포해도 조용히 구
+스키마로 뜨지 않는다. 세 컨테이너(`api` / `web` / `db`)가 모두 `running`이 되면 준비 완료.
 
 - API: http://localhost:8003 (`/api/health`, `/api/fields`, `/api/admin/*`)
 - 웹: http://localhost:8103 (nginx가 `/api/*`를 `api` 컨테이너로 프록시)

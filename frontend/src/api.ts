@@ -221,7 +221,8 @@ export interface DashboardResponse {
 
 export interface PreviewSample {
   title: string;
-  year: number;
+  // 백엔드가 OpenAlex publication_year를 그대로 통과시키므로 null일 수 있다(openalex.py::_parse_work).
+  year: number | null;
   journal: string | null;
   has_abstract: boolean;
 }

@@ -256,7 +256,7 @@ export default function RunDialog({
               <ul className="mt-1 space-y-1 text-xs text-muted">
                 {preview.samples.slice(0, 5).map((s, i) => (
                   <li key={i}>
-                    [{s.year}] {s.title}
+                    [{s.year ?? "연도 미상"}] {s.title}
                     {s.journal && <span className="text-faint"> · {s.journal}</span>}
                     {!s.has_abstract && <span className="ml-1 text-warning">(abstract 없음)</span>}
                   </li>

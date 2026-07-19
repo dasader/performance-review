@@ -2,7 +2,12 @@ import { useEffect } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { Stats } from "../api";
 
-const SOURCE_LABEL: Record<string, string> = { openalex: "OpenAlex", kci: "KCI" };
+// I10: source는 openalex/kci 단일 소스뿐 아니라 "both"(양쪽 모두에서 발견됨)도 가진다.
+const SOURCE_LABEL: Record<string, string> = {
+  openalex: "국제지(OpenAlex)만",
+  kci: "KCI만",
+  both: "중복(KCI+국제지)",
+};
 
 export default function StatsPanel({ stats }: { stats: Stats | Record<string, never> }) {
   // ResponsiveContainer는 마운트 시점 DOM 크기만 측정한다. 인쇄 시 @page margin으로

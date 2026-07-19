@@ -28,6 +28,18 @@ def test_by_year_and_source_counts():
     assert s["by_source"] == {"openalex": 2, "kci": 1}
 
 
+def test_by_source_distinguishes_both_from_single_source():
+    """I10: 양쪽 소스에서 발견된 논문(source="both")과 한쪽에서만 발견된 논문이
+    by_source에서 구분돼야 "KCI에 있는 논문 수"(kci+both)와 "국제지에만 있는 논문
+    수"(openalex only)를 각각 계산할 수 있다."""
+    papers = [
+        _p("a", source="both"), _p("b", source="both"),
+        _p("c", source="openalex"), _p("d", source="kci"),
+    ]
+    s = stats.compute(papers, [], snapshot_at=datetime(2026, 7, 18))
+    assert s["by_source"] == {"both": 2, "openalex": 1, "kci": 1}
+
+
 def test_international_collaboration_ratio_and_partners():
     papers = [
         _p("a", countries_json=["KR"]),

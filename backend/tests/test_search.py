@@ -60,6 +60,26 @@ def test_merge_keeps_distinct_keys():
     assert {p["paper_key"] for p in merged} == {"a", "b"}
 
 
+def test_merge_marks_source_both_when_found_in_both_sources():
+    """I10: merge_papers가 먼저 온 소스의 source 라벨만 유지하면, 양쪽에서 발견된
+    논문이 전부 openalex로 집계되어 KCI 국내지 비율이 체계적으로 과소 표시된다.
+    어느 쪽 순서로 병합하든 양쪽에서 발견된 논문은 "both"로 남아야 한다."""
+    oa = [_paper("10.1/x", source="openalex")]
+    kci = [_paper("10.1/x", source="kci")]
+    merged = merge_papers(oa, kci)
+    assert merged[0]["source"] == "both"
+
+    merged_rev = merge_papers(kci, oa)
+    assert merged_rev[0]["source"] == "both"
+
+
+def test_merge_keeps_single_source_when_found_in_one_source():
+    merged = merge_papers([_paper("a", source="openalex")], [])
+    assert merged[0]["source"] == "openalex"
+    merged_kci = merge_papers([], [_paper("b", source="kci")])
+    assert merged_kci[0]["source"] == "kci"
+
+
 def test_query_hash_changes_when_query_changes():
     sf1 = Subfield(field_id=1, name="HBM", query="A", query_kci=None)
     sf2 = Subfield(field_id=1, name="HBM", query="B", query_kci=None)
@@ -79,6 +99,24 @@ def test_upsert_is_idempotent_and_fills_missing_abstract(db):
     rows = db.query(Paper).all()
     assert len(rows) == 1
     assert rows[0].abstract == "채워짐"
+
+
+def test_upsert_combines_source_across_reupserts(db):
+    """I10: 병합은 단일 collect() 호출 안에서만 일어난다. 연도를 다시 검색해 이번에는
+    KCI에서만 걸린 논문이라도, 과거에 openalex에서도 걸렸던 사실을 잃으면 안 된다."""
+    upsert_papers(db, [_paper("k1", source="openalex")])
+    upsert_papers(db, [_paper("k1", source="kci")])
+    row = db.query(Paper).filter(Paper.paper_key == "k1").first()
+    assert row.source == "both"
+
+
+def test_upsert_preserves_both_source_when_reupserted_with_single_source(db):
+    """한 번 both로 확인된 논문이, 이후 재검색에서 한쪽 소스만 다시 잡혀도(예: KCI가
+    이번엔 안 걸림) both 라벨이 단일 소스로 되돌아가면 안 된다."""
+    upsert_papers(db, [_paper("k1", source="both")])
+    upsert_papers(db, [_paper("k1", source="openalex")])
+    row = db.query(Paper).filter(Paper.paper_key == "k1").first()
+    assert row.source == "both"
 
 
 async def test_collect_returns_openalex_total_count_alongside_merged_papers(db, monkeypatch):

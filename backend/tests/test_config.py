@@ -17,3 +17,5 @@ def test_defaults_match_spec():
     assert s.default_year_range == 3
     assert s.http_max_attempts == 5
     assert s.http_timeout_seconds == 60.0
+    # M16: 기본값은 "*"(전체 허용)이 아니라 프론트 컨테이너가 서비스되는 오리진으로 좁혀야 한다.
+    assert s.cors_origins == "http://localhost:8103"

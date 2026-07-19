@@ -55,12 +55,19 @@ def enqueue(
             db.add(row)
             queued.append(row)
         elif force or row.status in ("failed", "paused") or row.query_hash != current_hash:
+            query_changed = row.query_hash != current_hash
             row.status = "pending"
             row.query_hash = current_hash
             row.error = None
             row.batch_job_id = None
             row.extract_attempts = 0  # M11: 재시도 카운터를 리셋하지 않으면 상한에
             row.search_attempts = 0   # 걸려 failed된 잡이 재실행 즉시 다시 failed된다.
+            if query_changed:
+                # I7: 검색식이 바뀐 재실행은 옛 검색식으로만 걸리던 논문이 통계 모집단에
+                # 영구히 남지 않도록 링크만 정리한다. papers 테이블 자체와 paper_extractions
+                # 캐시(비용 들여 만든 자산)는 건드리지 않는다 — 같은 논문이 새 검색식에도
+                # 걸리면 upsert_papers가 같은 행을 재사용하고 추출 캐시도 그대로 히트한다.
+                db.query(AnalysisPaper).filter(AnalysisPaper.analysis_id == row.id).delete()
             queued.append(row)
         elif row.status in ACTIVE_STATES:
             queued.append(row)
@@ -162,7 +169,12 @@ async def _do_search(db: Session, analysis: Analysis, subfield: Subfield) -> Non
         if row.id not in existing:
             db.add(AnalysisPaper(analysis_id=analysis.id, paper_id=row.id))
 
-    analysis.searched_count = len(rows)
+    # I7: len(rows)는 "이번 검색에서 걸린 건수"라 검색식을 좁혀 재실행하면 stats.compute가
+    # 쓰는 _analysis_papers()(누적 링크)와 값이 어긋난다. AnalysisPaper 링크 총수(누적
+    # 기준)로 통일해 Report.tsx와 StatsPanel.tsx가 항상 같은 숫자를 보게 한다.
+    analysis.searched_count = db.query(AnalysisPaper).filter(
+        AnalysisPaper.analysis_id == analysis.id
+    ).count()
     analysis.snapshot_at = datetime.now(timezone.utc)
     analysis.search_attempts = 0  # I9: 성공했으니 재시도 카운트 리셋.
     analysis.status = "extracting"
@@ -256,7 +268,7 @@ async def _do_extract(db: Session, analysis: Analysis) -> None:
     # 잡 수 상한을 넘기지 않는 가장 단순한 방법. 그 첫 청크도 batch_max_enqueued_tokens를
     # 넘으면 안 되므로 mapper.estimate_tokens 기반으로 한 번 더 자른다.
     first_batch = mapper.token_capped_chunk(pending[:len(batches[0])], batches[0])
-    analysis.batch_job_id = await gemini_batch.submit_async(first_batch)
+    analysis.batch_job_id = await gemini_batch.submit_async(first_batch, analysis.id)
     db.commit()
 
 
