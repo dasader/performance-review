@@ -5,8 +5,8 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import FieldList from "./pages/FieldList";
 const FieldDetail = lazy(() => import("./pages/FieldDetail"));
 const Report = lazy(() => import("./pages/Report"));
+const Admin = lazy(() => import("./pages/Admin"));
 
-// /admin 라우트는 Task 13(Admin.tsx)에서 추가한다 — 지금 넣으면 빌드가 깨진다.
 export default function App() {
   return (
     <BrowserRouter>
@@ -16,6 +16,7 @@ export default function App() {
           <Route path="/fields/:fieldId" element={<FieldDetail />} />
           <Route path="/analyses/:analysisId" element={<Report />} />
           <Route path="/subfields/:subfieldId/:year" element={<Report />} />
+          <Route path="/admin" element={<Admin />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
