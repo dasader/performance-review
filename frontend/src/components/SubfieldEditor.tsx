@@ -16,11 +16,15 @@ export default function SubfieldEditor({
   fields,
   onChanged,
   onUnauthorized,
+  onItemsLoaded,
 }: {
   adminKey: string;
   fields: Field[];
   onChanged: () => void;
   onUnauthorized: () => void;
+  // 대시보드(/admin/dashboard)는 active 여부를 안 주므로, 이미 이 컴포넌트가 받아오는
+  // /admin/subfields 결과(active 포함)를 부모로 끌어올려 재사용한다 — 중복 호출 방지.
+  onItemsLoaded?: (items: AdminSubfield[]) => void;
 }) {
   const [items, setItems] = useState<AdminSubfield[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -37,8 +41,10 @@ export default function SubfieldEditor({
 
   const load = async () => {
     try {
-      setItems(await get<AdminSubfield[]>("/admin/subfields", adminKey));
+      const list = await get<AdminSubfield[]>("/admin/subfields", adminKey);
+      setItems(list);
       setListError(null);
+      onItemsLoaded?.(list);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return onUnauthorized();
       setListError(e instanceof Error ? e.message : "목록을 불러오지 못했습니다.");

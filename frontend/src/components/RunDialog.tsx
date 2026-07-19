@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, post, type PreviewResponse, type RunResponse } from "../api";
 
 // 미리보기와 실행은 항상 같은 (subfieldId, yearFrom, yearTo, force) 조합을 가리켜야 한다.
@@ -9,6 +9,7 @@ export default function RunDialog({
   rows,
   defaultYearFrom,
   defaultYearTo,
+  subfieldsVersion,
   onRan,
   onUnauthorized,
 }: {
@@ -16,6 +17,9 @@ export default function RunDialog({
   rows: { subfield_id: number; subfield_name: string }[];
   defaultYearFrom: number;
   defaultYearTo: number;
+  // 세부기술 검색식이 바뀔 때마다(SubfieldEditor의 onChanged) Admin.tsx가 증가시키는 세대 카운터.
+  // 이 화면 자체 입력과 무관하게 값이 바뀌면 미리보기가 stale해진 것이므로 폐기한다.
+  subfieldsVersion: number;
   onRan: () => void;
   onUnauthorized: () => void;
 }) {
@@ -31,13 +35,28 @@ export default function RunDialog({
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<RunResponse | null>(null);
+  const [staleNotice, setStaleNotice] = useState<string | null>(null);
 
   const invalidate = () => {
     setPreview(null);
     setPreviewError(null);
     setRunResult(null);
     setRunError(null);
+    setStaleNotice(null);
   };
+
+  // 세부기술 검색식이 (이 화면 밖에서) 바뀌면 확인했던 숫자가 더 이상 유효하지 않다.
+  // 첫 렌더에서는 건너뛰고, 이후 세대 값이 바뀔 때만 폐기 + 사유 안내.
+  const isFirstGen = useRef(true);
+  useEffect(() => {
+    if (isFirstGen.current) {
+      isFirstGen.current = false;
+      return;
+    }
+    invalidate();
+    setStaleNotice("검색식이 변경되어 미리보기를 다시 실행해야 합니다.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subfieldsVersion]);
 
   const selectedName = rows.find((r) => r.subfield_id === subfieldId)?.subfield_name ?? "";
 
@@ -53,6 +72,7 @@ export default function RunDialog({
     setPreviewing(true);
     setPreviewError(null);
     setRunResult(null);
+    setStaleNotice(null);
     try {
       setPreview(
         await post<PreviewResponse>(
@@ -132,6 +152,8 @@ export default function RunDialog({
           <input
             id="run-year-from"
             type="number"
+            min={1900}
+            max={2100}
             value={yearFrom}
             onChange={(e) => {
               setYearFrom(Number(e.target.value));
@@ -147,6 +169,8 @@ export default function RunDialog({
           <input
             id="run-year-to"
             type="number"
+            min={1900}
+            max={2100}
             value={yearTo}
             onChange={(e) => {
               setYearTo(Number(e.target.value));
@@ -175,6 +199,7 @@ export default function RunDialog({
           {previewing ? "확인 중…" : "미리보기 (비용 없음)"}
         </button>
       </div>
+      {staleNotice && <p className="mt-3 text-sm text-warning">{staleNotice}</p>}
       {previewError && <p className="mt-3 text-sm text-danger">{previewError}</p>}
 
       {preview && (

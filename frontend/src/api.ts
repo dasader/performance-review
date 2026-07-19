@@ -36,10 +36,31 @@ function adminHeaders(adminKey?: string): HeadersInit {
   return adminKey ? { "X-Admin-Key": adminKey } : {};
 }
 
+// FastAPI/Pydantic의 표준 422 응답은 detail이 문자열이 아니라
+// [{loc, msg, type}, ...] 배열이다. 그대로 메시지로 쓰면 "[object Object]"가 뜨므로
+// 필드명(loc의 마지막 요소)과 msg를 사람이 읽을 수 있는 문장으로 합친다.
+function formatDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const lines = detail
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const loc = Array.isArray((item as { loc?: unknown }).loc) ? (item as { loc: unknown[] }).loc : [];
+        const field = loc.length > 0 ? String(loc[loc.length - 1]) : null;
+        const msg = typeof (item as { msg?: unknown }).msg === "string" ? (item as { msg: string }).msg : null;
+        if (field && msg) return `${field}: ${msg}`;
+        return msg;
+      })
+      .filter((s): s is string => Boolean(s));
+    if (lines.length > 0) return lines.join(" / ");
+  }
+  return GENERIC_ERROR_MESSAGE;
+}
+
 async function throwOnError(res: Response): Promise<void> {
   if (res.ok) return;
   const body = await res.json().catch(() => null);
-  throw new ApiError(body?.detail ?? GENERIC_ERROR_MESSAGE, res.status);
+  throw new ApiError(formatDetail(body?.detail), res.status);
 }
 
 export async function get<T>(path: string, adminKey?: string): Promise<T> {

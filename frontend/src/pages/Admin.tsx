@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, get, post, type DashboardResponse, type Field } from "../api";
+import { ApiError, get, post, type AdminSubfield, type DashboardResponse, type Field } from "../api";
 import { useAdminKey } from "../useAdminKey";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
@@ -17,8 +17,16 @@ export default function Admin() {
 
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [fields, setFields] = useState<Field[] | null>(null);
+  const [fieldsError, setFieldsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryingId, setRetryingId] = useState<number | null>(null);
+
+  // /admin/subfields (active 포함) 결과 — SubfieldEditor가 이미 불러온 것을 끌어올려
+  // RunDialog의 실행 대상 목록에서 비활성 세부기술을 제외하는 데 재사용한다.
+  const [subfields, setSubfields] = useState<AdminSubfield[] | null>(null);
+  // SubfieldEditor에서 검색식이 바뀔 때마다 증가하는 세대 카운터. RunDialog는 이 값이
+  // 바뀌면 확인했던 미리보기 숫자가 더 이상 유효하지 않다고 보고 폐기한다.
+  const [subfieldGen, setSubfieldGen] = useState(0);
 
   const onUnauthorized = useCallback(() => {
     clear();
@@ -42,11 +50,16 @@ export default function Admin() {
     if (key) loadDashboard(key);
   }, [key, loadDashboard]);
 
-  useEffect(() => {
+  const loadFields = useCallback(() => {
+    setFieldsError(null);
     get<Field[]>("/fields")
       .then(setFields)
-      .catch(() => setFields([]));
+      .catch((e) => setFieldsError(e instanceof Error ? e.message : "분야 목록을 불러오지 못했습니다."));
   }, []);
+
+  useEffect(() => {
+    loadFields();
+  }, [loadFields]);
 
   if (!key) {
     return (
@@ -130,24 +143,39 @@ export default function Admin() {
 
         {error && <p className="mb-6 border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</p>}
 
-        {fields === null && <p className="text-sm text-muted">분야 목록을 불러오는 중…</p>}
+        {fields === null && !fieldsError && <p className="text-sm text-muted">분야 목록을 불러오는 중…</p>}
+        {fieldsError && (
+          <p className="mb-6 border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">
+            {fieldsError}{" "}
+            <button type="button" onClick={loadFields} className="ml-1 underline hover:text-danger/80">
+              다시 시도
+            </button>
+          </p>
+        )}
         {fields && (
           <SubfieldEditor
             adminKey={key}
             fields={fields}
-            onChanged={() => loadDashboard(key)}
+            onChanged={() => {
+              loadDashboard(key);
+              setSubfieldGen((g) => g + 1);
+            }}
             onUnauthorized={onUnauthorized}
+            onItemsLoaded={setSubfields}
           />
         )}
 
-        {data && (() => {
+        {data && subfields && (() => {
           const defaultYearFrom = currentYear - (data.default_year_range - 1);
           return (
           <RunDialog
             adminKey={key}
-            rows={data.rows.map((r) => ({ subfield_id: r.subfield_id, subfield_name: r.subfield_name }))}
+            rows={subfields
+              .filter((s) => s.active)
+              .map((s) => ({ subfield_id: s.id, subfield_name: s.name }))}
             defaultYearFrom={defaultYearFrom}
             defaultYearTo={currentYear}
+            subfieldsVersion={subfieldGen}
             onRan={() => loadDashboard(key)}
             onUnauthorized={onUnauthorized}
           />
