@@ -11,7 +11,18 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-_client = genai.Client(api_key=settings.gemini_api_key)
+# 지연 생성: gemini_batch.py와 동일한 이유 — GEMINI_API_KEY가 비어 있으면
+# genai.Client()가 즉시 ValueError를 던져 모듈 import(=컨테이너 기동)가 실패한다.
+_client: genai.Client | None = None
+
+
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=settings.gemini_api_key)
+    return _client
+
+
 # 동기 전용 SDK를 async 코드에서 부르기 위한 명시적 스레드풀.
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="gemini-sync")
 
@@ -57,7 +68,7 @@ async def generate(system: str, user: str, *, thinking: str, max_retries: int = 
     )
 
     def _call():
-        return _client.models.generate_content(
+        return _get_client().models.generate_content(
             model=settings.gemini_model, contents=user, config=config
         )
 

@@ -13,7 +13,7 @@ from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import Subfield
 from app.models.paper import Paper, PaperExtraction
 from app.services import mapper, reducer, search, stats
-from app.services.budget import BudgetExceeded
+from app.services.budget import BudgetExceeded, spent_today
 
 logger = logging.getLogger(__name__)
 
@@ -72,15 +72,34 @@ def is_stale(db: Session, analysis: Analysis, subfield: Subfield) -> bool:
     return analysis.query_hash != search.query_hash(subfield, analysis.year, analysis.year)
 
 
+def resume_paused(db: Session) -> None:
+    """paused 상태 analysis를 예산 여유가 생겼으면 pending으로 되돌린다.
+
+    OpenAlex 예산 사용액은 UTC 날짜별 행으로 관리되므로(budget.spent_today),
+    자정이 지나면 별도 컬럼 없이도 이 값이 자연히 0으로 리셋된다 — 이를 재개
+    신호로 쓴다. ACTIVE_STATES에는 paused를 넣지 않는다: advance()가 paused를
+    전진시키면 안 되고, 재개는 이 함수가 전담한다.
+    """
+    if spent_today(db) >= settings.openalex_daily_budget_usd:
+        return
+    paused = db.query(Analysis).filter(Analysis.status == "paused").all()
+    for analysis in paused:
+        logger.info("[잡 %d] 예산 여유 확인 — pending으로 재개", analysis.id)
+        analysis.status = "pending"
+        analysis.error = None
+    if paused:
+        db.commit()
+
+
 async def advance(db: Session, analysis: Analysis) -> None:
     """상태를 한 단계 전진시킨다. 각 단계는 독립적으로 재진입 가능해야 한다 —
     컨테이너가 언제 재시작되어도 DB 상태만 보고 이어갈 수 있어야 하기 때문."""
-    subfield = db.get(Subfield, analysis.subfield_id)
     try:
         if analysis.status == "pending":
             analysis.status = "searching"
             db.commit()
         elif analysis.status == "searching":
+            subfield = db.get(Subfield, analysis.subfield_id)
             await _do_search(db, analysis, subfield)
         elif analysis.status == "extracting":
             await _do_extract(db, analysis)
@@ -161,18 +180,33 @@ async def _do_extract(db: Session, analysis: Analysis) -> None:
         still_pending = mapper.pending_papers(db, analysis, _analysis_papers(db, analysis))
         # poll()이 성공을 반환해도 개별 요청이 대량 파싱 실패했을 수 있다. 제출 시점의
         # 건수를 그대로 비교할 수 없으니(제출과 폴링 사이 시점 차) 저장 전후로 남은
-        # pending 건수가 줄지 않았는지로 "진행이 없었다"를 감지해 경고한다 — 그래야
-        # 다음 루프에서 같은 청크를 무한히 재시도하는 상황을 조용히 넘기지 않는다.
+        # pending 건수가 줄지 않았는지로 "진행이 없었다"를 감지한다 — 그래야 다음
+        # 루프에서 같은 청크를 무한히 재시도하는 상황을 조용히 넘기지 않는다.
         if before and len(still_pending) >= before:
+            analysis.extract_attempts += 1
             logger.warning(
-                "[잡 %d] batch 저장 %d건인데 남은 대상이 %d→%d건으로 줄지 않음 — "
+                "[잡 %d] batch 저장 %d건인데 남은 대상이 %d→%d건으로 줄지 않음 (시도 %d/%d) — "
                 "결과 파싱 실패가 컸을 수 있습니다.",
                 analysis.id, saved, before, len(still_pending),
+                analysis.extract_attempts, settings.max_extract_attempts,
             )
+        else:
+            analysis.extract_attempts = 0  # 진행이 있었으니 재시도 카운트 리셋.
+
+        if analysis.extract_attempts >= settings.max_extract_attempts:
+            # 같은 논문을 영원히 재제출해 Gemini 크레딧을 낭비하지 않도록 여기서 끊는다.
+            analysis.status = "failed"
+            analysis.error = (
+                f"논문 {len(still_pending)}건을 {settings.max_extract_attempts}회 재시도해도 "
+                f"추출하지 못해 중단했습니다. Gemini 응답 파싱 실패가 반복되고 있을 수 있습니다."
+            )
+            db.commit()
+            return
 
         # 청크가 여러 개면 아직 제출 못한 논문이 남아 있다. reducing으로 넘기지 않고
         # extracting에 머물러 다음 루프에서 다음 청크를 제출한다.
         if still_pending:
+            db.commit()
             return
         analysis.status = "reducing"
         db.commit()
@@ -219,6 +253,7 @@ async def loop() -> None:
         try:
             db = SessionLocal()
             try:
+                resume_paused(db)
                 active = db.query(Analysis).filter(Analysis.status.in_(ACTIVE_STATES)).all()
                 for analysis in active:
                     await advance(db, analysis)

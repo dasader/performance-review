@@ -25,6 +25,9 @@ class Analysis(Base):
     sampled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     batch_job_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 배치 결과 저장 후에도 pending_papers가 줄지 않은(파싱 실패 등으로 진행이 없는)
+    # 연속 횟수. max_extract_attempts에 도달하면 무한 재제출을 끊고 failed로 전환한다.
+    extract_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class AnalysisPaper(Base):

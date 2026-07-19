@@ -10,7 +10,18 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-_client = genai.Client(api_key=settings.gemini_api_key)
+# 지연 생성: GEMINI_API_KEY가 비어 있으면 genai.Client()가 즉시 ValueError를 던진다.
+# 모듈 import 시점(=컨테이너 기동)에 만들면 키 없이 앱 전체가 뜨지 못하므로, 실제로
+# batch를 부르는 시점까지 미룬다.
+_client: genai.Client | None = None
+
+
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=settings.gemini_api_key)
+    return _client
+
 
 _TERMINAL_OK = "JOB_STATE_SUCCEEDED"
 _TERMINAL_BAD = ("JOB_STATE_FAILED", "JOB_STATE_CANCELLED", "JOB_STATE_EXPIRED")
@@ -30,11 +41,11 @@ def submit(requests: list[dict]) -> str:
         path = Path(fh.name)
 
     try:
-        uploaded = _client.files.upload(
+        uploaded = _get_client().files.upload(
             file=str(path),
             config=types.UploadFileConfig(display_name=path.name, mime_type="jsonl"),
         )
-        job = _client.batches.create(
+        job = _get_client().batches.create(
             model=settings.gemini_model,
             src=uploaded.name,
             config=types.CreateBatchJobConfig(display_name=f"map-{len(requests)}"),
@@ -48,7 +59,7 @@ def submit(requests: list[dict]) -> str:
 
 def poll(job_name: str) -> tuple[str, list[dict] | None]:
     """(state, results). state는 running | succeeded | failed."""
-    job = _client.batches.get(name=job_name)
+    job = _get_client().batches.get(name=job_name)
     state = job.state.name if hasattr(job.state, "name") else str(job.state)
 
     if state in _TERMINAL_BAD:
@@ -67,7 +78,7 @@ def _download_results(job) -> list[dict]:
     분석을 죽이지는 않되, 총 건수 대비 스킵 건수를 집계해 호출자가 눈치채지
     못한 채 "성공"으로 넘어가지 않게 한다.
     """
-    raw = _client.files.download(file=job.dest.file_name)
+    raw = _get_client().files.download(file=job.dest.file_name)
     text = raw.decode("utf-8") if isinstance(raw, bytes) else raw
 
     results: list[dict] = []

@@ -2,10 +2,12 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.config import settings
 from app.database import Base
-from app.models.analysis import Analysis
+from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import Field, Subfield
-from app.services import runner
+from app.models.paper import Paper
+from app.services import budget, runner
 
 
 @pytest.fixture
@@ -70,3 +72,92 @@ def test_step_labels_are_korean():
     assert runner.STEP_LABELS["extracting"] == "성과 추출 중"
     assert runner.STEP_LABELS["reducing"] == "보고서 작성 중"
     assert runner.STEP_LABELS["done"] == "완료"
+
+
+def test_resume_paused_returns_pending_when_budget_has_room(ctx):
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="paused", query_hash="h",
+                 error="OpenAlex 일일 크레딧 소진 — 내일 자동 재개됩니다.")
+    db.add(a)
+    db.commit()
+
+    runner.resume_paused(db)
+    db.refresh(a)
+    assert a.status == "pending"
+    assert a.error is None
+
+
+def test_resume_paused_stays_paused_when_budget_exhausted(ctx):
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="paused", query_hash="h", error="msg")
+    db.add(a)
+    db.commit()
+    budget.record_usage(db, settings.openalex_daily_budget_usd, None)
+
+    runner.resume_paused(db)
+    db.refresh(a)
+    assert a.status == "paused"
+    assert a.error == "msg"
+
+
+async def test_extract_attempts_resets_when_progress_is_made(ctx, monkeypatch):
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="extracting", query_hash="h",
+                 batch_job_id="job-1", extract_attempts=2)
+    db.add(a)
+    db.commit()
+
+    p = Paper(paper_key="k1", title="T", abstract="A", year=2025, source="openalex",
+              korea_flag=True)
+    db.add(p)
+    db.commit()
+    db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
+    db.commit()
+
+    # 첫 pending_papers 호출(before)은 1건, 두번째(still_pending, 저장 후)는 0건 —
+    # 정상적으로 추출이 진행된 상황을 흉내낸다.
+    calls = {"n": 0}
+
+    def fake_pending(db, analysis, papers):
+        calls["n"] += 1
+        return [] if calls["n"] > 1 else [p]
+
+    monkeypatch.setattr(runner.mapper, "pending_papers", fake_pending)
+    monkeypatch.setattr(runner.mapper, "save_results", lambda db, a, results: 1)
+    monkeypatch.setattr(runner.gemini_batch, "poll", lambda job_id: ("succeeded", []))
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert a.extract_attempts == 0
+    assert a.status == "reducing"
+
+
+async def test_extract_attempts_fails_after_max_when_no_progress(ctx, monkeypatch):
+    """파싱 불가 논문 때문에 pending 건수가 줄지 않는 상황이 max_extract_attempts회
+    반복되면 무한 재제출 대신 failed로 전환돼야 한다."""
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="extracting", query_hash="h")
+    db.add(a)
+    db.commit()
+
+    p = Paper(paper_key="k1", title="T", abstract="A", year=2025, source="openalex",
+              korea_flag=True)
+    db.add(p)
+    db.commit()
+    db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
+    db.commit()
+
+    # pending_papers는 항상 같은 논문을 반환 — 저장해도 줄지 않는 상황(파싱 실패) 흉내.
+    monkeypatch.setattr(runner.mapper, "pending_papers", lambda db, a, papers: [p])
+    monkeypatch.setattr(runner.mapper, "save_results", lambda db, a, results: 0)
+    monkeypatch.setattr(runner.gemini_batch, "poll", lambda job_id: ("succeeded", []))
+
+    for i in range(settings.max_extract_attempts):
+        a.batch_job_id = f"job-{i}"
+        db.commit()
+        await runner.advance(db, a)
+        db.refresh(a)
+
+    assert a.status == "failed"
+    assert a.error is not None
+    assert "추출" in a.error

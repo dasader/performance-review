@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     sync_tpm: int = 1_000_000
 
     max_papers_per_analysis: int = 5000
+    max_extract_attempts: int = 3
     reduce_group_threshold: int = 500
     default_year_range: int = 3
     loop_interval_seconds: int = 30
