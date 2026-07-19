@@ -195,7 +195,7 @@ export interface DashboardResponse {
   rows: DashboardRow[];
   budget_spent: number;
   budget_limit: number;
-  default_year_range: [number, number];
+  default_year_range: number; // 최근 N개년(개수)이지 연도 범위가 아니다
 }
 
 export interface PreviewSample {

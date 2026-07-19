@@ -8,6 +8,8 @@ import SubfieldEditor from "../components/SubfieldEditor";
 import RunDialog from "../components/RunDialog";
 
 export default function Admin() {
+  // 백엔드의 default_year_range는 "최근 N개년"의 N(정수)이다. 연도 범위가 아니라 개수.
+  const currentYear = new Date().getFullYear();
   const { key, save, clear } = useAdminKey();
   const [input, setInput] = useState("");
   const [authing, setAuthing] = useState(false);
@@ -138,16 +140,19 @@ export default function Admin() {
           />
         )}
 
-        {data && (
+        {data && (() => {
+          const defaultYearFrom = currentYear - (data.default_year_range - 1);
+          return (
           <RunDialog
             adminKey={key}
             rows={data.rows.map((r) => ({ subfield_id: r.subfield_id, subfield_name: r.subfield_name }))}
-            defaultYearFrom={data.default_year_range[0]}
-            defaultYearTo={data.default_year_range[1]}
+            defaultYearFrom={defaultYearFrom}
+            defaultYearTo={currentYear}
             onRan={() => loadDashboard(key)}
             onUnauthorized={onUnauthorized}
           />
-        )}
+          );
+        })()}
 
         <h2 className="mb-3 mt-10 font-display text-lg font-semibold text-ink">실행 상태</h2>
 
