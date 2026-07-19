@@ -56,13 +56,68 @@ def test_admin_accepts_correct_key(client):
     assert r.status_code == 200
 
 
-def test_dashboard_includes_schedule_info(client):
-    r = client.get("/api/admin/dashboard", headers={"X-Admin-Key": settings.admin_key})
-    schedule = r.json()["schedule"]
-    assert schedule["enabled"] is True
-    assert schedule["next_run_at"]  # ISO 문자열
-    assert schedule["last_run_at"] is None  # 아직 자동 실행된 적 없음
-    assert schedule["last_run_queued_count"] is None
+def test_schedule_requires_admin_key(client):
+    assert client.get("/api/admin/schedule").status_code == 401
+    assert client.put(
+        "/api/admin/schedule", json={"enabled": True, "day": 10, "hour": 3, "years_back": 1}
+    ).status_code == 401
+    assert client.post("/api/admin/schedule/run-now").status_code == 401
+
+
+def test_schedule_get_returns_env_defaults_and_empty_history(client):
+    r = client.get("/api/admin/schedule", headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["enabled"] == settings.schedule_enabled
+    assert body["day"] == settings.schedule_day
+    assert body["hour"] == settings.schedule_hour
+    assert body["years_back"] == settings.schedule_years_back
+    assert body["timezone"] == settings.schedule_timezone
+    assert body["next_run_at"]  # ISO 문자열
+    assert body["history"] == []  # 아직 자동/수동 실행된 적 없음
+
+
+@pytest.mark.parametrize("bad_payload", [
+    {"enabled": True, "day": 0, "hour": 3, "years_back": 1},
+    {"enabled": True, "day": 31, "hour": 3, "years_back": 1},
+    {"enabled": True, "day": 10, "hour": 24, "years_back": 1},
+    {"enabled": True, "day": 10, "hour": 3, "years_back": 6},
+])
+def test_schedule_put_rejects_out_of_range_values(client, bad_payload):
+    r = client.put(
+        "/api/admin/schedule", json=bad_payload, headers={"X-Admin-Key": settings.admin_key}
+    )
+    assert r.status_code == 422
+
+
+def test_schedule_put_persists_new_settings(client):
+    r = client.put(
+        "/api/admin/schedule",
+        json={"enabled": False, "day": 15, "hour": 4, "years_back": 2},
+        headers={"X-Admin-Key": settings.admin_key},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["enabled"] is False
+    assert body["day"] == 15
+    assert body["hour"] == 4
+    assert body["years_back"] == 2
+
+    again = client.get("/api/admin/schedule", headers={"X-Admin-Key": settings.admin_key}).json()
+    assert again["day"] == 15
+    assert again["enabled"] is False
+
+
+def test_schedule_run_now_queues_and_appears_in_history(client):
+    r = client.post("/api/admin/schedule/run-now", headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 200
+    # 활성 세부기술 1개 × years_back 기본값 1(당해+직전연도) = 2건
+    assert r.json()["queued_count"] == 2
+
+    hist = client.get("/api/admin/schedule", headers={"X-Admin-Key": settings.admin_key}).json()["history"]
+    assert len(hist) == 1
+    assert hist[0]["trigger"] == "manual"
+    assert hist[0]["queued_count"] == 2
 
 
 def test_admin_can_create_subfield(client):

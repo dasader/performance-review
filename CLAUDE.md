@@ -7,7 +7,7 @@
 
 ```bash
 # 스택 기동 — api 컨테이너 entrypoint(docker-entrypoint.sh)가 uvicorn 전에
-# alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0007
+# alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0008
 docker compose up -d --build
 
 # .env를 고친 뒤에는 restart가 아니라 재생성해야 한다.
@@ -73,15 +73,38 @@ thinking 레벨을 바꾸면 같은 논문이라도 재추출된다(신규 행�
 새 컨테이너/라이브러리 없이 `runner.loop()`(30초 주기) 안에서 매 틱마다
 `run_scheduled_if_due(db)`를 호출해 "지금이 실행 시각인가"를 확인하는 방식.
 
-- 조건: KST(`settings.schedule_timezone`) 기준 `schedule_day`일(기본 10 — 1~3일은 다른 서비스와
-  OpenAlex 키 공유로 회피) `schedule_hour`시대(기본 3시)이고, `scheduled_runs.run_month`
-  (예: `"2026-08"`)에 아직 그 달 행이 없을 때.
+**설정은 DB에서 관리한다(재기동 불필요)**: `ScheduleSetting`(테이블 `schedule_settings`, 싱글턴
+행 id=1)이 `enabled`/`day`/`hour`/`years_back`을 들고 있고, `runner.get_schedule_settings(db)`가
+행이 없으면 `.env`의 `schedule_enabled`/`schedule_day`/`schedule_hour`/`schedule_years_back`을
+**초기 기본값**으로 한 번만 seed한다. 이후로는 이 DB 행이 항상 우선한다 — 관리자 화면
+`GET/PUT /api/admin/schedule`이 이 행을 읽고 쓴다. `schedule_timezone`만 예외로 DB로 옮기지
+않고 `.env` 전용을 유지한다(변경이 드물고, 잘못된 값을 넣으면 `ZoneInfo`가 즉시 실패해
+스케줄러 전체가 멈추는 값이라 다른 설정과 리스크가 다르다).
+
+- 조건: `settings.schedule_timezone`(기본 KST) 기준 DB `day`일 `hour`시대(기본 10일 3시 — 1~3일은
+  다른 서비스와 OpenAlex 키 공유로 회피)이고, `scheduled_runs.run_month`(예: `"2026-08"`)에 아직
+  그 달 행이 없을 때.
 - 멱등성: `run_month` unique 제약 + `db.flush()` 후 `IntegrityError`를 잡아 롤백하는 패턴
   (`budget.py::_row`와 동일). 컨테이너가 실행 시각대에 재시작돼 루프가 다시 돌아도 두 번째
   삽입 시도는 여기서 막혀 중복 큐잉되지 않는다.
-- 활성(`active=True`) 세부기술 전부 × 당해~(당해−`schedule_years_back`)연도를 **`force=True`**로
+- 활성(`active=True`) 세부기술 전부 × 당해~(당해−`years_back`)연도를 **`force=True`**로
   `enqueue()`한다 — 실제 검색·추출·보고서 생성은 기존 잡 루프·예산 게이트·batch 슬롯 게이트가
   그대로 처리한다.
+- **관리자 "지금 실행"(`POST /api/admin/schedule/run-now` → `runner.run_scheduled_now`)**은
+  스케줄 시각 판정(`_is_schedule_due`)을 건너뛰고 즉시 같은 방식으로 큐잉하되, `run_month`에
+  `"YYYY-MM-manual-HHMMSSffffff"` 형식(접미사 + 마이크로초)을 써서 그 달의 정기 실행 키
+  (`"YYYY-MM"`)와 절대 겹치지 않게 한다 — 겹치면 둘 중 나중에 도는 쪽이 `IntegrityError`로
+  막혀 "수동 실행이 정기 실행을 막는다"는 요구를 깬다. `trigger`도 `"manual"`로 남겨(`Analysis`/
+  `AnalysisRun`/`ScheduledRun` 모두) 즉흥 실행의 성공률이 정기 스케줄러 통계에 섞이지 않게 한다.
+  루프의 자동 재시도 경로가 아니라 사용자가 직접 누르는 단발 액션이라 `IntegrityError` catch로
+  멱등성을 보장할 필요는 없다(마이크로초 단위 키라 충돌 가능성도 사실상 없음).
+- `GET /api/admin/schedule`의 `history`(`runner.schedule_history`, 최대 12건)는 `ScheduledRun`
+  각 행의 `done_count`를 `AnalysisRun.ran_at`이 [이 실행, 시간순 다음 실행) 구간에 든 같은
+  `trigger` 건수로 근사한다(`AnalysisRun`에 실행 ID를 연결하는 FK가 없어 정확한 귀속은
+  불가능 — `ScheduledRun.ran_at`은 스케줄 타임존 naive, `AnalysisRun.ran_at`은 UTC라 비교 전
+  변환 필요). `failed`/`paused`/`in_progress` 건수는 "지금 이 순간" 같은 `trigger`의 `Analysis`
+  상태 집계라 같은 `trigger` 중 **가장 최근** 실행 행에만 채우고(`is_current_snapshot=True`),
+  더 오래된 행은 이후 실행에 상태가 덮어써졌을 것이므로 0으로 둔다.
 - **`force=True`여야 하는 이유**: `enqueue(force=False)`는 이미 `done`이고 `query_hash`가 그대로면
   아무 것도 하지 않는다. 스케줄러가 그렇게 부르면 완료된 세부기술은 매달 건너뛰어져
   "그 사이 새로 등재된 논문을 잡는다"는 스케줄러의 존재 이유가 사라진다. 대신 매번 검색을

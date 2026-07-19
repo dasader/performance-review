@@ -6,6 +6,7 @@ import Footer from "../components/Footer";
 import StatusBadge from "../components/StatusBadge";
 import SubfieldEditor from "../components/SubfieldEditor";
 import RunDialog from "../components/RunDialog";
+import ScheduleSection from "../components/ScheduleSection";
 
 export default function Admin() {
   // 백엔드의 default_year_range는 "최근 N개년"의 N(정수)이다. 연도 범위가 아니라 개수.
@@ -125,33 +126,19 @@ export default function Admin() {
             <p className="font-mono text-xs uppercase tracking-widest text-accent">관리자</p>
             <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-ink">분석 운영</h1>
           </div>
-          <div className="flex flex-col items-end gap-1">
-            <div className="flex items-center gap-4">
-              {data && (
-                <p className="font-mono text-xs tabular-nums text-muted">
-                  OpenAlex 오늘 사용 ${data.budget_spent.toFixed(4)} / ${data.budget_limit.toFixed(2)}
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={clear}
-                className="border border-border px-3 py-1.5 text-xs text-ink-light hover:border-accent hover:text-accent"
-              >
-                로그아웃
-              </button>
-            </div>
+          <div className="flex items-center gap-4">
             {data && (
-              <p className="font-mono text-xs tabular-nums text-faint">
-                월간 자동 분석 {data.schedule.enabled ? "활성" : "비활성"} · 다음 실행{" "}
-                {new Date(data.schedule.next_run_at).toLocaleString("ko-KR")}
-                {data.schedule.last_run_at && (
-                  <>
-                    {" "}· 마지막 자동 실행 {new Date(data.schedule.last_run_at).toLocaleString("ko-KR")}
-                    ({data.schedule.last_run_queued_count}건 큐잉)
-                  </>
-                )}
+              <p className="font-mono text-xs tabular-nums text-muted">
+                OpenAlex 오늘 사용 ${data.budget_spent.toFixed(4)} / ${data.budget_limit.toFixed(2)}
               </p>
             )}
+            <button
+              type="button"
+              onClick={clear}
+              className="border border-border px-3 py-1.5 text-xs text-ink-light hover:border-accent hover:text-accent"
+            >
+              로그아웃
+            </button>
           </div>
         </header>
 
@@ -195,6 +182,8 @@ export default function Admin() {
           />
           );
         })()}
+
+        <ScheduleSection adminKey={key} onUnauthorized={onUnauthorized} />
 
         {/* 세부기술·검색식 / 분석 실행 섹션과 같은 카드로 묶어 시각적 단위를 맞춘다. */}
         <section className="mt-6 border border-border bg-surface p-5">

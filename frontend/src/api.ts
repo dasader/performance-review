@@ -223,19 +223,48 @@ export interface DashboardRow {
   years: DashboardYearCell[];
 }
 
-export interface ScheduleInfo {
-  enabled: boolean;
-  next_run_at: string; // 스케줄 타임존(기본 KST) wall-clock, tzinfo 없음
-  last_run_at: string | null;
-  last_run_queued_count: number | null;
-}
-
 export interface DashboardResponse {
   rows: DashboardRow[];
   budget_spent: number;
   budget_limit: number;
   default_year_range: number; // 최근 N개년(개수)이지 연도 범위가 아니다
-  schedule: ScheduleInfo;
+}
+
+// ── 자동 분석 스케줄 (관리자 화면 스케줄 설정 카드) ──
+
+export interface ScheduleHistoryEntry {
+  run_month: string; // 정기 실행: "YYYY-MM". 수동 실행: "YYYY-MM-manual-...".
+  ran_at: string; // 스케줄 타임존(기본 KST) wall-clock, tzinfo 없음
+  trigger: "scheduled" | "manual";
+  queued_count: number;
+  done_count: number;
+  failed_count: number;
+  paused_count: number;
+  in_progress_count: number;
+  // false면 failed/paused/in_progress는 이후 같은 trigger의 실행에 상태가 덮어써져
+  // 근사할 수 없어 0으로 채워진 값이다(백엔드 schedule_history 주석 참고).
+  is_current_snapshot: boolean;
+}
+
+export interface ScheduleInfo {
+  enabled: boolean;
+  day: number;
+  hour: number;
+  years_back: number;
+  timezone: string; // 읽기 전용 — .env 전용 값
+  next_run_at: string; // 스케줄 타임존(기본 KST) wall-clock, tzinfo 없음
+  history: ScheduleHistoryEntry[];
+}
+
+export interface ScheduleUpdateIn {
+  enabled: boolean;
+  day: number;
+  hour: number;
+  years_back: number;
+}
+
+export interface RunNowResponse {
+  queued_count: number;
 }
 
 export interface PreviewSample {

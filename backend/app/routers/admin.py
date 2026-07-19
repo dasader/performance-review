@@ -11,7 +11,6 @@ from app.database import get_db
 from app.deps import require_admin
 from app.models.analysis import Analysis
 from app.models.field import Field, Subfield
-from app.models.schedule import ScheduledRun
 from app.services import budget, mapper, runner
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -47,6 +46,26 @@ class PreviewIn(_YearRangeMixin):
 class RunIn(_YearRangeMixin):
     subfield_ids: list[int] = PydanticField(min_length=1)
     force: bool = False
+
+
+class ScheduleIn(BaseModel):
+    enabled: bool
+    day: int
+    hour: int
+    years_back: int
+
+    @model_validator(mode="after")
+    def _check_ranges(self):
+        if not (1 <= self.day <= 28):
+            raise ValueError(
+                f"일자는 1~28 사이여야 합니다({self.day}). 29~31일은 없는 달이 있어 "
+                f"그런 달에는 실행이 건너뛰어집니다."
+            )
+        if not (0 <= self.hour <= 23):
+            raise ValueError(f"시각은 0~23 사이여야 합니다({self.hour}).")
+        if not (0 <= self.years_back <= 5):
+            raise ValueError(f"대상 연도 범위는 0~5 사이여야 합니다({self.years_back}).")
+        return self
 
 
 @router.post("/auth")
@@ -215,21 +234,54 @@ def dashboard(db: Session = Depends(get_db)):
                 for a in sorted(analyses, key=lambda x: x.year, reverse=True)
             ],
         })
-    last_scheduled = db.query(ScheduledRun).order_by(ScheduledRun.ran_at.desc()).first()
     return {
         "rows": rows,
         "budget_spent": round(budget.spent_today(db), 4),
         "budget_limit": settings.openalex_daily_budget_usd,
         "default_year_range": settings.default_year_range,
-        "schedule": {
-            "enabled": settings.schedule_enabled,
-            # 둘 다 스케줄 타임존(기본 KST) 기준 wall-clock 값을 tzinfo 없이 그대로 낸다 —
-            # 프론트가 별도 변환 없이 표시한다(관리자 화면은 한국 사용자 전제).
-            "next_run_at": runner.next_scheduled_run_at().isoformat(),
-            "last_run_at": last_scheduled.ran_at.isoformat() if last_scheduled else None,
-            "last_run_queued_count": last_scheduled.queued_count if last_scheduled else None,
-        },
     }
+
+
+@router.get("/schedule")
+def get_schedule(db: Session = Depends(get_db)):
+    """스케줄 설정 + 상태. 스케줄 설정 카드(관리자 화면)가 통째로 이 응답 하나로 그려진다."""
+    cfg = runner.get_schedule_settings(db)
+    db.commit()  # 첫 조회에서 새로 만든 기본값 행을 즉시 영속화한다.
+    return {
+        "enabled": cfg.enabled,
+        "day": cfg.day,
+        "hour": cfg.hour,
+        "years_back": cfg.years_back,
+        "timezone": settings.schedule_timezone,  # 읽기 전용 — .env 전용 값
+        # 스케줄 타임존(기본 KST) 기준 wall-clock 값을 tzinfo 없이 그대로 낸다.
+        "next_run_at": runner.next_scheduled_run_at(db).isoformat(),
+        "history": runner.schedule_history(db, limit=12),
+    }
+
+
+@router.put("/schedule")
+def update_schedule(payload: ScheduleIn, db: Session = Depends(get_db)):
+    cfg = runner.get_schedule_settings(db)
+    cfg.enabled = payload.enabled
+    cfg.day = payload.day
+    cfg.hour = payload.hour
+    cfg.years_back = payload.years_back
+    db.commit()
+    return {
+        "enabled": cfg.enabled,
+        "day": cfg.day,
+        "hour": cfg.hour,
+        "years_back": cfg.years_back,
+        "timezone": settings.schedule_timezone,
+        "next_run_at": runner.next_scheduled_run_at(db).isoformat(),
+    }
+
+
+@router.post("/schedule/run-now")
+def run_schedule_now(db: Session = Depends(get_db)):
+    """스케줄 시각 판정을 우회해 즉시 1회 큐잉한다. 되돌릴 수 없는 동작이므로 프론트에서
+    확인 단계를 거친 뒤에만 호출해야 한다."""
+    return {"queued_count": runner.run_scheduled_now(db)}
 
 
 @router.post("/analyses/{analysis_id}/retry")

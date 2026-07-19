@@ -1,9 +1,30 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+
+
+class ScheduleSetting(Base):
+    """월간 자동 분석 스케줄의 런타임 설정 — 단일 행(싱글턴, id=1)만 존재한다.
+
+    .env의 SCHEDULE_ENABLED/DAY/HOUR/YEARS_BACK은 이제 "초기 기본값"으로만 쓰인다 —
+    이 행이 없으면 그 값으로 한 행을 만들고, 이후에는 이 행이 우선한다(재기동 없이
+    관리자 화면에서 변경 가능, app.services.runner.get_schedule_settings 참고).
+
+    schedule_timezone은 여기 포함하지 않는다 — 타임존 변경은 드물고, 잘못된 값이
+    들어가면 ZoneInfo가 즉시 실패해 스케줄러 전체가 멈춘다. .env 전용으로 남기고
+    관리자 화면에는 읽기 전용으로만 보여준다.
+    """
+
+    __tablename__ = "schedule_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    day: Mapped[int] = mapped_column(Integer, nullable=False)
+    hour: Mapped[int] = mapped_column(Integer, nullable=False)
+    years_back: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class AnalysisRun(Base):
@@ -33,11 +54,17 @@ class ScheduledRun(Base):
     ran_at은 스케줄 타임존(KST) 기준 시각을 그대로(naive) 저장한다 — 이 표는 관리자
     화면에 "다음/마지막 실행 시각(KST)"을 보여주기 위한 값이라, 나머지 테이블처럼
     UTC로 두면 매번 변환해야 해서 오히려 헷갈린다.
+
+    run_month은 정기 실행이면 "YYYY-MM"(멱등성 키, unique). 관리자가 "지금 실행"으로
+    즉시 실행하면 "YYYY-MM-manual-HHMMSSffffff" 형식을 써서 그 달의 정기 실행 키와
+    절대 겹치지 않게 한다(app.services.runner.run_scheduled_now 참고) — 수동 실행이
+    그 달의 정기 실행을 막아버리면 안 되기 때문이다. trigger로 두 종류를 구분한다.
     """
 
     __tablename__ = "scheduled_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    run_month: Mapped[str] = mapped_column(String(7), nullable=False, unique=True)  # "2026-08"
+    run_month: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
     ran_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     queued_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    trigger: Mapped[str] = mapped_column(String(20), nullable=False, default="scheduled")

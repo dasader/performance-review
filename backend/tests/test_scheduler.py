@@ -88,22 +88,80 @@ def test_run_scheduled_ignores_inactive_subfields(ctx):
     assert db.query(Analysis).count() == 0
 
 
-def test_next_scheduled_run_at_stays_in_month_before_due_hour():
+def test_next_scheduled_run_at_stays_in_month_before_due_hour(ctx):
+    db, sf = ctx
     before = datetime(2026, 8, 5, 0, 0, tzinfo=KST)
-    nxt = runner.next_scheduled_run_at(now=before)
+    nxt = runner.next_scheduled_run_at(db, now=before)
     assert (nxt.year, nxt.month, nxt.day, nxt.hour) == (2026, 8, 10, 3)
 
 
-def test_next_scheduled_run_at_rolls_to_next_month_after_due_hour():
+def test_next_scheduled_run_at_rolls_to_next_month_after_due_hour(ctx):
+    db, sf = ctx
     after = datetime(2026, 8, 10, 4, 0, tzinfo=KST)  # 실행 시각(03시대)을 이미 지남
-    nxt = runner.next_scheduled_run_at(now=after)
+    nxt = runner.next_scheduled_run_at(db, now=after)
     assert (nxt.year, nxt.month, nxt.day, nxt.hour) == (2026, 9, 10, 3)
 
 
-def test_next_scheduled_run_at_rolls_year_over_december():
+def test_next_scheduled_run_at_rolls_year_over_december(ctx):
+    db, sf = ctx
     dec = datetime(2026, 12, 15, 0, 0, tzinfo=KST)
-    nxt = runner.next_scheduled_run_at(now=dec)
+    nxt = runner.next_scheduled_run_at(db, now=dec)
     assert (nxt.year, nxt.month, nxt.day) == (2027, 1, 10)
+
+
+def _set_schedule(db, **kwargs) -> None:
+    cfg = runner.get_schedule_settings(db)
+    for k, v in kwargs.items():
+        setattr(cfg, k, v)
+    db.commit()
+
+
+def test_run_scheduled_follows_db_day_setting(ctx):
+    """PUT /admin/schedule로 day를 바꾸면 .env 기본값(10일)이 아니라 새 값을 따라야 한다."""
+    db, sf = ctx
+    _set_schedule(db, day=15)
+
+    old_day_due = datetime(2026, 8, 10, 3, 30, tzinfo=KST)  # 옛 기본값(10일)엔 더 이상 안 돈다
+    assert runner.run_scheduled_if_due(db, now=old_day_due) is None
+    assert db.query(Analysis).count() == 0
+
+    new_day_due = datetime(2026, 8, 15, 3, 30, tzinfo=KST)
+    queued = runner.run_scheduled_if_due(db, now=new_day_due)
+    assert queued == 2
+
+
+def test_run_scheduled_respects_disabled_flag_from_db(ctx):
+    db, sf = ctx
+    _set_schedule(db, enabled=False)
+    due = datetime(2026, 8, 10, 3, 30, tzinfo=KST)
+    assert runner.run_scheduled_if_due(db, now=due) is None
+    assert db.query(Analysis).count() == 0
+
+
+def test_run_scheduled_now_queues_outside_due_hour(ctx):
+    """run-now는 스케줄 시각(day/hour) 판정을 우회해 언제든 큐잉해야 한다."""
+    db, sf = ctx
+    off_hour = datetime(2026, 8, 10, 14, 0, tzinfo=KST)
+    queued = runner.run_scheduled_now(db, now=off_hour)
+    assert queued == 2
+    assert db.query(ScheduledRun).first().trigger == "manual"
+
+
+def test_run_scheduled_now_does_not_block_monthly_run(ctx):
+    """수동 '지금 실행'이 그 달의 정기 실행 멱등성 키(run_month="YYYY-MM")를 막으면 안 된다."""
+    db, sf = ctx
+    manual_time = datetime(2026, 8, 10, 1, 0, tzinfo=KST)  # 정기 실행 시각 이전에 먼저 수동 실행
+    assert runner.run_scheduled_now(db, now=manual_time) == 2
+
+    due = datetime(2026, 8, 10, 3, 30, tzinfo=KST)
+    assert runner.run_scheduled_if_due(db, now=due) == 2  # 수동 실행 이후에도 정기 실행은 정상 큐잉
+
+    runs = db.query(ScheduledRun).order_by(ScheduledRun.ran_at).all()
+    assert len(runs) == 2
+    assert runs[0].trigger == "manual"
+    assert runs[1].trigger == "scheduled"
+    assert runs[0].run_month != runs[1].run_month
+    assert runs[1].run_month == "2026-08"
 
 
 def test_run_scheduled_requeues_already_done_analysis(ctx):

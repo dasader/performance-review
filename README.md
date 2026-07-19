@@ -64,7 +64,8 @@ NN=03. 레지스트리는 `../PORTS.md` 참고 — NN=00은 backend 포트가 80
 | `REDUCE_GROUP_THRESHOLD` | `500` | 세부기술의 추출 건수가 이 값을 넘으면 3단 reduce로 자동 분기 |
 | `DEFAULT_YEAR_RANGE` | `3` | 관리자 대시보드 기본 실행 범위(최근 N개년) |
 | `LOOP_INTERVAL_SECONDS` | `30` | 백그라운드 잡 루프 주기 |
-| `SCHEDULE_ENABLED` / `SCHEDULE_DAY` / `SCHEDULE_HOUR` / `SCHEDULE_TIMEZONE` / `SCHEDULE_YEARS_BACK` | `true` / `10` / `3` / `Asia/Seoul` / `1` | 월간 자동 분석 스케줄 — 아래 "월간 자동 분석 스케줄러" 참고 |
+| `SCHEDULE_ENABLED` / `SCHEDULE_DAY` / `SCHEDULE_HOUR` / `SCHEDULE_YEARS_BACK` | `true` / `10` / `3` / `1` | 월간 자동 분석 스케줄의 **초기 기본값**(최초 실행 시 DB에 한 번만 seed됨) — 이후에는 관리자 화면 "자동 분석 스케줄" 카드에서 재기동 없이 바꾼다. 아래 "월간 자동 분석 스케줄러" 참고 |
+| `SCHEDULE_TIMEZONE` | `Asia/Seoul` | 스케줄 타임존. **DB로 옮기지 않고 `.env` 전용으로 유지** — 변경이 드물고 잘못된 값을 넣으면 `ZoneInfo`가 즉시 실패하므로, 관리자 화면에는 읽기 전용으로만 표시한다 |
 | `API_PORT` / `WEB_PORT` / `DB_PORT` | `8003` / `8103` / `5403` | 호스트 포트 오버라이드 |
 
 전체 목록은 `.env.example` 참고.
@@ -84,22 +85,30 @@ NN=03. 레지스트리는 `../PORTS.md` 참고 — NN=00은 backend 포트가 80
 별도 컨테이너나 스케줄러 라이브러리(APScheduler, celery-beat 등) 없이, 기존 30초 잡 루프
 (`runner.loop()`)가 매 틱마다 "지금이 실행 시각인가"를 확인하는 방식으로 동작한다.
 
-- **주기·시각**: 매월 `SCHEDULE_DAY`일(기본 10일) `SCHEDULE_HOUR`시대(기본 새벽 3시, `SCHEDULE_TIMEZONE`
-  기준 — 기본 KST). **1~3일을 피한 이유**: 같은 OpenAlex 키를 쓰는 다른 서비스와 겹치지 않기 위함.
-- **대상 연도**: 활성(`active=True`) 세부기술 전부에 대해 당해연도 ~ (당해 − `SCHEDULE_YEARS_BACK`)연도
+- **설정은 이제 DB에서 관리한다**: `SCHEDULE_ENABLED`/`SCHEDULE_DAY`/`SCHEDULE_HOUR`/`SCHEDULE_YEARS_BACK`은
+  `schedule_settings` 테이블(싱글턴 행)이 없을 때 딱 한 번 seed되는 **초기 기본값**일 뿐이다. 실제 값을
+  바꾸려면 `.env`를 고치고 컨테이너를 재생성할 필요 없이 관리자 화면(`/admin`)의 "자동 분석 스케줄"
+  카드에서 바로 바꾸면 다음 잡 루프 틱부터 적용된다. `SCHEDULE_TIMEZONE`만 예외 — DB로 옮기지 않고
+  `.env` 전용으로 유지하며 화면에는 읽기 전용으로 표시한다(타임존은 잘못 바꾸면 `ZoneInfo`가 즉시
+  실패해 스케줄러 전체가 멈추는 값이라 변경 빈도·리스크가 다른 설정과 다르다고 판단했다).
+- **주기·시각**: 매월 지정한 일(기본 10일) 시각대(기본 새벽 3시, `SCHEDULE_TIMEZONE` 기준 — 기본 KST)에
+  실행된다. **1~3일을 피한 이유**: 같은 OpenAlex 키를 쓰는 다른 서비스와 겹치지 않기 위함.
+- **대상 연도**: 활성(`active=True`) 세부기술 전부에 대해 당해연도 ~ (당해 − 대상 연도 범위)연도
   (기본값 1 → 당해·직전 2개년)를 큐잉한다. 매번 검색을 다시 돌려 **그 사이 새로 등재된 논문**을
   잡되, 신규가 0건이면 보고서 재생성을 생략해 비용은 검색분(약 $0.004)에 그친다.
 - **멱등성**: `scheduled_runs.run_month`(예: `"2026-08"`)에 unique 제약을 걸어, 같은 달에 컨테이너가
-  재시작돼 실행 시각대에 잡 루프가 다시 돌아도 중복 큐잉되지 않는다.
-- **설정 변수**: `SCHEDULE_ENABLED` / `SCHEDULE_DAY` / `SCHEDULE_HOUR` / `SCHEDULE_TIMEZONE` /
-  `SCHEDULE_YEARS_BACK` (`.env.example` 참고).
+  재시작돼 실행 시각대에 잡 루프가 다시 돌아도 중복 큐잉되지 않는다. 관리자 화면의 "지금 실행"(스케줄
+  시각과 무관하게 즉시 1회 큐잉)은 `"YYYY-MM-manual-..."` 형식의 별도 키를 써서 그 달의 정기 실행을
+  막지 않는다.
 - **실행 이력**: 잡이 `done`에 도달할 때마다 `analysis_runs`에 검색/분석 건수와 트리거(`manual`|`scheduled`)를
-  기록한다. 조회 API는 아직 없다 — 몇 달치가 쌓이면 "월별로 논문이 실제로 얼마나 느는가"를 데이터로
-  확인하는 데 쓴다.
+  기록한다. 관리자 화면 "자동 분석 스케줄" 카드에서 최근 12건의 실행(월·시각·큐잉 건수·성공/실패 요약)을
+  볼 수 있다(`GET /api/admin/schedule`) — 몇 달치가 쌓이면 "월별로 논문이 실제로 얼마나 느는가"를
+  데이터로 확인하는 데도 쓴다.
 - **비용 최적화**: 신규 추출 논문이 0건이면(모델 버전이 바뀌어 전량 재추출된 경우 제외) 보고서 재생성
   LLM 호출을 생략하고 통계만 갱신한다 — 재실행 1회 비용의 약 47%가 보고서 생성이라 이 스킵으로 크게
   줄어든다.
-- 관리자 화면(`/admin`) 상단에 스케줄 활성 여부·다음 실행 예정 시각·마지막 자동 실행 결과가 표시된다.
+- 관리자 화면(`/admin`)의 "자동 분석 스케줄" 카드에서 on/off · 일정 편집 · 다음 실행 예정 시각 ·
+  최근 실행 이력 · 즉시 실행("지금 실행")을 모두 처리한다.
 
 ## 알려진 제약
 

@@ -14,7 +14,7 @@ from app.database import SessionLocal
 from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import Subfield
 from app.models.paper import Paper, PaperExtraction
-from app.models.schedule import AnalysisRun, ScheduledRun
+from app.models.schedule import AnalysisRun, ScheduledRun, ScheduleSetting
 from app.services import mapper, reducer, search, stats
 from app.services.budget import BudgetExceeded, spent_today
 
@@ -336,18 +336,48 @@ async def _do_reduce(db: Session, analysis: Analysis) -> None:
     db.commit()
 
 
+_SCHEDULE_SETTING_ID = 1
+
+
+def get_schedule_settings(db: Session) -> ScheduleSetting:
+    """스케줄 설정 싱글턴 행을 가져온다. 없으면 .env 값을 초기 기본값으로 한 행을 만든다.
+
+    행이 생성된 뒤로는 이 값이 .env보다 우선한다 — 관리자 화면에서 PUT /admin/schedule로
+    바꾸면 재기동 없이 다음 잡 루프 틱부터 바로 반영된다.
+    """
+    row = db.get(ScheduleSetting, _SCHEDULE_SETTING_ID)
+    if row is not None:
+        return row
+    row = ScheduleSetting(
+        id=_SCHEDULE_SETTING_ID,
+        enabled=settings.schedule_enabled,
+        day=settings.schedule_day,
+        hour=settings.schedule_hour,
+        years_back=settings.schedule_years_back,
+    )
+    db.add(row)
+    try:
+        db.flush()
+    except IntegrityError:
+        # 동시 요청이 먼저 만든 경우(budget.py::_row와 같은 패턴).
+        db.rollback()
+        row = db.get(ScheduleSetting, _SCHEDULE_SETTING_ID)
+    return row
+
+
 def _now_schedule_tz() -> datetime:
     return datetime.now(ZoneInfo(settings.schedule_timezone))
 
 
-def _is_schedule_due(now: datetime) -> bool:
-    return now.day == settings.schedule_day and now.hour == settings.schedule_hour
+def _is_schedule_due(now: datetime, *, day: int, hour: int) -> bool:
+    return now.day == day and now.hour == hour
 
 
-def next_scheduled_run_at(now: datetime | None = None) -> datetime:
-    """다음 예정 실행 시각(스케줄 타임존 기준, tzinfo 없이) — 관리자 대시보드 표시용."""
+def next_scheduled_run_at(db: Session, now: datetime | None = None) -> datetime:
+    """다음 예정 실행 시각(스케줄 타임존 기준, tzinfo 없이) — 관리자 화면 표시용."""
+    cfg = get_schedule_settings(db)
     now = now or _now_schedule_tz()
-    this_month = now.replace(day=settings.schedule_day, hour=settings.schedule_hour,
+    this_month = now.replace(day=cfg.day, hour=cfg.hour,
                               minute=0, second=0, microsecond=0, tzinfo=None)
     if now.replace(tzinfo=None) < this_month:
         return this_month
@@ -358,8 +388,9 @@ def next_scheduled_run_at(now: datetime | None = None) -> datetime:
 
 
 def run_scheduled_if_due(db: Session, *, now: datetime | None = None) -> int | None:
-    """매월 schedule_day일 schedule_hour시대(schedule_timezone)에 활성 세부기술 전부를
-    당해~(당해-schedule_years_back)연도로 enqueue한다.
+    """매월 (DB) schedule_day일 schedule_hour시대(schedule_timezone)에 활성 세부기술
+    전부를 당해~(당해-schedule_years_back)연도로 enqueue한다. 설정은 get_schedule_settings로
+    DB에서 읽는다(.env는 행이 없을 때의 초기 기본값일 뿐이다).
 
     **force=True인 이유**: enqueue()는 status="done"이고 query_hash가 그대로면 아무것도
     하지 않는다. 스케줄러가 force=False로 부르면 이미 완료된 분석은 매달 건너뛰어져
@@ -371,14 +402,16 @@ def run_scheduled_if_due(db: Session, *, now: datetime | None = None) -> int | N
     재시작돼 잡 루프가 다시 돌아도, 같은 달 두 번째 삽입은 IntegrityError로 막혀
     조용히 건너뛴다(budget.py::_row와 같은 패턴).
     """
-    if not settings.schedule_enabled:
+    cfg = get_schedule_settings(db)
+    if not cfg.enabled:
         return None
     now = now or _now_schedule_tz()
-    if not _is_schedule_due(now):
+    if not _is_schedule_due(now, day=cfg.day, hour=cfg.hour):
         return None
 
     run_month = f"{now.year:04d}-{now.month:02d}"
-    row = ScheduledRun(run_month=run_month, ran_at=now.replace(tzinfo=None), queued_count=0)
+    row = ScheduledRun(run_month=run_month, ran_at=now.replace(tzinfo=None), queued_count=0,
+                        trigger="scheduled")
     db.add(row)
     try:
         db.flush()
@@ -387,7 +420,7 @@ def run_scheduled_if_due(db: Session, *, now: datetime | None = None) -> int | N
         logger.debug("[스케줄러] %s 이미 실행됨 — 건너뜀", run_month)
         return None
 
-    years = [now.year - i for i in range(settings.schedule_years_back + 1)]
+    years = [now.year - i for i in range(cfg.years_back + 1)]
     subfields = db.query(Subfield).filter(Subfield.active.is_(True)).all()
     queued = 0
     for subfield in subfields:
@@ -401,6 +434,120 @@ def run_scheduled_if_due(db: Session, *, now: datetime | None = None) -> int | N
         run_month, len(subfields), years, queued,
     )
     return queued
+
+
+def run_scheduled_now(db: Session, *, now: datetime | None = None) -> int:
+    """관리자 화면의 "지금 실행" — 스케줄 시각 판정을 우회해 즉시 1회 큐잉한다.
+
+    run_scheduled_if_due와 같은 모양(활성 세부기술 전부 × 당해~(당해-years_back)연도,
+    force=True)으로 큐잉하되 두 가지가 다르다:
+    - trigger를 "manual"로 남긴다 — 이 실행으로 완료된 건은 AnalysisRun.trigger에도
+      "manual"로 기록되어, "정기 스케줄러가 실제로 새 논문을 얼마나 찾는가"라는
+      원래 통계 목적이 즉흥 실행으로 흐려지지 않는다.
+    - ScheduledRun.run_month를 "YYYY-MM"이 아니라 "YYYY-MM-manual-HHMMSSffffff"로
+      만든다. run_month unique 제약이 그 달의 정기 실행 멱등성 키이므로, 여기서
+      "YYYY-MM"을 그대로 쓰면 (a) 이 수동 실행이 먼저 들어갔을 때 그 달 정기 실행이
+      IntegrityError로 막히거나, (b) 정기 실행이 먼저 있었을 때 이 수동 실행이
+      거부된다 — 어느 쪽이든 "수동 실행이 정기 실행을 막으면 안 된다"는 요구를
+      깬다. 접미사를 붙여 두 키가 절대 같은 문자열이 될 수 없게 한다.
+      (마이크로초까지 포함하므로 같은 초 안에 버튼을 여러 번 눌러도 충돌하지 않는다.
+      루프가 자동 재시도하는 경로가 아니라 사용자가 직접 누르는 단발 액션이라
+      run_scheduled_if_due처럼 IntegrityError catch로 멱등성을 보장할 필요는 없다.)
+    """
+    now = now or _now_schedule_tz()
+    cfg = get_schedule_settings(db)
+    run_key = f"{now.year:04d}-{now.month:02d}-manual-{now:%H%M%S%f}"
+    row = ScheduledRun(run_month=run_key, ran_at=now.replace(tzinfo=None), queued_count=0,
+                        trigger="manual")
+    db.add(row)
+    db.flush()
+
+    years = [now.year - i for i in range(cfg.years_back + 1)]
+    subfields = db.query(Subfield).filter(Subfield.active.is_(True)).all()
+    queued = 0
+    for subfield in subfields:
+        for year in years:
+            queued += len(enqueue(db, subfield, year, year, force=True, trigger="manual"))
+
+    row.queued_count = queued
+    db.commit()
+    logger.info(
+        "[스케줄러] 수동 즉시 실행 완료 — 활성 세부기술 %d개 × 연도 %s, %d건 큐잉",
+        len(subfields), years, queued,
+    )
+    return queued
+
+
+def schedule_history(db: Session, *, limit: int = 12) -> list[dict]:
+    """관리자 화면의 "최근 실행 이력" — ScheduledRun 최신 limit건 + 성공 여부 요약(근사치).
+
+    done_count: 이 실행의 ran_at ~ (시간순 다음 ScheduledRun의 ran_at, 없으면 지금) 구간에
+    같은 trigger로 완료(AnalysisRun 생성)된 건수. ScheduledRun.ran_at은 스케줄 타임존
+    기준 naive 값이고 AnalysisRun.ran_at은 UTC 기준이라 비교 전 UTC로 맞춘다. "이 구간에
+    완료됐다"는 "이 실행이 큐잉한 것"의 근사치다 — AnalysisRun에 실행 ID를 직접 연결하는
+    FK가 없어 정확히 귀속시킬 수는 없다(다음 실행 전에 완료된 것이라 이 실행 소관일
+    가능성이 높다고 보는 수준).
+
+    failed_count/paused_count/in_progress_count: "지금 이 순간" 같은 trigger의 Analysis
+    상태 집계다. Analysis는 (subfield_id, year)별로 매번 덮어써지므로, 같은 trigger로
+    더 나중에 실행된 적이 있다면 이 값은 그 나중 실행 결과로 이미 갈아치워진 것이라
+    이 행 소관이 아니다 — 그래서 같은 trigger 중 "가장 최근" 실행 행에만 채우고
+    (is_current_snapshot=True), 더 오래된 행은 0으로 둔다.
+    """
+    rows = db.query(ScheduledRun).order_by(ScheduledRun.ran_at.desc()).limit(limit).all()
+    if not rows:
+        return []
+
+    all_asc = db.query(ScheduledRun).order_by(ScheduledRun.ran_at.asc()).all()
+    latest_ran_at_by_trigger: dict[str, datetime] = {}
+    for r in all_asc:
+        latest_ran_at_by_trigger[r.trigger] = r.ran_at  # 오름차순이라 마지막 값이 최신
+
+    tz = ZoneInfo(settings.schedule_timezone)
+
+    def to_utc_naive(schedule_tz_naive: datetime) -> datetime:
+        return schedule_tz_naive.replace(tzinfo=tz).astimezone(timezone.utc).replace(tzinfo=None)
+
+    result = []
+    for row in rows:
+        next_ran_at = next((r.ran_at for r in all_asc if r.ran_at > row.ran_at), None)
+        window_start = to_utc_naive(row.ran_at)
+        window_end = (
+            to_utc_naive(next_ran_at) if next_ran_at
+            else datetime.now(timezone.utc).replace(tzinfo=None)
+        )
+        done_count = db.query(AnalysisRun).filter(
+            AnalysisRun.trigger == row.trigger,
+            AnalysisRun.ran_at >= window_start,
+            AnalysisRun.ran_at < window_end,
+        ).count()
+
+        is_current = latest_ran_at_by_trigger.get(row.trigger) == row.ran_at
+        if is_current:
+            failed_count = db.query(Analysis).filter(
+                Analysis.trigger == row.trigger, Analysis.status == "failed"
+            ).count()
+            paused_count = db.query(Analysis).filter(
+                Analysis.trigger == row.trigger, Analysis.status == "paused"
+            ).count()
+            in_progress_count = db.query(Analysis).filter(
+                Analysis.trigger == row.trigger, Analysis.status.in_(ACTIVE_STATES)
+            ).count()
+        else:
+            failed_count = paused_count = in_progress_count = 0
+
+        result.append({
+            "run_month": row.run_month,
+            "ran_at": row.ran_at.isoformat(),
+            "trigger": row.trigger,
+            "queued_count": row.queued_count,
+            "done_count": done_count,
+            "failed_count": failed_count,
+            "paused_count": paused_count,
+            "in_progress_count": in_progress_count,
+            "is_current_snapshot": is_current,
+        })
+    return result
 
 
 async def loop() -> None:
