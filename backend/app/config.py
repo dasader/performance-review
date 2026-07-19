@@ -25,11 +25,12 @@ class Settings(BaseSettings):
     batch_max_requests_per_file: int = 1000
     sync_rpm: int = 60
 
-    # Gemini batch(map) 단가. 정확한 단가는 확인되지 않았다 — Gemini 3.1 Flash Lite의
-    # 공식 batch 요금표를 찾지 못해 같은 세대 flash-lite 계열의 공개 단가를 보수적으로
-    # (실제보다 비싸게) 반영했다. 확인되는 대로 .env에서 조정할 것.
-    gemini_batch_input_usd_per_1m: float = 0.0375
-    gemini_batch_output_usd_per_1m: float = 0.15
+    # Gemini batch(map) 단가 — ai.google.dev/gemini-api/docs/pricing 의
+    # gemini-3.1-flash-lite 항목에서 확인(2026-07 기준). Batch는 표준가의 50%.
+    # 표준: 입력 $0.25 / 출력 $1.50 → batch: 입력 $0.125 / 출력 $0.75.
+    # 출력 단가는 "including thinking tokens" — thinking 토큰이 출력에 포함돼 과금된다.
+    gemini_batch_input_usd_per_1m: float = 0.125
+    gemini_batch_output_usd_per_1m: float = 0.75
     # 미리보기 시점엔 실제 논문 title/abstract가 없어 길이를 알 수 없으므로 쓰는
     # 논문당 평균 토큰 근사치. 실측 분포가 쌓이면 .env에서 조정한다.
     gemini_avg_input_tokens_per_paper: int = 700
