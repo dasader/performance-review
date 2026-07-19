@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -22,10 +23,19 @@ def reset_time_utc() -> datetime:
 
 def _row(db: Session) -> OpenAlexUsage:
     row = db.query(OpenAlexUsage).filter(OpenAlexUsage.usage_date == _today()).first()
-    if not row:
-        row = OpenAlexUsage(usage_date=_today(), cost_usd=0.0)
-        db.add(row)
+    if row:
+        return row
+    row = OpenAlexUsage(usage_date=_today(), cost_usd=0.0)
+    db.add(row)
+    try:
         db.flush()
+    except IntegrityError:
+        # 다른 세션이 같은 usage_date 행을 먼저 커밋한 경우(동시 첫 요청).
+        # 롤백 후 재조회하면 그 행을 찾을 수 있다.
+        db.rollback()
+        row = db.query(OpenAlexUsage).filter(OpenAlexUsage.usage_date == _today()).first()
+        if row is None:
+            raise
     return row
 
 
@@ -34,11 +44,17 @@ def spent_today(db: Session) -> float:
 
 
 def check_budget(db: Session, estimated_cost: float) -> None:
-    """예상 비용을 더해도 이 서비스 몫을 넘지 않는지 확인한다."""
-    projected = spent_today(db) + estimated_cost
+    """예상 비용을 더해도 이 서비스 몫을 넘지 않는지 확인한다.
+
+    # ponytail: check→호출→record 사이에 잠금이 없어 동시 실행 시 한도를 소폭 넘을 수 있다.
+    # 기본 예산이 실제 한도($1/day)의 절반이라 이를 흡수한다. 정확한 상한이 필요해지면
+    # usage 행에 SELECT ... FOR UPDATE 잠금을 건다.
+    """
+    spent = spent_today(db)
+    projected = spent + estimated_cost
     if projected > settings.openalex_daily_budget_usd:
         raise BudgetExceeded(
-            f"OpenAlex 일일 예산 초과: 사용 ${spent_today(db):.4f} + 예상 ${estimated_cost:.4f} "
+            f"OpenAlex 일일 예산 초과: 사용 ${spent:.4f} + 예상 ${estimated_cost:.4f} "
             f"> 한도 ${settings.openalex_daily_budget_usd:.2f}. "
             f"UTC {reset_time_utc():%Y-%m-%d %H:%M} 이후 재시도하세요."
         )
