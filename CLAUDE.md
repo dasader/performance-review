@@ -98,3 +98,33 @@ SQLAlchemy가 FK를 해석하려면 관련 모델 클래스가 전부 import되�
 (`google/genai/batches.py::_InlinedRequest_to_mldev`, `google/genai/models.py::_GenerateContentConfig_to_mldev`)로
 확인한 것이므로, `GenerateContentConfig`를 통째로 덤프하면 `systemInstruction`이 잘못된 위치에 나온다 —
 반드시 별도 `Content`로 분리해 조립해야 한다.
+
+## 실검증 상태 (2026-07-19)
+
+실제 API 키로 종단 실행해 확인한 범위. **미검증 항목을 검증된 것처럼 다루지 말 것.**
+
+| 경로 | 상태 |
+|---|---|
+| OpenAlex 검색·cursor 페이징·비용 실측 기록·KR 필터·abstract 인라인 수신 | ✅ 검증 |
+| 예산 게이트, 미리보기 비용 추정 | ✅ 검증 |
+| Gemini Batch 제출·폴링·결과 JSONL 파싱, `thinking_level="low"` 수용 | ✅ 검증 |
+| reduce(thinking `high`) 보고서 생성 | ✅ 검증 (논문 10건 규모) |
+| 잡 상태머신 `pending→searching→extracting→reducing→done`, `/retry` | ✅ 검증 |
+| 통계 집계, 모집단 분리 표기(검색 11 / 분석 10 / abstract 미보유 1) | ✅ 검증 |
+| **KCI 검색 (국문 검색식 포함)** | ❌ **미검증** — 키 만료(`사용기간이 종료되었습니다.`) |
+| 3단 reduce 분기 (`REDUCE_GROUP_THRESHOLD` 초과) | ❌ 미검증 — 실행 규모가 작아 도달 안 함 |
+| batch 다중 청크 (1,000건 초과) | ❌ 미검증 — 동일 |
+| 대량 검색 시 하드 가드(`AnalysisTooLarge`) 실동작 | ❌ 미검증 — 단위 테스트만 |
+
+### KCI 키가 만료된 상태에서 돌릴 때
+
+`KCI_API_KEY`가 **설정돼 있는데 만료**면 모든 분석이 `failed`로 끝난다(의도된 동작 —
+자세한 이유는 README "KCI 실패는 조용히 넘어가지 않는다" 참고). 키를 갱신하기 전까지
+OpenAlex만으로 돌리려면 `.env`에서 `KCI_API_KEY`를 **비우고** 컨테이너를 재생성한다:
+
+```bash
+# .env: KCI_API_KEY=
+docker compose up -d --force-recreate api
+```
+
+키를 갱신한 뒤에는 세부기술의 `query_kci`에 **한글 검색식**을 채워야 국내지가 잡힌다.
