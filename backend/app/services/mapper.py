@@ -1,5 +1,6 @@
 import logging
 
+from google.genai import types
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -39,21 +40,37 @@ def pending_papers(db: Session, analysis: Analysis, papers: list[Paper]) -> list
 
 
 def build_requests(papers: list[Paper]) -> list[dict]:
-    """paper_key를 요청 key로 실어 결과를 논문에 되짚을 수 있게 한다."""
+    """paper_key를 요청 key로 실어 결과를 논문에 되짚을 수 있게 한다.
+
+    request 본문은 손으로 만든 dict가 아니라 google-genai SDK 타입(Content/Part/
+    GenerateContentConfig)으로 만들고 model_dump(by_alias=True, mode="json")으로
+    직렬화한다. 와이어 스키마는 camelCase이고, systemInstruction은 request 최상위
+    (contents/generationConfig와 형제)에, responseMimeType/responseSchema/
+    thinkingConfig는 generationConfig 안에 중첩된다 — 이 구조는 SDK 내부 변환 로직
+    (google/genai/batches.py::_InlinedRequest_to_mldev,
+    google/genai/models.py::_GenerateContentConfig_to_mldev)의 실제 소스로 확인했다.
+    GenerateContentConfig를 통째로 dump하면 systemInstruction이 잘못된 위치(다른
+    generationConfig 필드들과 같은 레벨)에 나오므로, system instruction은 별도
+    Content로 분리해 조립한다.
+    """
     return [
         {
             "key": p.paper_key,
             "request": {
                 "contents": [
-                    {"role": "user",
-                     "parts": [{"text": map_user_text(p.title, p.abstract)}]}
+                    types.Content(
+                        role="user",
+                        parts=[types.Part(text=map_user_text(p.title, p.abstract))],
+                    ).model_dump(by_alias=True, exclude_none=True, mode="json")
                 ],
-                "system_instruction": {"parts": [{"text": MAP_INSTRUCTION}]},
-                "generation_config": {
-                    "response_mime_type": "application/json",
-                    "response_schema": MAP_SCHEMA,
-                    "thinking_config": {"thinking_level": settings.thinking_map},
-                },
+                "systemInstruction": types.Content(
+                    parts=[types.Part(text=MAP_INSTRUCTION)]
+                ).model_dump(by_alias=True, exclude_none=True, mode="json"),
+                "generationConfig": types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=MAP_SCHEMA,
+                    thinking_config=types.ThinkingConfig(thinking_level=settings.thinking_map),
+                ).model_dump(by_alias=True, exclude_none=True, mode="json"),
             },
         }
         for p in papers
@@ -65,11 +82,23 @@ def chunks(requests: list[dict]) -> list[list[dict]]:
     return [requests[i:i + size] for i in range(0, len(requests), size)]
 
 
+def _estimate_text_tokens(text: str) -> int:
+    """근사치: ASCII는 4자/토큰(영어 경험칙), 비ASCII(한글 등)는 2자/토큰으로
+    따로 센다. 문자수/4를 그대로 쓰면 한국어 비중이 큰 텍스트에서 토큰 수를
+    과소평가한다."""
+    ascii_len = sum(1 for c in text if ord(c) < 128)
+    non_ascii_len = len(text) - ascii_len
+    return ascii_len // 4 + non_ascii_len // 2
+
+
 def estimate_tokens(papers: list[Paper]) -> int:
-    """제출 전 게이트 판단용 근사치. 문자수/4 — ±20% 오차면 충분하고,
-    논문마다 count_tokens를 부르면 그 호출 자체가 낭비다."""
-    instruction_len = len(MAP_INSTRUCTION)
-    return sum((len(p.title) + len(p.abstract) + instruction_len) // 4 for p in papers)
+    """제출 전 게이트 판단용 근사치 — ±20% 오차면 충분하고, 논문마다
+    count_tokens를 부르면 그 호출 자체가 낭비다."""
+    instruction_tokens = _estimate_text_tokens(MAP_INSTRUCTION)
+    return sum(
+        instruction_tokens + _estimate_text_tokens(p.title) + _estimate_text_tokens(p.abstract)
+        for p in papers
+    )
 
 
 def save_results(db: Session, analysis: Analysis, results: list[dict]) -> int:

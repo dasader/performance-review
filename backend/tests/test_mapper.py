@@ -6,6 +6,7 @@ from app.database import Base
 from app.models.analysis import Analysis
 from app.models.field import Field, Subfield
 from app.models.paper import Paper, PaperExtraction
+from app.prompts import MAP_INSTRUCTION, MAP_SCHEMA
 from app.services import mapper
 
 
@@ -67,6 +68,39 @@ def test_build_requests_carries_paper_key_as_the_request_key(ctx):
     reqs = mapper.build_requests([p1])
     assert reqs[0]["key"] == "k1"
     assert "초록 본문" in reqs[0]["request"]["contents"][0]["parts"][0]["text"]
+
+
+def test_build_requests_serializes_sdk_types_into_expected_wire_shape(ctx):
+    """SDK 소스(google/genai/batches.py::_InlinedRequest_to_mldev,
+    google/genai/models.py::_GenerateContentConfig_to_mldev)로 확인한 실제 와이어
+    구조: systemInstruction은 request 최상위, thinkingConfig/responseSchema 등은
+    generationConfig 안에 camelCase로 중첩된다."""
+    db, a = ctx
+    p1 = _paper(db, "k1", "초록 본문")
+    req = mapper.build_requests([p1])[0]["request"]
+
+    assert req["systemInstruction"]["parts"][0]["text"] == MAP_INSTRUCTION
+    assert req["generationConfig"]["responseMimeType"] == "application/json"
+    assert req["generationConfig"]["responseSchema"] == MAP_SCHEMA
+    assert req["generationConfig"]["thinkingConfig"]["thinkingLevel"] == "LOW"
+    # 손으로 만든 snake_case 키가 남아있지 않은지 확인
+    assert "system_instruction" not in req
+    assert "generation_config" not in req
+
+
+def test_estimate_tokens_korean_estimates_higher_than_ascii(ctx):
+    db, a = ctx
+    ascii_paper = _paper(db, "k1", "x" * 100)
+    ascii_paper.title = "y" * 100
+    db.commit()
+
+    korean_paper = _paper(db, "k2", "가" * 100)
+    korean_paper.title = "나" * 100
+    db.commit()
+
+    ascii_estimate = mapper.estimate_tokens([ascii_paper])
+    korean_estimate = mapper.estimate_tokens([korean_paper])
+    assert korean_estimate > ascii_estimate
 
 
 def test_save_results_writes_extractions(ctx):
