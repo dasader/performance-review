@@ -515,7 +515,9 @@ function QueryLintFeedback({ result, valueTrimmed }: { result: LintResult; value
 }
 
 // 세부기술 추가/편집 공용 모달. 라이브러리 없이 직접 구현:
-// - 배경 클릭·Esc로 닫힘(저장 중에는 무시)
+// - Esc·명시적 취소/닫기 버튼으로만 닫힘(저장 중에는 무시). 배경(오버레이) 클릭으로는
+//   닫히지 않는다 — 검색식을 길게 입력하다 실수로 바깥을 클릭하면 입력이 통째로 날아가는
+//   사고를 막기 위함이다.
 // - 열릴 때 initialFocusRef로 포커스, 닫힐 때(언마운트) 트리거였던 요소로 포커스 복귀
 //   (모달을 연 순간의 document.activeElement가 곧 그 트리거 버튼이므로 별도로 전달받지 않는다)
 // - role=dialog + aria-modal + aria-labelledby, 열려 있는 동안 배경 스크롤 잠금
@@ -558,12 +560,7 @@ function Modal({
   }, [closeDisabled, onClose]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !closeDisabled) onClose();
-      }}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4">
       <div
         role="dialog"
         aria-modal="true"

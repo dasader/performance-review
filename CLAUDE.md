@@ -20,6 +20,9 @@ docker compose logs -f api
 # 테스트 (컨테이너 밖, 로컬 venv)
 cd backend && ./.venv/bin/python -m pytest
 
+# 프론트엔드 테스트 (vitest, 순수 함수 대상 — jsdom 등 브라우저 환경 없음)
+cd frontend && npm test
+
 # 마이그레이션 추가
 docker compose exec api alembic revision --autogenerate -m "설명"
 ```

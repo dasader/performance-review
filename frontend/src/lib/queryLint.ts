@@ -91,20 +91,4 @@ export function lintQuery(raw: string, mode: "openalex" | "kci"): LintResult {
   return { errors, warnings };
 }
 
-// 검증:
-// lintQuery("", "openalex") → { errors: [], warnings: [] } (빈 입력은 항상 통과)
-// lintQuery("semiconductor AND memory", "openalex") → 오류·경고 없음
-// lintQuery("(memory OR flash) AND semiconductor", "openalex") → 오류·경고 없음
-// lintQuery("memory OR (flash AND semiconductor)", "openalex") → 오류·경고 없음
-// lintQuery("(memory OR flash", "openalex") → errors 1건 (paren-unclosed)
-// lintQuery("memory OR flash)", "openalex") → errors 1건 (paren-order)
-// lintQuery('"memory semiconductor', "openalex") → errors 1건 (quote-unmatched)
-// lintQuery("memory AND ()", "openalex") → errors 1건 (empty-parens)
-// lintQuery("AND memory", "openalex") → errors 1건 (leading-operator)
-// lintQuery("memory OR", "openalex") → errors 1건 (trailing-operator)
-// lintQuery("memory AND OR flash", "openalex") → errors 1건 (consecutive-operators)
-// lintQuery("memory AND NOT flash", "openalex") → 오류 없음 (AND NOT은 허용되는 부정 결합)
-// lintQuery("memory, flash", "openalex") → errors 없음, warnings 1건 (comma-pipe)
-// lintQuery("반도체 메모리", "kci") → 오류·경고 없음 (KCI는 연산자 검사를 하지 않음)
-// lintQuery("(반도체 메모리", "kci") → errors 1건 (paren-unclosed), 연산자 관련 오류는 없음
-// lintQuery("AND 반도체", "kci") → 오류 없음 (KCI는 leading-operator를 검사하지 않음)
+// 검증: frontend/src/lib/queryLint.test.ts

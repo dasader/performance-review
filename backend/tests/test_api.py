@@ -309,3 +309,74 @@ def test_analysis_report_reuses_footnote_number_for_repeated_citation(client):
     assert body["report_md"].count("[\\[1\\]](#ref-1)") == 2
     assert len(body["references"]) == 1
     assert body["references"][0]["n"] == 1
+
+
+def test_analysis_report_footnotes_year_prefixed_citation(client):
+    """분석 7 재현: LLM이 괄호 안에 '[2025] 제목' 형태로 연도 접두사를 붙인 경우도
+    치환돼야 한다 — 완전 일치만 보던 이전 구현은 이 형태를 전혀 못 잡았다."""
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(
+        paper_key="k4",
+        title="Development of High Density 3D NAND Flash Memory",
+        journal="IEEE", year=2025, source="openalex",
+    )
+    md = "밀도를 크게 높였다 ([2025] Development of High Density 3D NAND Flash Memory)."
+    title = paper.title
+    a = _done_analysis_with_papers(db, md, [paper])
+    db.close()
+
+    r = client.get(f"/api/analyses/{a.id}")
+    body = r.json()
+    assert "[\\[1\\]](#ref-1)" in body["report_md"]
+    assert "Development of High Density" not in body["report_md"]
+    assert len(body["references"]) == 1
+    assert body["references"][0]["title"] == title
+
+
+def test_analysis_report_footnotes_short_title_not_partial_matched(client):
+    """제목이 짧으면(15자 미만) 괄호 안 다른 텍스트의 일부로 우연히 매칭되지 않아야 한다."""
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(paper_key="k5", title="AI Diagnosis", source="openalex")  # 12자, 부분매칭 대상 아님
+    md = "제안된 방법이다 (AI Diagnosis based on deep learning approach)."
+    a = _done_analysis_with_papers(db, md, [paper])
+    db.close()
+
+    r = client.get(f"/api/analyses/{a.id}")
+    body = r.json()
+    assert body["report_md"] == md
+    assert body["references"] == []
+
+
+def test_analysis_report_footnotes_prefers_longer_title_when_substring(client):
+    """한 제목이 다른 제목의 부분 문자열인 경우, 실제로 인용된 긴 제목의 논문으로
+    귀속돼야 한다 — 짧은 제목을 먼저 보면 잘못된 논문이 걸릴 수 있다."""
+    db = app.dependency_overrides[get_db]()
+    short_paper = Paper(paper_key="k6", title="Graphene Growth Method", source="openalex")
+    long_paper = Paper(
+        paper_key="k7",
+        title="Advanced Graphene Growth Method for Flexible Devices",
+        journal="Nature", year=2023, source="openalex",
+    )
+    md = "새로운 성장법을 제시했다 (Advanced Graphene Growth Method for Flexible Devices)."
+    long_title = long_paper.title
+    a = _done_analysis_with_papers(db, md, [short_paper, long_paper])
+    db.close()
+
+    r = client.get(f"/api/analyses/{a.id}")
+    body = r.json()
+    assert len(body["references"]) == 1
+    assert body["references"][0]["title"] == long_title
+
+
+def test_analysis_report_footnotes_exact_match_still_works(client):
+    """기존에 동작하던 '괄호 안이 제목과 정확히 일치' 케이스가 회귀 없이 계속 동작해야 한다."""
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(paper_key="k8", title="Exact Match Paper Title Example", source="openalex")
+    md = "성과를 냈다 (Exact Match Paper Title Example)."
+    a = _done_analysis_with_papers(db, md, [paper])
+    db.close()
+
+    r = client.get(f"/api/analyses/{a.id}")
+    body = r.json()
+    assert "[\\[1\\]](#ref-1)" in body["report_md"]
+    assert len(body["references"]) == 1

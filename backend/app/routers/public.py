@@ -15,15 +15,35 @@ router = APIRouter(prefix="/api", tags=["public"])
 
 _PAREN_RE = re.compile(r"\(([^()]+)\)")
 
+# 짧은 제목(15자 미만)은 괄호 안 텍스트에 부분 문자열로 우연히 등장할 위험이 커서
+# (예: 제목이 "AI"면 "(AI 기반 진단 시스템)"에도 걸림) 부분 매칭 대상에서 제외하고
+# 완전 일치만 허용한다. 15는 실측 데이터(짧아도 단어 2~3개는 되는 실제 논문 제목들)
+# 기준의 여유 있는 하한선이다 — 과학적으로 도출된 값은 아니다.
+_MIN_PARTIAL_TITLE_LEN = 15
+
 
 def _normalize_ws(s: str) -> str:
     return " ".join(s.split())
 
 
+def _title_pattern(title: str) -> re.Pattern:
+    """제목의 공백 연속을 \\s+로 완화하고 나머지는 이스케이프한 정규식.
+    LLM이 인용할 때 줄바꿈/공백 개수가 원 제목과 살짝 달라져도 매칭되게 한다."""
+    return re.compile(r"\s+".join(re.escape(w) for w in title.split()), re.IGNORECASE)
+
+
 def _apply_footnotes(report_md: str | None, papers: list[Paper]) -> tuple[str | None, list[dict]]:
     """report_md 안에서 괄호로 인용된 논문 제목을 각주 번호로 치환한다(읽기 시점 후처리,
-    LLM 재호출 없음). 매칭은 보수적으로: 괄호 안 텍스트가 공백 정규화 후 논문 제목과
-    정확히 같을 때만 치환한다. 못 찾은 제목은 원문 그대로 둔다.
+    LLM 재호출 없음). LLM이 실행마다 인용 형식을 조금씩 다르게 쓰므로(연도 접두사, 공백 차이
+    등) 매칭은 "괄호 안 어딘가에 제목이 포함되는가"로 본다 — 괄호 전체와 정확히 같아야만
+    치환하던 이전 방식은 `([2025] 제목)` 같은 형태를 전혀 못 잡았다. 다만 짧은 제목은 부분
+    매칭 시 오탐 위험이 커서(_MIN_PARTIAL_TITLE_LEN 참고) 완전 일치만 허용한다. 못 찾은
+    제목은 원문 그대로 둔다 — 잘못 치환하는 것보다 안전하다.
+
+    제목은 긴 것부터 시도한다. 한 제목이 다른 제목의 부분 문자열인 경우(예: "Graphene
+    Growth Method"가 "Advanced Graphene Growth Method for Flexible Devices"에 포함),
+    짧은 쪽을 먼저 보면 실제로는 긴 제목이 인용된 괄호가 짧은 제목의 논문으로 잘못
+    귀속된다.
 
     각주는 `[\\[1\\]](#ref-1)` 형태의 마크다운 링크로 치환된다 — 대괄호를 이스케이프해
     렌더링 시 보이는 텍스트는 그대로 "[1]"이면서 "#ref-1"(참고문헌 항목)로 이동하는 링크가
@@ -34,30 +54,39 @@ def _apply_footnotes(report_md: str | None, papers: list[Paper]) -> tuple[str | 
     if not report_md:
         return report_md, []
 
-    title_by_norm: dict[str, Paper] = {}
-    for p in papers:
-        key = _normalize_ws(p.title or "")
-        if key and key not in title_by_norm:
-            title_by_norm[key] = p
+    # (paper, 정규식 패턴) 목록. 제목 길이 내림차순 — 위 docstring의 부분 문자열 문제 방지.
+    candidates: list[tuple[Paper, re.Pattern]] = sorted(
+        ((p, _title_pattern(p.title)) for p in papers if p.title and p.title.strip()),
+        key=lambda pc: len(pc[0].title),
+        reverse=True,
+    )
 
-    numbers: dict[str, int] = {}
+    numbers: dict[int, int] = {}  # paper.id -> 각주 번호
     references: list[dict] = []
 
     def repl(m: re.Match) -> str:
-        norm = _normalize_ws(m.group(1))
-        paper = title_by_norm.get(norm)
-        if paper is None:
+        content = m.group(1)
+        matched: Paper | None = None
+        for paper, pattern in candidates:
+            if len(paper.title) < _MIN_PARTIAL_TITLE_LEN:
+                if _normalize_ws(content).lower() != _normalize_ws(paper.title).lower():
+                    continue
+            elif not pattern.search(content):
+                continue
+            matched = paper
+            break
+        if matched is None:
             return m.group(0)
-        n = numbers.get(norm)
+        n = numbers.get(matched.id)
         if n is None:
             n = len(references) + 1
-            numbers[norm] = n
+            numbers[matched.id] = n
             references.append({
                 "n": n,
-                "title": paper.title,
-                "journal": paper.journal,
-                "year": paper.year,
-                "doi": paper.doi,
+                "title": matched.title,
+                "journal": matched.journal,
+                "year": matched.year,
+                "doi": matched.doi,
             })
         return f"[\\[{n}\\]](#ref-{n})"
 
