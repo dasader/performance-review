@@ -3,6 +3,18 @@ from app.models.paper import Paper, PaperExtraction
 from app.services import reducer
 
 
+class _FakeGenerate:
+    """gemini_sync.generate 대역. 호출 여부/인자를 기록하고 실제 API는 부르지 않는다."""
+
+    def __init__(self, return_value: str = "generated"):
+        self.calls: list[tuple[str, str, str]] = []
+        self.return_value = return_value
+
+    async def __call__(self, system, user, *, thinking, **kwargs):
+        self.calls.append((system, user, thinking))
+        return self.return_value
+
+
 def _ext(key, atype):
     return PaperExtraction(paper_key=key, subfield_id=1, tech_summary=f"{key} 성과",
                            achievement_type=atype, metrics_json=[], model_ver="m")
@@ -45,3 +57,52 @@ def test_format_includes_title_year_and_summary():
 def test_format_skips_extractions_without_a_matching_paper():
     text = reducer.format_extractions([_ext("missing", "공정")], {})
     assert text == ""
+
+
+async def test_reduce_subfield_skips_llm_when_body_empty_single_group(monkeypatch):
+    """추출은 있지만 papers_by_key 매칭 실패로 본문이 빈 단일 그룹 경로 — LLM 호출 금지."""
+    fake = _FakeGenerate()
+    monkeypatch.setattr(reducer.gemini_sync, "generate", fake)
+    ext = [_ext("missing", "공정")]
+
+    result = await reducer.reduce_subfield(None, None, ext, {})
+
+    assert fake.calls == []
+    assert result == "분석 대상 논문이 없어 성과를 정리할 수 없습니다."
+
+
+async def test_reduce_subfield_skips_llm_when_all_groups_empty_three_tier(monkeypatch):
+    """3단 경로에서 모든 그룹의 본문이 비면 최종 통합 호출도 하지 않는다."""
+    monkeypatch.setattr(settings, "reduce_group_threshold", 1)
+    fake = _FakeGenerate()
+    monkeypatch.setattr(reducer.gemini_sync, "generate", fake)
+    ext = [_ext("m1", "공정"), _ext("m2", "알고리즘")]
+
+    result = await reducer.reduce_subfield(None, None, ext, {})
+
+    assert fake.calls == []
+    assert result == "분석 대상 논문이 없어 성과를 정리할 수 없습니다."
+
+
+async def test_reduce_subfield_calls_llm_for_normal_input(monkeypatch):
+    """본문이 실제로 채워지면 가드가 과하게 막지 않고 LLM을 호출한다."""
+    fake = _FakeGenerate(return_value="report")
+    monkeypatch.setattr(reducer.gemini_sync, "generate", fake)
+    papers = {"k1": Paper(paper_key="k1", title="HBM 논문", year=2025, journal="J",
+                          abstract="A", source="openalex", citations=0)}
+    ext = [_ext("k1", "공정")]
+
+    result = await reducer.reduce_subfield(None, None, ext, papers)
+
+    assert len(fake.calls) == 1
+    assert result == "report"
+
+
+async def test_rollup_field_skips_llm_for_empty_input(monkeypatch):
+    fake = _FakeGenerate()
+    monkeypatch.setattr(reducer.gemini_sync, "generate", fake)
+
+    result = await reducer.rollup_field("분야", [])
+
+    assert fake.calls == []
+    assert result == "분석된 세부기술이 없습니다."

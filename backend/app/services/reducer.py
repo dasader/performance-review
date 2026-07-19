@@ -61,14 +61,22 @@ async def reduce_subfield(
     extractions: list[PaperExtraction],
     papers_by_key: dict[str, Paper],
 ) -> str:
-    """세부기술 보고서 생성. 추출 결과가 0건이면 LLM을 호출하지 않는다 —
+    """세부기술 보고서 생성. 추출 결과가 0건이거나, 있어도 papers_by_key 매칭 실패로
+    LLM에 보낼 본문이 비면 LLM을 호출하지 않는다 —
     빈 입력으로 부르면 모델이 성과를 통째로 지어낸다."""
+    no_data_message = "분석 대상 논문이 없어 성과를 정리할 수 없습니다."
     if not extractions:
-        return "분석 대상 논문이 없어 성과를 정리할 수 없습니다."
+        return no_data_message
 
     groups = group_for_reduce(extractions)
     if len(groups) == 1:
         body = format_extractions(next(iter(groups.values())), papers_by_key)
+        if not body:
+            logger.warning(
+                "[reduce] 추출 %d건이 있으나 papers_by_key 매칭 실패로 본문이 비어 LLM 호출을 건너뜀",
+                len(extractions),
+            )
+            return no_data_message
         return await gemini_sync.generate(
             REDUCE_INSTRUCTION, body, thinking=settings.thinking_reduce
         )
@@ -82,6 +90,13 @@ async def reduce_subfield(
             REDUCE_INSTRUCTION, f"[성과유형: {name}]\n{body}", thinking=settings.thinking_reduce
         )
         partials.append(f"### {name}\n{partial}")
+
+    if not partials:
+        logger.warning(
+            "[reduce] 추출 %d건이 있으나 모든 그룹에서 papers_by_key 매칭 실패로 본문이 비어 LLM 호출을 건너뜀",
+            len(extractions),
+        )
+        return no_data_message
 
     return await gemini_sync.generate(
         REDUCE_INSTRUCTION,

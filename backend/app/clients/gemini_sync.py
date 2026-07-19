@@ -22,9 +22,16 @@ class _RequestBucket:
     def __init__(self, per_minute: int):
         self.per_minute = per_minute
         self._stamps: list[float] = []
-        self._lock = asyncio.Lock()
+        # 지연 생성: asyncio.Lock()은 최초 acquire 시점에 실행 중인 이벤트 루프에 바인딩되므로,
+        # 여기서 즉시 만들면 이후 다른 루프(예: 테스트마다 새 루프를 만드는 pytest-asyncio)에서
+        # RuntimeError가 난다.
+        self._lock: asyncio.Lock | None = None
 
     async def acquire(self) -> None:
+        if self.per_minute < 1:
+            return
+        if self._lock is None:
+            self._lock = asyncio.Lock()
         async with self._lock:
             while True:
                 now = time.monotonic()
@@ -39,11 +46,7 @@ _bucket = _RequestBucket(settings.sync_rpm)
 
 
 def _is_rate_limit(e: Exception) -> bool:
-    return (
-        type(e).__name__ in ("ResourceExhausted", "TooManyRequests", "RateLimitError")
-        or getattr(e, "status_code", None) == 429
-        or getattr(e, "code", None) == 429
-    )
+    return getattr(e, "status_code", None) == 429 or getattr(e, "code", None) == 429
 
 
 async def generate(system: str, user: str, *, thinking: str, max_retries: int = 4) -> str:
@@ -70,4 +73,4 @@ async def generate(system: str, user: str, *, thinking: str, max_retries: int = 
                 await asyncio.sleep(delay)
                 continue
             raise
-    raise RuntimeError("Gemini 재시도 소진")
+    # 도달 불가능: 루프는 매 반복마다 return 또는 raise로 끝난다 (재시도 소진 시 원본 예외 전파).
