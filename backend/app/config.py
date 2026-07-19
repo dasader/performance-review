@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     default_year_range: int = 3
     loop_interval_seconds: int = 30
 
+    http_max_attempts: int = 5
+    http_timeout_seconds: float = 60.0
+
     model_config = SettingsConfigDict(env_file=".env")
 
 

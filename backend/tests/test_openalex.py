@@ -1,4 +1,4 @@
-from app.clients.openalex import _parse_work, reconstruct_abstract
+from app.clients.openalex import _filter_expr, _parse_work, reconstruct_abstract
 from app.clients._doi import strip_doi_prefix
 
 
@@ -47,3 +47,26 @@ def test_parse_work_flags_korea_and_collects_countries():
 def test_parse_work_without_doi_uses_openalex_id():
     work = {"id": "https://openalex.org/W2", "title": "T", "authorships": []}
     assert _parse_work(work)["paper_key"] == "openalex:W2"
+
+
+def test_filter_expr_strips_comma_to_avoid_extra_and_clause():
+    # 콤마는 OpenAlex filter DSL에서 AND 절 구분자라 그대로 넣으면 검색식이 쪼개진다
+    expr = _filter_expr("quantum computing, error correction", 2022, 2024)
+    assert expr.count(",") == 2  # year/KR 절 구분자 2개만 있어야 함
+    assert "quantum computing" in expr and "error correction" in expr
+
+
+def test_filter_expr_strips_pipe_to_avoid_unintended_or():
+    # 파이프는 OpenAlex filter DSL에서 OR 구분자라 그대로 넣으면 검색식이 쪼개진다
+    expr = _filter_expr("quantum|classical computing", 2022, 2024)
+    assert "|" not in expr
+    assert "quantum classical computing" in expr
+
+
+def test_filter_expr_keeps_plain_query_and_appends_year_and_kr():
+    expr = _filter_expr("quantum computing", 2022, 2024)
+    assert expr == (
+        "title_and_abstract.search:quantum computing,"
+        "publication_year:2022-2024,"
+        "authorships.institutions.country_code:KR"
+    )

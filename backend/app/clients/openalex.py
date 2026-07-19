@@ -14,7 +14,6 @@ SELECT = (
     "id,doi,title,publication_year,cited_by_count,"
     "abstract_inverted_index,primary_location,authorships"
 )
-BASIC_PAGING_LIMIT = 10_000
 
 
 class OpenAlexResult(NamedTuple):
@@ -71,11 +70,17 @@ def _parse_work(work: dict) -> dict:
     }
 
 
+def _sanitize_query(query: str) -> str:
+    """콤마(AND)와 파이프(OR)는 OpenAlex filter DSL의 절 구분자라 이스케이프가
+    불가능하다 — 관리자 입력에 섞여 들어오면 검색식이 조용히 쪼개지므로 공백으로 치환한다."""
+    return query.replace(",", " ").replace("|", " ")
+
+
 def _filter_expr(query: str, year_from: int, year_to: int) -> str:
     """연도를 범위로 한 번에 건다 — 연도별 개별 조회 대비 콜수가 1/N이 된다.
     KR 필터를 서버측에 걸어 불필요한 페이지를 받지 않는다."""
     return (
-        f"title_and_abstract.search:{query},"
+        f"title_and_abstract.search:{_sanitize_query(query)},"
         f"publication_year:{year_from}-{year_to},"
         f"authorships.institutions.country_code:KR"
     )

@@ -3,6 +3,8 @@ import logging
 
 import httpx
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,10 +23,13 @@ async def get_with_retry(
     params: dict | None = None,
     service_name: str,
     context: str = "",
-    max_attempts: int = 5,
-    timeout: float = 60.0,
+    max_attempts: int | None = None,
+    timeout: float | None = None,
 ) -> httpx.Response:
-    """GET + 지수 백오프. 429는 헤더로 일시/영구를 구분해 RateLimited로 올린다."""
+    """GET + 지수 백오프. 429는 헤더로 일시/영구를 구분해 RateLimited로 올린다.
+    max_attempts/timeout 기본값은 .env(HTTP_MAX_ATTEMPTS/HTTP_TIMEOUT_SECONDS)에서 온다."""
+    max_attempts = max_attempts if max_attempts is not None else settings.http_max_attempts
+    timeout = timeout if timeout is not None else settings.http_timeout_seconds
     for attempt in range(max_attempts):
         try:
             response = await client.get(url, params=params, timeout=timeout)

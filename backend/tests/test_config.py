@@ -13,3 +13,5 @@ def test_defaults_match_spec():
     assert s.max_papers_per_analysis == 5000
     assert s.reduce_group_threshold == 500
     assert s.default_year_range == 3
+    assert s.http_max_attempts == 5
+    assert s.http_timeout_seconds == 60.0
