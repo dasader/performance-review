@@ -4023,3 +4023,22 @@ git commit -m "docs: README · CLAUDE.md · PORTS 레지스트리 등록(NN=03)"
 1. 대분류 rollup 보고서 생성·노출
 2. 하드 가드 초과 시 표본 추출 실행 경로
 3. 여러 batch 청크의 병렬 제출 (현재는 루프 주기마다 1청크씩)
+
+---
+
+## 실행 중 계획 수정 이력
+
+구현·리뷰 과정에서 계획서 원본 코드의 결함이 발견돼 아래와 같이 바뀌었다.
+Task 1~4의 코드 블록은 이 수정을 반영하지 않은 원본이므로, 실제 구현은 `backend/` 소스를 기준으로 본다.
+
+| 태스크 | 수정 | 이유 |
+|---|---|---|
+| Task 1 | `alembic.ini`를 Task 2 산출물로 이관 | Task 1에 이를 만드는 Step이 없었고 실제로는 Task 2의 `alembic init`이 생성 |
+| Task 1 | `class Config` → `model_config = SettingsConfigDict(...)` | Pydantic V2 deprecation |
+| Task 1 | `backend/tests/conftest.py` 추가 | `settings` 모듈 레벨 싱글턴 때문에 테스트 import 시점에 필수 env가 필요 |
+| Task 3 | `_sanitize_query` 추가 (콤마·파이프 → 공백) | OpenAlex filter DSL은 콤마를 AND, 파이프를 OR로 해석하며 이스케이프 수단이 없어, 검색식에 이 문자가 들어가면 **에러 없이 다른 결과**를 반환 |
+| Task 3 | `http_max_attempts` / `http_timeout_seconds`를 `.env`로 | 전역 제약(한도는 `.env`) 위반 |
+| Task 3 | `BASIC_PAGING_LIMIT` 삭제 | 항상 cursor 페이징을 쓰므로 참조되지 않는 죽은 상수 |
+| Task 4 | `kci_max_pages`(기본 20) 추가 + 상한 도달 시 경고 | KCI는 연도 필터가 없어 코드에서 거르는데, 대상 연도 논문이 적으면 페이지를 무한정 넘길 수 있었음 |
+| Task 4 | `PAGE_SIZE` → `settings.kci_page_size` | 전역 제약 위반 |
+| Task 4 | `kci_concurrency` 삭제 | 분석 1건당 KCI 호출이 1회 순차라 동시성 대상이 없는 죽은 설정 |
