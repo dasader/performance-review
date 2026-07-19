@@ -12,7 +12,8 @@ class Settings(BaseSettings):
     openalex_daily_budget_usd: float = 0.5
     openalex_search_cost_usd: float = 0.001  # search 계열 요청 1건 단가
     kci_api_key: str = ""
-    kci_concurrency: int = 3
+    kci_page_size: int = 100
+    kci_max_pages: int = 20
 
     admin_key: str
     database_url: str

@@ -10,7 +10,6 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 API_URL = "https://open.kci.go.kr/po/openapi/openApiSearch.kci"
-PAGE_SIZE = 100
 
 
 def _pick_by_lang(elements: list[ET.Element], preferred: str = "english") -> str:
@@ -94,11 +93,17 @@ async def search(
     collected: list[dict] = []
     page = 1
     while len(collected) < limit:
+        if page > settings.kci_max_pages:
+            logger.warning(
+                "[KCI] 페이지 상한(%d) 도달 — 결과가 잘렸을 수 있습니다: query=%r",
+                settings.kci_max_pages, query,
+            )
+            break
         params = {
             "apiCode": "articleSearch",
             "key": settings.kci_api_key,
             "keyword": query,
-            "displayCount": PAGE_SIZE,
+            "displayCount": settings.kci_page_size,
             "page": page,
         }
         response = await get_with_retry(
@@ -108,7 +113,7 @@ async def search(
         if not batch:
             break
         collected.extend(p for p in batch if p["year"] and year_from <= p["year"] <= year_to)
-        if len(batch) < PAGE_SIZE:
+        if len(batch) < settings.kci_page_size:
             break
         page += 1
 

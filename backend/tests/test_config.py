@@ -10,6 +10,8 @@ def test_defaults_match_spec():
     assert s.openalex_per_page == 100
     assert s.openalex_daily_budget_usd == 0.5
     assert s.openalex_search_cost_usd == 0.001
+    assert s.kci_page_size == 100
+    assert s.kci_max_pages == 20
     assert s.max_papers_per_analysis == 5000
     assert s.reduce_group_threshold == 500
     assert s.default_year_range == 3
