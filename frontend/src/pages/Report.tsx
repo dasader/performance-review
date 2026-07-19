@@ -55,25 +55,23 @@ function ReportBody({ data }: { data: Analysis }) {
           <StatusBadge status={data.status} label={data.status_label} />
         </div>
 
-        {/* 검색 모집단과 분석 모집단이 다르다는 점을 감추지 않는다 */}
-        {data.searched_count > 0 && (
-          <div className="avoid-break mt-4 max-w-sm border border-border bg-surface p-4">
-            <p className="text-sm text-ink-light">
-              검색 <span className="font-mono tabular-nums">{data.searched_count.toLocaleString()}</span>
-              건 / 분석 대상{" "}
-              <span className="font-mono tabular-nums">{data.analyzed_count.toLocaleString()}</span>건
-            </p>
-            <div className="mt-2">
-              <CoverageBar searched={data.searched_count} analyzed={data.analyzed_count} />
-            </div>
-            {excluded > 0 && (
-              <p className="mt-2 text-xs text-muted">abstract 미보유 등 사유로 {excluded.toLocaleString()}건 제외</p>
-            )}
-            {data.sampled && (
-              <p className="mt-1 text-xs text-muted">성과 서술은 표본 기준, 통계는 전수 기준입니다.</p>
-            )}
+        {/* 검색 모집단과 분석 모집단이 다르다는 점을 감추지 않는다. 0건도 정보이므로 항상 표시한다. */}
+        <div className="avoid-break mt-4 max-w-sm border border-border bg-surface p-4">
+          <p className="text-sm text-ink-light">
+            검색 <span className="font-mono tabular-nums">{data.searched_count.toLocaleString()}</span>
+            건 / 분석 대상{" "}
+            <span className="font-mono tabular-nums">{data.analyzed_count.toLocaleString()}</span>건
+          </p>
+          <div className="mt-2">
+            <CoverageBar searched={data.searched_count} analyzed={data.analyzed_count} />
           </div>
-        )}
+          {excluded > 0 && (
+            <p className="mt-2 text-xs text-muted">abstract 미보유 등 사유로 {excluded.toLocaleString()}건 제외</p>
+          )}
+          {data.sampled && (
+            <p className="mt-1 text-xs text-muted">성과 서술은 표본 기준, 통계는 전수 기준입니다.</p>
+          )}
+        </div>
 
         {data.snapshot_at && (
           <p className="mt-3 text-xs text-faint">

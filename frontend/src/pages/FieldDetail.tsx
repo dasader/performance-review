@@ -16,7 +16,14 @@ export default function FieldDetail() {
 
   useEffect(() => {
     get<Field[]>("/fields")
-      .then((all) => setField(all.find((f) => f.id === Number(fieldId)) ?? null))
+      .then((all) => {
+        const found = all.find((f) => f.id === Number(fieldId));
+        if (!found) {
+          setError("요청하신 분야를 찾을 수 없습니다.");
+          return;
+        }
+        setField(found);
+      })
       .catch((e) => setError(e.message));
     get<YearRow[]>(`/fields/${fieldId}/years`)
       .then((rows) => {
@@ -33,7 +40,20 @@ export default function FieldDetail() {
       .catch((e) => setError(e.message));
   }, [fieldId, year]);
 
-  if (error) return <p className="p-8 text-sm text-danger">{error}</p>;
+  if (error) {
+    return (
+      <div className="min-h-screen">
+        <TopBar />
+        <main className="mx-auto max-w-5xl px-6 py-14">
+          <p className="text-sm text-danger">{error}</p>
+          <Link to="/" className="mt-4 inline-block text-sm text-muted hover:text-ink">
+            ← 분야 목록으로 돌아가기
+          </Link>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
   if (!field) return <p className="p-8 text-sm text-muted">불러오는 중…</p>;
 
   return (

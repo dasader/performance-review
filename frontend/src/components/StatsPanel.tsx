@@ -1,10 +1,23 @@
+import { useEffect } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { Stats } from "../api";
 
 const SOURCE_LABEL: Record<string, string> = { openalex: "OpenAlex", kci: "KCI" };
 
-export default function StatsPanel({ stats }: { stats: Stats | null }) {
-  if (!stats || !stats.searched_count) return null;
+export default function StatsPanel({ stats }: { stats: Stats | Record<string, never> }) {
+  // ResponsiveContainer는 마운트 시점 DOM 크기만 측정한다. 인쇄 시 @page margin으로
+  // 레이아웃 폭이 바뀌므로 beforeprint/afterprint에서 resize를 발생시켜 재측정을 유도한다.
+  useEffect(() => {
+    const triggerResize = () => window.dispatchEvent(new Event("resize"));
+    window.addEventListener("beforeprint", triggerResize);
+    window.addEventListener("afterprint", triggerResize);
+    return () => {
+      window.removeEventListener("beforeprint", triggerResize);
+      window.removeEventListener("afterprint", triggerResize);
+    };
+  }, []);
+
+  if (!stats.searched_count) return null;
 
   const byYear = Object.entries(stats.by_year ?? {})
     .map(([year, count]) => ({ year, count }))
@@ -50,30 +63,52 @@ export default function StatsPanel({ stats }: { stats: Stats | null }) {
           <figcaption className="mb-2 font-display text-sm font-bold text-ink">
             연도별 검색 논문 수
           </figcaption>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={byYear} margin={{ left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e0d8" vertical={false} />
-              <XAxis
-                dataKey="year"
-                tick={{ fontSize: 12, fill: "#78716c" }}
-                axisLine={{ stroke: "#e5e0d8" }}
-                tickLine={false}
-              />
-              <YAxis
-                allowDecimals={false}
-                tick={{ fontSize: 12, fill: "#78716c" }}
-                axisLine={false}
-                tickLine={false}
-                width={36}
-              />
-              <Tooltip
-                cursor={{ fill: "rgba(30, 74, 114, 0.06)" }}
-                contentStyle={{ borderRadius: 0, borderColor: "#e5e0d8", fontSize: 12 }}
-                formatter={(v) => [`${Number(v).toLocaleString()}건`, "검색 논문"]}
-              />
-              <Bar dataKey="count" fill="#1e4a72" radius={[2, 2, 0, 0]} maxBarSize={40} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div role="img" aria-label="연도별 검색 논문 수 막대그래프. 같은 데이터를 아래 표로도 제공합니다.">
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={byYear} margin={{ left: -20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e0d8" vertical={false} />
+                <XAxis
+                  dataKey="year"
+                  tick={{ fontSize: 12, fill: "#78716c" }}
+                  axisLine={{ stroke: "#e5e0d8" }}
+                  tickLine={false}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fontSize: 12, fill: "#78716c" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={36}
+                />
+                <Tooltip
+                  cursor={{ fill: "rgba(30, 74, 114, 0.06)" }}
+                  contentStyle={{ borderRadius: 0, borderColor: "#e5e0d8", fontSize: 12 }}
+                  formatter={(v) => [`${Number(v).toLocaleString()}건`, "검색 논문"]}
+                />
+                <Bar dataKey="count" fill="#1e4a72" radius={[2, 2, 0, 0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {/* 차트의 텍스트 대안. 스크린리더가 읽을 수 있고, 인쇄 시에도 그대로 보여 유용하다. */}
+          <table className="mt-3 w-full max-w-xs text-xs">
+            <caption className="sr-only">연도별 검색 논문 수 (표)</caption>
+            <thead>
+              <tr className="border-b border-border-light text-left text-muted">
+                <th className="py-1 font-medium">연도</th>
+                <th className="py-1 text-right font-medium">검색 논문 수</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byYear.map((d) => (
+                <tr key={d.year} className="border-b border-border-light">
+                  <td className="py-1 text-ink-light">{d.year}</td>
+                  <td className="py-1 text-right font-mono tabular-nums text-muted">
+                    {d.count.toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </figure>
       )}
 
