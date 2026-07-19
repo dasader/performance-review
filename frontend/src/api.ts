@@ -223,11 +223,19 @@ export interface DashboardRow {
   years: DashboardYearCell[];
 }
 
+export interface ScheduleInfo {
+  enabled: boolean;
+  next_run_at: string; // 스케줄 타임존(기본 KST) wall-clock, tzinfo 없음
+  last_run_at: string | null;
+  last_run_queued_count: number | null;
+}
+
 export interface DashboardResponse {
   rows: DashboardRow[];
   budget_spent: number;
   budget_limit: number;
   default_year_range: number; // 최근 N개년(개수)이지 연도 범위가 아니다
+  schedule: ScheduleInfo;
 }
 
 export interface PreviewSample {

@@ -1,8 +1,10 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import httpx
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.clients import gemini_batch
@@ -12,6 +14,7 @@ from app.database import SessionLocal
 from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import Subfield
 from app.models.paper import Paper, PaperExtraction
+from app.models.schedule import AnalysisRun, ScheduledRun
 from app.services import mapper, reducer, search, stats
 from app.services.budget import BudgetExceeded, spent_today
 
@@ -35,12 +38,17 @@ class AnalysisTooLarge(RuntimeError):
 
 
 def enqueue(
-    db: Session, subfield: Subfield, year_from: int, year_to: int, *, force: bool
+    db: Session, subfield: Subfield, year_from: int, year_to: int, *, force: bool,
+    trigger: str = "manual",
 ) -> list[Analysis]:
     """연도별 Analysis를 만들거나 되살린다.
 
     이미 done이고 query_hash가 같으면 건너뛴다(재호출 방지). 검색식이 바뀌었으면
     같은 행을 pending으로 되돌려 증분 재실행한다 — 프리즈는 두지 않는다.
+
+    trigger는 이 행을 활성화한 원인(manual|scheduled)을 남긴다 — done에 도달할 때
+    AnalysisRun에 그대로 기록되어 수동/자동 실행이 실제로 새 논문을 얼마나 찾아내는지
+    나중에 비교할 수 있게 한다.
     """
     queued: list[Analysis] = []
     for year in range(year_from, year_to + 1):
@@ -51,7 +59,7 @@ def enqueue(
 
         if row is None:
             row = Analysis(subfield_id=subfield.id, year=year, status="pending",
-                           query_hash=current_hash)
+                           query_hash=current_hash, trigger=trigger)
             db.add(row)
             queued.append(row)
         elif force or row.status in ("failed", "paused") or row.query_hash != current_hash:
@@ -62,12 +70,16 @@ def enqueue(
             row.batch_job_id = None
             row.extract_attempts = 0  # M11: 재시도 카운터를 리셋하지 않으면 상한에
             row.search_attempts = 0   # 걸려 failed된 잡이 재실행 즉시 다시 failed된다.
+            row.trigger = trigger
             if query_changed:
                 # I7: 검색식이 바뀐 재실행은 옛 검색식으로만 걸리던 논문이 통계 모집단에
                 # 영구히 남지 않도록 링크만 정리한다. papers 테이블 자체와 paper_extractions
                 # 캐시(비용 들여 만든 자산)는 건드리지 않는다 — 같은 논문이 새 검색식에도
                 # 걸리면 upsert_papers가 같은 행을 재사용하고 추출 캐시도 그대로 히트한다.
                 db.query(AnalysisPaper).filter(AnalysisPaper.analysis_id == row.id).delete()
+                # C4: analyzed_count도 옛 링크 기준의 값이라, 갱신 생략 판단(_do_reduce)이
+                # 재검색 후 건수가 이 옛 값보다 작아 "늘지 않았다"고 오판할 수 있다.
+                row.analyzed_count = 0
             queued.append(row)
         elif row.status in ACTIVE_STATES:
             queued.append(row)
@@ -285,13 +297,104 @@ async def _do_reduce(db: Session, analysis: Analysis) -> None:
         PaperExtraction.model_ver == mapper.model_ver(),
     ).all()
 
+    prior_analyzed_count = analysis.analyzed_count
+    current_model_ver = mapper.model_ver()
+    new_count = len(extractions)
+
+    # C4: 신규 추출이 없으면(건수가 늘지 않았으면) LLM을 다시 부르지 않는다 — 실측상
+    # 재실행 1회 비용의 약 47%가 보고서 재생성이다. model_ver가 바뀌면 같은 논문
+    # 집합이 전량 재추출된 것이라 건수가 그대로여도 "늘어난 것"으로 취급해야 하므로
+    # analyzed_count 비교만이 아니라 report_model_ver로 이를 별도로 확인한다.
+    skip_reduce = (
+        analysis.report_md is not None
+        and new_count <= prior_analyzed_count
+        and analysis.report_model_ver == current_model_ver
+    )
+    if skip_reduce:
+        logger.info(
+            "[잡 %d] 신규 추출 없음(%d→%d건, model_ver 동일) — 보고서 재생성 생략, 통계만 갱신",
+            analysis.id, prior_analyzed_count, new_count,
+        )
+    else:
+        analysis.report_md = await reducer.reduce_subfield(db, analysis, extractions, papers_by_key)
+        analysis.report_model_ver = current_model_ver
+
+    # 통계는 인용수 등 값이 싸게 바뀌므로 스킵 여부와 무관하게 항상 다시 계산한다.
     analysis.stats_json = stats.compute(
         papers, extractions, snapshot_at=analysis.snapshot_at or datetime.now(timezone.utc)
     )
-    analysis.analyzed_count = len(extractions)
-    analysis.report_md = await reducer.reduce_subfield(db, analysis, extractions, papers_by_key)
+    analysis.analyzed_count = new_count
     analysis.status = "done"
+    db.add(AnalysisRun(
+        analysis_id=analysis.id,
+        ran_at=datetime.now(timezone.utc),
+        searched_count=analysis.searched_count,
+        analyzed_count=new_count,
+        new_papers=max(new_count - prior_analyzed_count, 0),
+        trigger=analysis.trigger,
+    ))
     db.commit()
+
+
+def _now_schedule_tz() -> datetime:
+    return datetime.now(ZoneInfo(settings.schedule_timezone))
+
+
+def _is_schedule_due(now: datetime) -> bool:
+    return now.day == settings.schedule_day and now.hour == settings.schedule_hour
+
+
+def next_scheduled_run_at(now: datetime | None = None) -> datetime:
+    """다음 예정 실행 시각(스케줄 타임존 기준, tzinfo 없이) — 관리자 대시보드 표시용."""
+    now = now or _now_schedule_tz()
+    this_month = now.replace(day=settings.schedule_day, hour=settings.schedule_hour,
+                              minute=0, second=0, microsecond=0, tzinfo=None)
+    if now.replace(tzinfo=None) < this_month:
+        return this_month
+    year, month = now.year, now.month + 1
+    if month > 12:
+        year, month = year + 1, 1
+    return this_month.replace(year=year, month=month)
+
+
+def run_scheduled_if_due(db: Session, *, now: datetime | None = None) -> int | None:
+    """매월 schedule_day일 schedule_hour시대(schedule_timezone)에 활성 세부기술 전부를
+    당해~(당해-schedule_years_back)연도로 enqueue한다(force=False, 기존 증분 정책 그대로).
+
+    ScheduledRun.run_month unique 제약이 멱등성의 근거다 — 컨테이너가 그 시간대에
+    재시작돼 잡 루프가 다시 돌아도, 같은 달 두 번째 삽입은 IntegrityError로 막혀
+    조용히 건너뛴다(budget.py::_row와 같은 패턴).
+    """
+    if not settings.schedule_enabled:
+        return None
+    now = now or _now_schedule_tz()
+    if not _is_schedule_due(now):
+        return None
+
+    run_month = f"{now.year:04d}-{now.month:02d}"
+    row = ScheduledRun(run_month=run_month, ran_at=now.replace(tzinfo=None), queued_count=0)
+    db.add(row)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        logger.debug("[스케줄러] %s 이미 실행됨 — 건너뜀", run_month)
+        return None
+
+    years = [now.year - i for i in range(settings.schedule_years_back + 1)]
+    subfields = db.query(Subfield).filter(Subfield.active.is_(True)).all()
+    queued = 0
+    for subfield in subfields:
+        for year in years:
+            queued += len(enqueue(db, subfield, year, year, force=False, trigger="scheduled"))
+
+    row.queued_count = queued
+    db.commit()
+    logger.info(
+        "[스케줄러] %s 월간 자동 분석 큐잉 완료 — 활성 세부기술 %d개 × 연도 %s, %d건 큐잉",
+        run_month, len(subfields), years, queued,
+    )
+    return queued
 
 
 async def loop() -> None:
@@ -302,6 +405,7 @@ async def loop() -> None:
         try:
             db = SessionLocal()
             try:
+                run_scheduled_if_due(db)
                 resume_paused(db)
                 active = db.query(Analysis).filter(Analysis.status.in_(ACTIVE_STATES)).all()
                 for analysis in active:

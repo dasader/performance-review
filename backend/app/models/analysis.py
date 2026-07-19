@@ -32,6 +32,15 @@ class Analysis(Base):
     # 내부 재시도를 이미 소진한 뒤 올라온 것). max_search_attempts에 도달하면 30초마다
     # 같은 페이지들을 무한히 재과금하며 도는 대신 failed로 전환한다.
     search_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # 이 행을 마지막으로 pending으로 되돌린(=활성화한) 원인. manual(관리자 수동 실행) |
+    # scheduled(월간 스케줄러). done에 도달할 때 AnalysisRun.trigger로 그대로 옮겨 적어
+    # 수동/자동 실행이 실제로 새 논문을 얼마나 찾아내는지 나중에 비교할 수 있게 한다.
+    trigger: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")
+    # 마지막으로 report_md를 생성했을 때의 mapper.model_ver(). 재실행 시 model_ver가
+    # 바뀌면(모델 교체·추출 스키마 버전 상향) 같은 논문 집합이 전량 재추출되어 추출
+    # 건수는 그대로일 수 있다 — analyzed_count 비교만으로는 "건수가 그대로니 재추출도
+    # 없었다"로 오판하므로, 이 값으로 model_ver 변경 자체를 별도 신호로 잡는다.
+    report_model_ver: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
 
 class AnalysisPaper(Base):

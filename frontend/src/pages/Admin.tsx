@@ -125,19 +125,33 @@ export default function Admin() {
             <p className="font-mono text-xs uppercase tracking-widest text-accent">관리자</p>
             <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-ink">분석 운영</h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-4">
+              {data && (
+                <p className="font-mono text-xs tabular-nums text-muted">
+                  OpenAlex 오늘 사용 ${data.budget_spent.toFixed(4)} / ${data.budget_limit.toFixed(2)}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={clear}
+                className="border border-border px-3 py-1.5 text-xs text-ink-light hover:border-accent hover:text-accent"
+              >
+                로그아웃
+              </button>
+            </div>
             {data && (
-              <p className="font-mono text-xs tabular-nums text-muted">
-                OpenAlex 오늘 사용 ${data.budget_spent.toFixed(4)} / ${data.budget_limit.toFixed(2)}
+              <p className="font-mono text-xs tabular-nums text-faint">
+                월간 자동 분석 {data.schedule.enabled ? "활성" : "비활성"} · 다음 실행{" "}
+                {new Date(data.schedule.next_run_at).toLocaleString("ko-KR")}
+                {data.schedule.last_run_at && (
+                  <>
+                    {" "}· 마지막 자동 실행 {new Date(data.schedule.last_run_at).toLocaleString("ko-KR")}
+                    ({data.schedule.last_run_queued_count}건 큐잉)
+                  </>
+                )}
               </p>
             )}
-            <button
-              type="button"
-              onClick={clear}
-              className="border border-border px-3 py-1.5 text-xs text-ink-light hover:border-accent hover:text-accent"
-            >
-              로그아웃
-            </button>
           </div>
         </header>
 

@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     default_year_range: int = 3
     loop_interval_seconds: int = 30
 
+    # 월간 자동 분석 스케줄러 — 기존 30초 잡 루프(runner.loop) 안에서 매 틱마다
+    # "지금이 실행 시각인가"를 확인하는 방식이라 별도 컨테이너/스케줄러 라이브러리가 없다.
+    schedule_enabled: bool = True
+    schedule_day: int = 10  # 1~3일은 다른 서비스가 같은 OpenAlex 키를 쓰므로 피한다.
+    schedule_hour: int = 3  # KST 새벽 3시대
+    schedule_timezone: str = "Asia/Seoul"
+    schedule_years_back: int = 1  # 0=당해연도만, 1=당해+직전연도
+
     http_max_attempts: int = 5
     http_timeout_seconds: float = 60.0
 

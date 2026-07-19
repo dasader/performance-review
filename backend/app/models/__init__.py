@@ -4,4 +4,5 @@ from app.models.analysis import Analysis, AnalysisPaper  # noqa: F401
 from app.models.budget import OpenAlexUsage  # noqa: F401
 from app.models.field import Field, Subfield  # noqa: F401
 from app.models.paper import Paper, PaperExtraction  # noqa: F401
+from app.models.schedule import AnalysisRun, ScheduledRun  # noqa: F401
 from app.models.visit import Visit  # noqa: F401

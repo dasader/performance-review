@@ -7,7 +7,7 @@
 
 ```bash
 # 스택 기동 — api 컨테이너 entrypoint(docker-entrypoint.sh)가 uvicorn 전에
-# alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0003
+# alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0007
 docker compose up -d --build
 
 # .env를 고친 뒤에는 restart가 아니라 재생성해야 한다.
@@ -67,6 +67,44 @@ thinking 레벨을 바꾸면 같은 논문이라도 재추출된다(신규 행�
 올해 새로 잡히는 경로가 있다). `runner.py::enqueue()`가 검색식 해시(`query_hash`)가 바뀐 연도를
 자동으로 `pending`으로 되돌려 재실행 대상에 넣고, `is_stale()`이 이를 판정한다.
 `analyses.snapshot_at`이 최종 수집 시점, `analyses.query_hash`가 갱신 필요 여부의 근거다.
+
+## 월간 자동 분석 스케줄러
+
+새 컨테이너/라이브러리 없이 `runner.loop()`(30초 주기) 안에서 매 틱마다
+`run_scheduled_if_due(db)`를 호출해 "지금이 실행 시각인가"를 확인하는 방식.
+
+- 조건: KST(`settings.schedule_timezone`) 기준 `schedule_day`일(기본 10 — 1~3일은 다른 서비스와
+  OpenAlex 키 공유로 회피) `schedule_hour`시대(기본 3시)이고, `scheduled_runs.run_month`
+  (예: `"2026-08"`)에 아직 그 달 행이 없을 때.
+- 멱등성: `run_month` unique 제약 + `db.flush()` 후 `IntegrityError`를 잡아 롤백하는 패턴
+  (`budget.py::_row`와 동일). 컨테이너가 실행 시각대에 재시작돼 루프가 다시 돌아도 두 번째
+  삽입 시도는 여기서 막혀 중복 큐잉되지 않는다.
+- 활성(`active=True`) 세부기술 전부 × 당해~(당해−`schedule_years_back`)연도를 `force=False`로
+  `enqueue()`한다 — 실제 검색·추출·보고서 생성은 기존 잡 루프·예산 게이트·batch 슬롯 게이트가
+  그대로 처리한다. `enqueue(force=False)`는 이미 `done`이고 `query_hash`가 그대로면 아무 것도
+  하지 않는 기존 동작 그대로다(신규 세부기술·failed/paused 회복·검색식 변경분만 실질적으로
+  재실행됨) — "매달 무조건 재검색"이 아니라 기존 증분 정책을 그대로 얹은 것.
+- `AnalysisRun`이 매 `done` 도달 시 `trigger`(`manual`|`scheduled`) · 검색/분석 건수를 남긴다.
+  OpenAlex의 `from_created_date` 필터가 유료 플랜 전용이라 막혀 있어, 대신 이 실행 이력을
+  몇 달 쌓아 "논문이 실제로 얼마나 느는가"를 데이터로 확인할 계획이다(조회 API는 아직 없음).
+- `python:3.11-slim`에는 시스템 tz 데이터베이스가 없어 `zoneinfo.ZoneInfo("Asia/Seoul")`가
+  실패할 수 있다 — `requirements.txt`의 `tzdata` 패키지로 해결(컨테이너 안에서
+  `python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Seoul'))"`로 확인 가능).
+
+## 재실행 비용 최적화 — 신규 추출 0건이면 보고서 재생성 생략
+
+`runner.py::_do_reduce`는 이번 실행에서 추출 건수(`len(extractions)`)가 이전 `analysis.analyzed_count`
+보다 늘지 않았고 `report_md`가 이미 있으면 `reducer.reduce_subfield`(LLM 호출)를 건너뛰고 기존
+`report_md`를 유지한다. 통계(`stats_json`)는 인용수 등이 바뀌므로 스킵 여부와 무관하게 항상
+다시 계산한다. 실측 재실행 1회 비용 $0.0225 중 보고서 재생성이 $0.0105(약 47%)라 이 스킵으로
+$0.0040까지 떨어진다.
+
+**model_ver 변경은 별도로 추적**: `mapper.model_ver()`가 바뀌면(모델 교체·`EXTRACTION_SCHEMA_VERSION`
+상향) 같은 논문 집합이 전량 재추출되어 건수가 이전과 같을 수 있다 — `analyzed_count` 비교만으로는
+이를 "늘지 않았다"고 오판한다. `analyses.report_model_ver`(마지막 보고서 생성 시점의 model_ver)를
+같이 비교해 이 경우를 구분한다. 검색식이 바뀌어(`query_hash` 불일치) `AnalysisPaper` 링크가
+비워지는 경로(`enqueue()`)에서는 `analyzed_count`도 함께 0으로 리셋한다 — 그러지 않으면 재검색 후
+건수가 옛(더 큰) 값보다 작아 보여 갱신이 잘못 생략될 수 있다.
 
 ## OpenAlex 과금
 

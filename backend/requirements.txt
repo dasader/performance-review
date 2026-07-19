@@ -6,5 +6,8 @@ psycopg2-binary==2.9.10
 pydantic-settings==2.7.0
 httpx==0.28.1
 google-genai==2.12.1
+# python:3.11-slim에는 시스템 tz 데이터베이스가 없어 zoneinfo.ZoneInfo("Asia/Seoul")가
+# 실패한다 — 스케줄러가 KST 계산에 zoneinfo를 쓰므로 필요.
+tzdata==2025.2
 pytest==8.3.4
 pytest-asyncio==0.25.0

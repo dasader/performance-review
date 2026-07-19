@@ -7,7 +7,8 @@ from app.config import settings
 from app.database import Base
 from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import Field, Subfield
-from app.models.paper import Paper
+from app.models.paper import Paper, PaperExtraction
+from app.models.schedule import AnalysisRun
 from app.services import budget, runner, search
 
 
@@ -426,3 +427,131 @@ def test_enqueue_resets_extract_and_search_attempts_on_revival(ctx):
     assert len(again) == 1
     assert again[0].extract_attempts == 0
     assert again[0].search_attempts == 0
+
+
+# ── C4: 신규 추출 0건이면 reduce_subfield(LLM) 호출을 생략 ──
+
+def _reducing_analysis(db, sf, *, report_md=None, analyzed_count=0, report_model_ver=None,
+                       trigger="manual"):
+    a = Analysis(subfield_id=sf.id, year=2025, status="reducing", query_hash="h",
+                 report_md=report_md, analyzed_count=analyzed_count,
+                 report_model_ver=report_model_ver, trigger=trigger)
+    db.add(a)
+    db.commit()
+    return a
+
+
+def _link_extracted_paper(db, a, sf, key, *, model_ver=None):
+    p = Paper(paper_key=key, title="T", abstract="A", year=2025, source="openalex",
+              korea_flag=True)
+    db.add(p)
+    db.commit()
+    db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
+    db.add(PaperExtraction(paper_key=key, subfield_id=sf.id, tech_summary="s",
+                           model_ver=model_ver or runner.mapper.model_ver()))
+    db.commit()
+
+
+async def test_do_reduce_skips_llm_when_no_new_extractions(ctx, monkeypatch):
+    db, sf = ctx
+    a = _reducing_analysis(db, sf, report_md="기존 보고서", analyzed_count=1,
+                           report_model_ver=runner.mapper.model_ver())
+    _link_extracted_paper(db, a, sf, "k1")
+
+    called = {"n": 0}
+
+    async def fake_reduce(*args, **kwargs):
+        called["n"] += 1
+        return "새 보고서"
+
+    monkeypatch.setattr(runner.reducer, "reduce_subfield", fake_reduce)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert called["n"] == 0
+    assert a.report_md == "기존 보고서"  # 그대로 유지
+    assert a.status == "done"
+    assert a.analyzed_count == 1  # 통계 근거는 여전히 갱신됨
+
+
+async def test_do_reduce_calls_llm_when_extractions_increased(ctx, monkeypatch):
+    db, sf = ctx
+    a = _reducing_analysis(db, sf, report_md="기존 보고서", analyzed_count=0,
+                           report_model_ver=runner.mapper.model_ver())
+    _link_extracted_paper(db, a, sf, "k1")  # analyzed_count(0) < 이번 추출 건수(1)
+
+    called = {"n": 0}
+
+    async def fake_reduce(*args, **kwargs):
+        called["n"] += 1
+        return "새 보고서"
+
+    monkeypatch.setattr(runner.reducer, "reduce_subfield", fake_reduce)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert called["n"] == 1
+    assert a.report_md == "새 보고서"
+
+
+async def test_do_reduce_generates_when_report_md_missing_even_if_no_new(ctx, monkeypatch):
+    db, sf = ctx
+    a = _reducing_analysis(db, sf, report_md=None, analyzed_count=0)  # 추출 0건, 보고서 없음
+
+    called = {"n": 0}
+
+    async def fake_reduce(*args, **kwargs):
+        called["n"] += 1
+        return "최초 보고서"
+
+    monkeypatch.setattr(runner.reducer, "reduce_subfield", fake_reduce)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert called["n"] == 1
+    assert a.report_md == "최초 보고서"
+
+
+async def test_do_reduce_regenerates_when_model_ver_changed_even_if_count_same(ctx, monkeypatch):
+    """model_ver가 바뀌면 같은 논문 집합이 전량 재추출된 것이므로, 추출 건수가
+    이전과 같아도 report_model_ver 불일치로 반드시 재생성해야 한다."""
+    db, sf = ctx
+    a = _reducing_analysis(db, sf, report_md="옛 모델 보고서", analyzed_count=1,
+                           report_model_ver="old-model/low/v1")
+    _link_extracted_paper(db, a, sf, "k1")  # 현재 model_ver로 추출된 1건 — 건수는 그대로
+
+    called = {"n": 0}
+
+    async def fake_reduce(*args, **kwargs):
+        called["n"] += 1
+        return "재생성된 보고서"
+
+    monkeypatch.setattr(runner.reducer, "reduce_subfield", fake_reduce)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert called["n"] == 1
+    assert a.report_md == "재생성된 보고서"
+    assert a.report_model_ver == runner.mapper.model_ver()
+
+
+async def test_do_reduce_records_analysis_run(ctx, monkeypatch):
+    db, sf = ctx
+    a = _reducing_analysis(db, sf, report_md=None, analyzed_count=0, trigger="scheduled")
+    a.searched_count = 3
+    db.commit()
+    _link_extracted_paper(db, a, sf, "k1")
+
+    async def fake_reduce(*args, **kwargs):
+        return "보고서"
+
+    monkeypatch.setattr(runner.reducer, "reduce_subfield", fake_reduce)
+
+    await runner.advance(db, a)
+
+    runs = db.query(AnalysisRun).filter(AnalysisRun.analysis_id == a.id).all()
+    assert len(runs) == 1
+    assert runs[0].trigger == "scheduled"
+    assert runs[0].new_papers == 1
+    assert runs[0].searched_count == 3
+    assert runs[0].analyzed_count == 1

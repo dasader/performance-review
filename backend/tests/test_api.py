@@ -56,6 +56,15 @@ def test_admin_accepts_correct_key(client):
     assert r.status_code == 200
 
 
+def test_dashboard_includes_schedule_info(client):
+    r = client.get("/api/admin/dashboard", headers={"X-Admin-Key": settings.admin_key})
+    schedule = r.json()["schedule"]
+    assert schedule["enabled"] is True
+    assert schedule["next_run_at"]  # ISO 문자열
+    assert schedule["last_run_at"] is None  # 아직 자동 실행된 적 없음
+    assert schedule["last_run_queued_count"] is None
+
+
 def test_admin_can_create_subfield(client):
     r = client.post(
         "/api/admin/subfields",

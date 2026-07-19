@@ -11,6 +11,7 @@ from app.database import get_db
 from app.deps import require_admin
 from app.models.analysis import Analysis
 from app.models.field import Field, Subfield
+from app.models.schedule import ScheduledRun
 from app.services import budget, mapper, runner
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -214,11 +215,20 @@ def dashboard(db: Session = Depends(get_db)):
                 for a in sorted(analyses, key=lambda x: x.year, reverse=True)
             ],
         })
+    last_scheduled = db.query(ScheduledRun).order_by(ScheduledRun.ran_at.desc()).first()
     return {
         "rows": rows,
         "budget_spent": round(budget.spent_today(db), 4),
         "budget_limit": settings.openalex_daily_budget_usd,
         "default_year_range": settings.default_year_range,
+        "schedule": {
+            "enabled": settings.schedule_enabled,
+            # 둘 다 스케줄 타임존(기본 KST) 기준 wall-clock 값을 tzinfo 없이 그대로 낸다 —
+            # 프론트가 별도 변환 없이 표시한다(관리자 화면은 한국 사용자 전제).
+            "next_run_at": runner.next_scheduled_run_at().isoformat(),
+            "last_run_at": last_scheduled.ran_at.isoformat() if last_scheduled else None,
+            "last_run_queued_count": last_scheduled.queued_count if last_scheduled else None,
+        },
     }
 
 
