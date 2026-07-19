@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     # 쉼표 구분 오리진 목록. 기본값은 web(nginx) 컨테이너가 서비스되는 오리진으로 좁힌다.
     cors_origins: str = "http://localhost:8103"
 
+    # 푸터에 표시할 도메인명. 빌드 타임이 아니라 .env로 배포 시점에 주입 — 비어 있으면
+    # 프론트가 window.location.host로 대체한다.
+    site_domain: str = ""
+    # 방문자 식별 해시(sha256(ip+user_agent+salt+날짜))에 쓰는 솔트. 원본 IP/UA를
+    # 복원하지 못하게 막는 값이므로 운영 배포에서는 반드시 임의의 긴 문자열로 바꿀 것.
+    visitor_salt: str = "change-me-in-prod"
+
     model_config = SettingsConfigDict(env_file=".env")
 
 

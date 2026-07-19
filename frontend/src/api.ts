@@ -262,3 +262,24 @@ export interface RunResponse {
   queued: number[];
   blocked: { subfield_id: number; reason: string }[];
 }
+
+// ── 푸터: 사이트 정보 · 방문자 통계 ──
+
+export interface SiteInfo {
+  // 비어 있으면 프론트가 window.location.host로 대체한다.
+  domain: string;
+  // 백엔드가 자기 API 버전을 함께 내려주지만, 화면 표기는 프론트 package.json이
+  // 단일 출처다(Footer는 이 필드 대신 __APP_VERSION__을 쓴다).
+  version: string;
+}
+
+export interface DailyVisitorCount {
+  date: string;
+  count: number;
+}
+
+export interface VisitorStats {
+  today: number;
+  this_week: number;
+  daily: DailyVisitorCount[];
+}

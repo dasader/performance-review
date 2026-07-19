@@ -1,12 +1,14 @@
 import re
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import Field, Subfield
 from app.models.paper import Paper
+from app.services import visitors as visitors_service
 from app.services.runner import STEP_LABELS
 
 router = APIRouter(prefix="/api", tags=["public"])
@@ -160,6 +162,19 @@ def field_summary(field_id: int, year: int, db: Session = Depends(get_db)):
         "total_searched": total_searched,
         "total_analyzed": total_analyzed,
     }
+
+
+@router.get("/site-info")
+def site_info(request: Request):
+    """푸터에 표시할 도메인·버전. 버전은 프론트 package.json이 단일 출처이므로
+    프론트는 이 값 대신 빌드 타임에 주입된 자기 자신의 버전을 쓴다 — 여기서는
+    FastAPI 앱에 이미 있는 버전 속성을 그대로 노출한다."""
+    return {"domain": settings.site_domain, "version": request.app.version}
+
+
+@router.get("/visitors")
+def get_visitors(db: Session = Depends(get_db)):
+    return visitors_service.visitor_stats(db)
 
 
 @router.get("/analyses/{analysis_id}")

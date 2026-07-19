@@ -9,12 +9,19 @@ import StatusBadge from "../components/StatusBadge";
 import CoverageBar from "../components/CoverageBar";
 import StatsPanel from "../components/StatsPanel";
 
-// h1(페이지 제목) > h2(섹션 제목) > h3(하위 제목) 위계를 report_md의 마크다운 헤딩(##, ###)에도
-// 강제한다. prose 기본값에 맡기면 StatsPanel의 네이티브 h2/h3와 크기가 어긋난다.
+// h1(페이지 제목) > h2(섹션 제목 — "주요 기술적 성과"/"기본 통계" 등) > h3(하위 제목) > 본문
+// 위계를 report_md의 마크다운 헤딩(##, ###)에도 강제한다. prose 기본값에 맡기면 h3가
+// text-sm(본문 text-base보다 작음)으로 떨어져 위계가 역전된다 — 마크다운 헤딩은 항상
+// 본문보다 커야 하고, 같은 레벨은 항상 같은 크기여야 한다. prose-h2는 StatsPanel/References의
+// 네이티브 h2("기본 통계", "참고문헌")와 같은 text-xl로 맞춰 "섹션 제목" 레벨을 통일한다.
+// [&>*:first-child]:mt-0 은 (구체적 헤딩 레벨과 무관하게) 블록의 첫 자식 위쪽 여백만 지워
+// SectionDivider 바로 아래가 뜨지 않게 하면서, 두 번째 이후 헤딩(예: "## 주제 클러스터")의
+// 여백은 살려 섹션 경계가 보이게 한다.
 const PROSE_HEADING_CLASSES =
   "prose-headings:font-display prose-headings:tracking-tight prose-headings:text-ink " +
-  "prose-h2:text-xl prose-h2:font-bold prose-h2:mt-0 prose-h2:mb-4 " +
-  "prose-h3:text-sm prose-h3:font-bold prose-h3:mt-8 prose-h3:mb-2";
+  "[&>*:first-child]:mt-0 " +
+  "prose-h2:text-xl prose-h2:font-bold prose-h2:mt-12 prose-h2:mb-4 " +
+  "prose-h3:text-lg prose-h3:font-bold prose-h3:mt-8 prose-h3:mb-2";
 
 function SectionDivider() {
   return <hr className="my-10 border-t border-border" />;
@@ -86,8 +93,11 @@ function ReportBody({ data }: { data: Analysis }) {
         </div>
 
         {/* 검색 모집단과 분석 모집단이 다르다는 점을 감추지 않는다. 0건도 정보이므로 항상 표시한다.
-            서술을 읽기 전에 봐야 하는 전제이므로 섹션 순서와 무관하게 항상 최상단에 유지한다. */}
-        <div className="avoid-break mt-4 max-w-sm border border-border bg-surface p-4">
+            서술을 읽기 전에 봐야 하는 전제이므로 섹션 순서와 무관하게 항상 최상단에 유지한다.
+            print:hidden — PDF에서는 이 박스가 PrintHeader와 중복된다. 검색/분석 건수 정보
+            자체는 PDF에서 완전히 사라지면 안 되므로, 그 역할은 아래 StatsPanel("기본 통계")의
+            검색 논문/분석 대상 타일(print:hidden 없음)이 대신한다. */}
+        <div className="avoid-break mt-4 max-w-sm border border-border bg-surface p-4 print:hidden">
           <p className="text-sm text-ink-light">
             검색 <span className="font-mono tabular-nums">{data.searched_count.toLocaleString()}</span>
             건 / 분석 대상{" "}
@@ -142,6 +152,8 @@ function PrintHeader({ data }: { data: Analysis }) {
     <div className="mb-8 hidden border-b border-ink pb-4 print:block">
       <p className="font-display text-sm font-bold tracking-tight text-ink">전략기술 논문성과 분석</p>
       <p className="mt-0.5 break-all font-mono text-[11px] text-muted">{window.location.href}</p>
+      {/* 검색/분석 건수 줄은 의도적으로 뺀다 — "기본 통계" 섹션의 검색 논문/분석 대상
+          타일이 인쇄물에서 같은 정보를 이미 전달하므로, 여기서 중복 표시하지 않는다. */}
       <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-ink-light">
         <p><span className="text-muted">분야</span> {data.field_name}</p>
         <p><span className="text-muted">세부기술</span> {data.subfield_name}</p>
@@ -151,10 +163,6 @@ function PrintHeader({ data }: { data: Analysis }) {
           {data.snapshot_at
             ? `${new Date(data.snapshot_at).toLocaleString("ko-KR")} 기준 (인용수 포함)`
             : "-"}
-        </p>
-        <p className="col-span-2">
-          <span className="text-muted">모집단</span> 검색{" "}
-          {data.searched_count.toLocaleString()}건 / 분석 대상 {data.analyzed_count.toLocaleString()}건
         </p>
       </div>
     </div>
