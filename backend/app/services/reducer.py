@@ -1,0 +1,102 @@
+import logging
+from collections import defaultdict
+
+from sqlalchemy.orm import Session
+
+from app.clients import gemini_sync
+from app.config import settings
+from app.models.analysis import Analysis
+from app.models.paper import Paper, PaperExtraction
+from app.prompts import REDUCE_INSTRUCTION, ROLLUP_INSTRUCTION
+
+logger = logging.getLogger(__name__)
+
+
+def format_extractions(
+    extractions: list[PaperExtraction], papers_by_key: dict[str, Paper]
+) -> str:
+    """추출 결과를 reduce 입력용 텍스트로. 논문당 한 줄이라 수백 건도 컨텍스트에 들어간다."""
+    lines: list[str] = []
+    for e in extractions:
+        paper = papers_by_key.get(e.paper_key)
+        if paper is None:
+            continue
+        metrics = ", ".join(
+            f"{m.get('name')} {m.get('value')}{m.get('unit', '')}" for m in (e.metrics_json or [])
+        )
+        line = f"- [{paper.year or '연도미상'}] {paper.title} | {e.achievement_type or '기타'} | {e.tech_summary}"
+        if metrics:
+            line += f" | 수치: {metrics}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def group_for_reduce(extractions: list[PaperExtraction]) -> dict[str, list[PaperExtraction]]:
+    """임계값 이하면 한 번에 합성하고, 넘으면 성과유형별로 나눠 3단 reduce로 간다."""
+    if len(extractions) <= settings.reduce_group_threshold:
+        return {"전체": extractions}
+
+    by_type: dict[str, list[PaperExtraction]] = defaultdict(list)
+    for e in extractions:
+        by_type[e.achievement_type or "기타"].append(e)
+
+    # 한 성과유형에 전부 몰리면 유형 분할만으로는 임계값 아래로 내려가지 않는다.
+    # 그런 그룹은 임계값 크기로 다시 쪼갠다.
+    size = settings.reduce_group_threshold
+    groups: dict[str, list[PaperExtraction]] = {}
+    for name, items in by_type.items():
+        if len(items) <= size:
+            groups[name] = items
+            continue
+        for i in range(0, len(items), size):
+            groups[f"{name} ({i // size + 1})"] = items[i:i + size]
+
+    logger.info("[reduce] %d건 → %d개 그룹으로 분할", len(extractions), len(groups))
+    return groups
+
+
+async def reduce_subfield(
+    db: Session,
+    analysis: Analysis,
+    extractions: list[PaperExtraction],
+    papers_by_key: dict[str, Paper],
+) -> str:
+    """세부기술 보고서 생성. 추출 결과가 0건이면 LLM을 호출하지 않는다 —
+    빈 입력으로 부르면 모델이 성과를 통째로 지어낸다."""
+    if not extractions:
+        return "분석 대상 논문이 없어 성과를 정리할 수 없습니다."
+
+    groups = group_for_reduce(extractions)
+    if len(groups) == 1:
+        body = format_extractions(next(iter(groups.values())), papers_by_key)
+        return await gemini_sync.generate(
+            REDUCE_INSTRUCTION, body, thinking=settings.thinking_reduce
+        )
+
+    partials: list[str] = []
+    for name, items in groups.items():
+        body = format_extractions(items, papers_by_key)
+        if not body:
+            continue
+        partial = await gemini_sync.generate(
+            REDUCE_INSTRUCTION, f"[성과유형: {name}]\n{body}", thinking=settings.thinking_reduce
+        )
+        partials.append(f"### {name}\n{partial}")
+
+    return await gemini_sync.generate(
+        REDUCE_INSTRUCTION,
+        "아래는 성과유형별 중간 정리 결과입니다. 이를 하나의 보고서로 통합하세요.\n\n"
+        + "\n\n".join(partials),
+        thinking=settings.thinking_reduce,
+    )
+
+
+async def rollup_field(field_name: str, subfield_reports: list[tuple[str, str]]) -> str:
+    """대분류 보고서 = 하위 세부기술 보고서 합성 1콜."""
+    if not subfield_reports:
+        return "분석된 세부기술이 없습니다."
+
+    body = "\n\n".join(f"## {name}\n{report}" for name, report in subfield_reports)
+    return await gemini_sync.generate(
+        ROLLUP_INSTRUCTION, f"[대분류: {field_name}]\n\n{body}", thinking=settings.thinking_reduce
+    )
