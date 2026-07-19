@@ -79,11 +79,15 @@ thinking 레벨을 바꾸면 같은 논문이라도 재추출된다(신규 행�
 - 멱등성: `run_month` unique 제약 + `db.flush()` 후 `IntegrityError`를 잡아 롤백하는 패턴
   (`budget.py::_row`와 동일). 컨테이너가 실행 시각대에 재시작돼 루프가 다시 돌아도 두 번째
   삽입 시도는 여기서 막혀 중복 큐잉되지 않는다.
-- 활성(`active=True`) 세부기술 전부 × 당해~(당해−`schedule_years_back`)연도를 `force=False`로
+- 활성(`active=True`) 세부기술 전부 × 당해~(당해−`schedule_years_back`)연도를 **`force=True`**로
   `enqueue()`한다 — 실제 검색·추출·보고서 생성은 기존 잡 루프·예산 게이트·batch 슬롯 게이트가
-  그대로 처리한다. `enqueue(force=False)`는 이미 `done`이고 `query_hash`가 그대로면 아무 것도
-  하지 않는 기존 동작 그대로다(신규 세부기술·failed/paused 회복·검색식 변경분만 실질적으로
-  재실행됨) — "매달 무조건 재검색"이 아니라 기존 증분 정책을 그대로 얹은 것.
+  그대로 처리한다.
+- **`force=True`여야 하는 이유**: `enqueue(force=False)`는 이미 `done`이고 `query_hash`가 그대로면
+  아무 것도 하지 않는다. 스케줄러가 그렇게 부르면 완료된 세부기술은 매달 건너뛰어져
+  "그 사이 새로 등재된 논문을 잡는다"는 스케줄러의 존재 이유가 사라진다. 대신 매번 검색을
+  다시 돌리되, 신규 논문이 0건이면 `_do_reduce`가 보고서 재생성을 생략하므로 실질 비용은
+  검색분(약 $0.004)에 그친다. 이 동작은 `test_scheduler.py::test_run_scheduled_requeues_already_done_analysis`
+  가 고정한다 — 깨지면 스케줄러가 조용히 무력화된 것이다.
 - `AnalysisRun`이 매 `done` 도달 시 `trigger`(`manual`|`scheduled`) · 검색/분석 건수를 남긴다.
   OpenAlex의 `from_created_date` 필터가 유료 플랜 전용이라 막혀 있어, 대신 이 실행 이력을
   몇 달 쌓아 "논문이 실제로 얼마나 느는가"를 데이터로 확인할 계획이다(조회 API는 아직 없음).

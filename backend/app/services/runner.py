@@ -359,7 +359,13 @@ def next_scheduled_run_at(now: datetime | None = None) -> datetime:
 
 def run_scheduled_if_due(db: Session, *, now: datetime | None = None) -> int | None:
     """매월 schedule_day일 schedule_hour시대(schedule_timezone)에 활성 세부기술 전부를
-    당해~(당해-schedule_years_back)연도로 enqueue한다(force=False, 기존 증분 정책 그대로).
+    당해~(당해-schedule_years_back)연도로 enqueue한다.
+
+    **force=True인 이유**: enqueue()는 status="done"이고 query_hash가 그대로면 아무것도
+    하지 않는다. 스케줄러가 force=False로 부르면 이미 완료된 분석은 매달 건너뛰어져
+    "그 사이 새로 등재된 논문을 잡는다"는 스케줄러의 존재 이유가 사라진다.
+    force=True로 검색을 매번 다시 돌리되, 신규 논문이 0건이면 _do_reduce가 보고서
+    재생성을 생략하므로 실질 비용은 검색분(약 $0.004)에 그친다.
 
     ScheduledRun.run_month unique 제약이 멱등성의 근거다 — 컨테이너가 그 시간대에
     재시작돼 잡 루프가 다시 돌아도, 같은 달 두 번째 삽입은 IntegrityError로 막혀
@@ -386,7 +392,7 @@ def run_scheduled_if_due(db: Session, *, now: datetime | None = None) -> int | N
     queued = 0
     for subfield in subfields:
         for year in years:
-            queued += len(enqueue(db, subfield, year, year, force=False, trigger="scheduled"))
+            queued += len(enqueue(db, subfield, year, year, force=True, trigger="scheduled"))
 
     row.queued_count = queued
     db.commit()

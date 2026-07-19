@@ -104,3 +104,35 @@ def test_next_scheduled_run_at_rolls_year_over_december():
     dec = datetime(2026, 12, 15, 0, 0, tzinfo=KST)
     nxt = runner.next_scheduled_run_at(now=dec)
     assert (nxt.year, nxt.month, nxt.day) == (2027, 1, 10)
+
+
+def test_run_scheduled_requeues_already_done_analysis(ctx):
+    """스케줄러의 존재 이유 — 이미 done인 분석도 매달 다시 돌려 신규 논문을 잡아야 한다.
+
+    enqueue()는 status="done"이고 query_hash가 그대로면 아무것도 하지 않으므로,
+    스케줄러가 force=False로 부르면 완료된 세부기술이 영영 갱신되지 않는다.
+    이 테스트가 깨지면 스케줄러가 조용히 무력화된 것이다.
+    """
+    db, sf = ctx
+    from app.services import search
+
+    year = 2026
+    done = Analysis(
+        subfield_id=sf.id,
+        year=year,
+        status="done",
+        query_hash=search.query_hash(sf, year, year),  # 검색식 변경 없음
+        report_md="기존 보고서",
+        analyzed_count=10,
+    )
+    db.add(done)
+    db.commit()
+
+    due = datetime(2026, 8, 10, 3, 30, tzinfo=KST)
+    queued = runner.run_scheduled_if_due(db, now=due)
+
+    assert queued == 2  # 2026(기존 done 되살림) + 2025(신규)
+    db.refresh(done)
+    assert done.status == "pending", "done 분석이 다시 큐잉되지 않으면 신규 논문을 못 잡는다"
+    assert done.trigger == "scheduled"
+    assert done.report_md == "기존 보고서", "보고서는 유지되어야 한다(신규 0건이면 재생성 생략)"

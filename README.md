@@ -87,7 +87,8 @@ NN=03. 레지스트리는 `../PORTS.md` 참고 — NN=00은 backend 포트가 80
 - **주기·시각**: 매월 `SCHEDULE_DAY`일(기본 10일) `SCHEDULE_HOUR`시대(기본 새벽 3시, `SCHEDULE_TIMEZONE`
   기준 — 기본 KST). **1~3일을 피한 이유**: 같은 OpenAlex 키를 쓰는 다른 서비스와 겹치지 않기 위함.
 - **대상 연도**: 활성(`active=True`) 세부기술 전부에 대해 당해연도 ~ (당해 − `SCHEDULE_YEARS_BACK`)연도
-  (기본값 1 → 당해·직전 2개년)를 `force=False`로 큐잉한다 — 기존 증분 갱신 정책을 그대로 따른다.
+  (기본값 1 → 당해·직전 2개년)를 큐잉한다. 매번 검색을 다시 돌려 **그 사이 새로 등재된 논문**을
+  잡되, 신규가 0건이면 보고서 재생성을 생략해 비용은 검색분(약 $0.004)에 그친다.
 - **멱등성**: `scheduled_runs.run_month`(예: `"2026-08"`)에 unique 제약을 걸어, 같은 달에 컨테이너가
   재시작돼 실행 시각대에 잡 루프가 다시 돌아도 중복 큐잉되지 않는다.
 - **설정 변수**: `SCHEDULE_ENABLED` / `SCHEDULE_DAY` / `SCHEDULE_HOUR` / `SCHEDULE_TIMEZONE` /
