@@ -1,6 +1,6 @@
 """initial tables
 
-Revision ID: 149d9225d7bf
+Revision ID: 0001
 Revises: 
 Create Date: 2026-07-19 00:40:59.281874
 
