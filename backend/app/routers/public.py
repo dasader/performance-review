@@ -1,0 +1,125 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models.analysis import Analysis
+from app.models.field import Field, Subfield
+from app.services.runner import STEP_LABELS
+
+router = APIRouter(prefix="/api", tags=["public"])
+
+
+def _serialize(db: Session, analysis: Analysis) -> dict:
+    subfield = db.get(Subfield, analysis.subfield_id)
+    field = db.get(Field, subfield.field_id)
+    return {
+        "id": analysis.id,
+        "field_name": field.name,
+        "subfield_name": subfield.name,
+        "year": analysis.year,
+        "status": analysis.status,
+        "status_label": STEP_LABELS.get(analysis.status, analysis.status),
+        "report_md": analysis.report_md,
+        "stats": analysis.stats_json,
+        "searched_count": analysis.searched_count,
+        "analyzed_count": analysis.analyzed_count,
+        "sampled": analysis.sampled,
+        "snapshot_at": analysis.snapshot_at.isoformat() if analysis.snapshot_at else None,
+        "error": analysis.error,
+    }
+
+
+@router.get("/fields")
+def list_fields(db: Session = Depends(get_db)):
+    fields = db.query(Field).order_by(Field.order_no).all()
+    return [
+        {
+            "id": f.id,
+            "name": f.name,
+            "slug": f.slug,
+            "subfields": [
+                {"id": s.id, "name": s.name, "active": s.active}
+                for s in db.query(Subfield).filter(Subfield.field_id == f.id).all()
+            ],
+        }
+        for f in fields
+    ]
+
+
+@router.get("/fields/{field_id}/years")
+def field_years(field_id: int, db: Session = Depends(get_db)):
+    """이 분야에서 보고서가 존재하는 연도 목록."""
+    subfield_ids = [s.id for s in db.query(Subfield).filter(Subfield.field_id == field_id)]
+    rows = db.query(Analysis).filter(Analysis.subfield_id.in_(subfield_ids)).all()
+
+    by_year: dict[int, dict] = {}
+    for row in rows:
+        entry = by_year.setdefault(row.year, {"year": row.year, "subfield_count": 0, "done_count": 0})
+        entry["subfield_count"] += 1
+        if row.status == "done":
+            entry["done_count"] += 1
+    return sorted(by_year.values(), key=lambda e: e["year"], reverse=True)
+
+
+@router.get("/fields/{field_id}/summary")
+def field_summary(field_id: int, year: int, db: Session = Depends(get_db)):
+    """세부기술별 논문 분포 — 대분류 레벨에서 세부기술들을 비교할 때만 의미가 있다.
+
+    analyses 행이 없는 세부기술도 analysis_id=null / status="미실행"으로 포함한다.
+    빠뜨리면 분포가 왜곡된다.
+    """
+    field = db.get(Field, field_id)
+    if not field:
+        raise HTTPException(status_code=404, detail="분야를 찾을 수 없습니다.")
+
+    subfields = db.query(Subfield).filter(Subfield.field_id == field_id).order_by(Subfield.name).all()
+    analyses_by_subfield = {
+        a.subfield_id: a
+        for a in db.query(Analysis).filter(
+            Analysis.subfield_id.in_([s.id for s in subfields]), Analysis.year == year
+        )
+    }
+
+    rows = []
+    total_searched = total_analyzed = 0
+    for s in subfields:
+        a = analyses_by_subfield.get(s.id)
+        searched = a.searched_count if a else 0
+        analyzed = a.analyzed_count if a else 0
+        total_searched += searched
+        total_analyzed += analyzed
+        rows.append({
+            "subfield_id": s.id,
+            "subfield_name": s.name,
+            "analysis_id": a.id if a else None,
+            "status": a.status if a else "미실행",
+            "status_label": STEP_LABELS.get(a.status, a.status) if a else "미실행",
+            "searched_count": searched,
+            "analyzed_count": analyzed,
+        })
+
+    return {
+        "field_name": field.name,
+        "year": year,
+        "subfields": rows,
+        "total_searched": total_searched,
+        "total_analyzed": total_analyzed,
+    }
+
+
+@router.get("/analyses/{analysis_id}")
+def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
+    analysis = db.get(Analysis, analysis_id)
+    if not analysis:
+        raise HTTPException(status_code=404, detail="분석 결과를 찾을 수 없습니다.")
+    return _serialize(db, analysis)
+
+
+@router.get("/subfields/{subfield_id}/analyses/{year}")
+def get_by_subfield_year(subfield_id: int, year: int, db: Session = Depends(get_db)):
+    analysis = db.query(Analysis).filter(
+        Analysis.subfield_id == subfield_id, Analysis.year == year
+    ).first()
+    if not analysis:
+        raise HTTPException(status_code=404, detail="분석 결과를 찾을 수 없습니다.")
+    return _serialize(db, analysis)
