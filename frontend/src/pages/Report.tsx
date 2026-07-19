@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -9,6 +9,7 @@ import Footer from "../components/Footer";
 import StatusBadge from "../components/StatusBadge";
 import CoverageBar from "../components/CoverageBar";
 import StatsPanel from "../components/StatsPanel";
+import { firstCiteOffsets } from "../lib/citeAnchors";
 
 // h1(페이지 제목) > h2(섹션 제목 — "주요 기술적 성과"/"기본 통계" 등) > h3(하위 제목) > 본문
 // 위계를 report_md의 마크다운 헤딩(##, ###)에도 강제한다. prose 기본값에 맡기면 h3가
@@ -38,30 +39,30 @@ function SectionDivider() {
 const SCROLL_TARGET_CLASS = "scroll-mt-20";
 
 // report_md 각주 링크([\[1\]](#ref-1))에 "본문으로 돌아가기"용 id를 붙인다. 같은 논문이 여러
-// 번 인용될 수 있어 백엔드는 몇 번째가 "첫 인용"인지 추적하지 않는다 — 여기 프론트는 이미
-// 링크를 하나씩 순서대로 렌더링하고 있으므로, seenRefs Set으로 #ref-n을 처음 만난 시점만
-// 표시하면 된다. 원문에 앵커 태그를 심고 rehype-raw로 파싱하는 것보다 훨씬 단순하다.
+// 번 인용될 수 있어 백엔드는 몇 번째가 "첫 인용"인지 추적하지 않으므로, md에서 그 번호가 처음
+// 나오는 offset을 미리 구해 두고 렌더 중 노드 위치와 대조한다. 원문에 앵커 태그를 심고
+// rehype-raw로 파싱하는 것보다 단순하다.
 function ReportMarkdown({ md }: { md: string }) {
-  const seenRefs = useRef(new Set<string>());
-
-  const components: Components = {
-    a({ href, children, ...props }) {
-      const refN = href?.startsWith("#ref-") ? href.slice("#ref-".length) : null;
-      if (refN && !seenRefs.current.has(refN)) {
-        seenRefs.current.add(refN);
+  const components: Components = useMemo(() => {
+    const first = firstCiteOffsets(md);
+    return {
+      a({ href, children, node, ...props }) {
+        const refN = href?.startsWith("#ref-") ? href.slice("#ref-".length) : null;
+        if (refN && node?.position?.start.offset === first.get(refN)) {
+          return (
+            <a href={href} id={`cite-${refN}`} className={SCROLL_TARGET_CLASS} {...props}>
+              {children}
+            </a>
+          );
+        }
         return (
-          <a href={href} id={`cite-${refN}`} className={SCROLL_TARGET_CLASS} {...props}>
+          <a href={href} {...props}>
             {children}
           </a>
         );
-      }
-      return (
-        <a href={href} {...props}>
-          {children}
-        </a>
-      );
-    },
-  };
+      },
+    };
+  }, [md]);
 
   // remarkCjkFriendly는 remarkGfm 뒤에 온다 — 패키지 README의 권장 순서(parse -> gfm ->
   // cjk-friendly -> rehype)를 따른다. CommonMark는 닫는 `**` 바로 뒤에 공백 없이 한글
