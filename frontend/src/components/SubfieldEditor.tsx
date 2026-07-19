@@ -553,6 +553,41 @@ function QueryHelpPanel({ source, panelId }: { source: "openalex" | "kci"; panel
             <span className="text-muted">→ 208건</span>
           </li>
         </ul>
+
+        <p className="mt-3 font-medium text-ink">괄호 중첩</p>
+        <p className="mt-1">
+          괄호 안에 <code className="font-mono text-ink">AND</code>/<code className="font-mono text-ink">OR</code>를
+          중첩할 수 있고, 그룹끼리 조합하거나 <code className="font-mono text-ink">NOT</code>과 섞어도 됩니다.
+        </p>
+        <ul className="mt-1 space-y-0.5">
+          <li>
+            <code className="font-mono text-ink">(memory OR flash) AND (semiconductor OR device)</code>{" "}
+            <span className="text-muted">→ 1,055건 (그룹 2개)</span>
+          </li>
+          <li>
+            <code className="font-mono text-ink">((memory OR flash) AND semiconductor) OR quantum</code>{" "}
+            <span className="text-muted">→ 2,701건 (3중 중첩)</span>
+          </li>
+          <li>
+            <code className="font-mono text-ink">(memory OR flash) AND semiconductor NOT DRAM</code>{" "}
+            <span className="text-muted">→ 176건 (그룹 + NOT)</span>
+          </li>
+        </ul>
+
+        {/* 괄호가 무시되지 않고 실제로 그룹으로 해석된다는 근거 — 같은 단어라도 묶는 위치에 따라
+            결과가 19배 차이난다. 검색식을 짤 때 가장 실수하기 쉬운 지점이라 대비 예시로 보여준다. */}
+        <p className="mt-3 font-medium text-warning">괄호 위치가 결과를 크게 바꿉니다</p>
+        <ul className="mt-1 space-y-0.5">
+          <li>
+            <code className="font-mono text-ink">(memory OR flash) AND semiconductor</code>{" "}
+            <span className="text-muted">→ 208건</span>
+          </li>
+          <li>
+            <code className="font-mono text-ink">memory OR (flash AND semiconductor)</code>{" "}
+            <span className="text-muted">→ 3,995건</span>
+          </li>
+        </ul>
+        <p className="mt-1">같은 단어인데 묶는 위치만 달라도 결과가 19배 차이납니다.</p>
       </div>
     );
   }
