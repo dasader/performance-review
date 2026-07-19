@@ -114,6 +114,19 @@ thinking 레벨을 바꾸면 같은 논문이라도 재추출된다(신규 행�
 - `AnalysisRun`이 매 `done` 도달 시 `trigger`(`manual`|`scheduled`) · 검색/분석 건수를 남긴다.
   OpenAlex의 `from_created_date` 필터가 유료 플랜 전용이라 막혀 있어, 대신 이 실행 이력을
   몇 달 쌓아 "논문이 실제로 얼마나 느는가"를 데이터로 확인할 계획이다(조회 API는 아직 없음).
+  나중에 이 데이터로 **주기를 조정**할 때 볼 지표는 목적에 따라 다르다:
+  - **`AnalysisRun.searched_count`의 연속 실행 간 증가분** — 같은 `analysis_id`의 실행을 시간순으로
+    비교해 "이 연도에 새로 검색되는 논문이 실제로 몇 건씩 늘어나는가"를 직접 보여준다. **주기 조정에
+    쓸 지표는 이쪽.**
+  - **`AnalysisRun.new_papers`** — "이번 실행에서 LLM을 돌려 실제로 추출한 논문 수"(=비용이 발생한
+    건수, `Analysis.extracted_this_run`을 `_do_extract`가 누적하고 `_do_reduce`가 옮겨 적음). 비용
+    신호에 가깝고, `model_ver`가 바뀌면 검색 결과가 하나도 안 늘어도 전량 재추출되어 값이 커진다 —
+    "논문이 얼마나 늘었는가"의 대리 지표로 쓰면 안 된다.
+  - **주의**: `analysis_runs` 초기 6개 행(2026-07-19 이전, `new_papers`가 대부분 0)은 `new_papers`를
+    `new_count - prior_analyzed_count`(총계의 차이)로 계산하던 버그 시절 값이라, model_ver 변경으로
+    전량 재추출된 경우에도 0으로 남아 있다(실측: analysis 4 — 양자컴퓨팅 2026, 스키마 v1→v2로 10건
+    전량 재추출됐는데 `new_papers=0`). 이 버그를 고치면서(`extracted_this_run` 컬럼, migration 0009)
+    기존 6개 행은 **소급 정정하지 않았다** — 근거가 없어서다. 이 행들의 `new_papers`는 신뢰하지 말 것.
 - `python:3.11-slim`에는 시스템 tz 데이터베이스가 없어 `zoneinfo.ZoneInfo("Asia/Seoul")`가
   실패할 수 있다 — `requirements.txt`의 `tzdata` 패키지로 해결(컨테이너 안에서
   `python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Seoul'))"`로 확인 가능).

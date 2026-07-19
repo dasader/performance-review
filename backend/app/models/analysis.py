@@ -41,6 +41,13 @@ class Analysis(Base):
     # 건수는 그대로일 수 있다 — analyzed_count 비교만으로는 "건수가 그대로니 재추출도
     # 없었다"로 오판하므로, 이 값으로 model_ver 변경 자체를 별도 신호로 잡는다.
     report_model_ver: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # 이번 실행(enqueue가 이 행을 pending으로 되돌린 시점부터 done까지) 동안
+    # mapper.save_results()가 실제로 LLM 결과를 저장한 논문 수의 누적치. 추출은
+    # batch_max_requests_per_file 단위로 여러 청크로 쪼개져 여러 루프 틱에 걸쳐
+    # 저장되므로(_do_extract) 메모리 변수로는 셀 수 없다 — 이 컬럼에 누적하고,
+    # _do_reduce가 done 시점에 AnalysisRun.new_papers로 그대로 옮겨 적는다.
+    # enqueue()가 이 행을 새로 만들거나 되살릴 때만 0으로 리셋한다(그 외에는 계속 누적).
+    extracted_this_run: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class AnalysisPaper(Base):

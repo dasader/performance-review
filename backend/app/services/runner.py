@@ -59,7 +59,7 @@ def enqueue(
 
         if row is None:
             row = Analysis(subfield_id=subfield.id, year=year, status="pending",
-                           query_hash=current_hash, trigger=trigger)
+                           query_hash=current_hash, trigger=trigger, extracted_this_run=0)
             db.add(row)
             queued.append(row)
         elif force or row.status in ("failed", "paused") or row.query_hash != current_hash:
@@ -71,6 +71,9 @@ def enqueue(
             row.extract_attempts = 0  # M11: 재시도 카운터를 리셋하지 않으면 상한에
             row.search_attempts = 0   # 걸려 failed된 잡이 재실행 즉시 다시 failed된다.
             row.trigger = trigger
+            # 이번에 새로 시작하는 실행의 추출 건수를 세는 카운터라, 지난 실행에서
+            # 누적된 값이 이번 AnalysisRun.new_papers에 섞여 들어가면 안 된다.
+            row.extracted_this_run = 0
             if query_changed:
                 # I7: 검색식이 바뀐 재실행은 옛 검색식으로만 걸리던 논문이 통계 모집단에
                 # 영구히 남지 않도록 링크만 정리한다. papers 테이블 자체와 paper_extractions
@@ -221,6 +224,11 @@ async def _do_extract(db: Session, analysis: Analysis) -> None:
 
         before = len(mapper.pending_papers(db, analysis, _analysis_papers(db, analysis)))
         saved = mapper.save_results(db, analysis, results or [])
+        # save_results가 저장한 건 전부 mapper.pending_papers(캐시에 없는 논문)로만
+        # 구성된 요청의 결과다 — 즉 saved는 "덮어쓴 총 행 수"가 아니라 "이번 실행에서
+        # 실제로 LLM을 돌려 새로 얻은 결과 수"(비용이 발생한 건수)와 같다. 여러 청크에
+        # 걸쳐 여러 번 저장되므로 누적한다(_do_reduce가 done 시점에 AnalysisRun로 옮긴다).
+        analysis.extracted_this_run += saved
         analysis.batch_job_id = None
         db.commit()
 
@@ -330,7 +338,11 @@ async def _do_reduce(db: Session, analysis: Analysis) -> None:
         ran_at=datetime.now(timezone.utc),
         searched_count=analysis.searched_count,
         analyzed_count=new_count,
-        new_papers=max(new_count - prior_analyzed_count, 0),
+        # M18: new_count - prior_analyzed_count(총계의 차이)가 아니라 이번 실행에서
+        # 실제로 추출한 건수(extracted_this_run)를 쓴다 — model_ver가 바뀌어 논문
+        # 전량이 재추출돼도 총계는 그대로일 수 있어(전량 재추출 = 재추출 건수는 총계와
+        # 같은데 차이는 0), 총계 차이만 보면 "신규 추출 없음"으로 오판한다.
+        new_papers=analysis.extracted_this_run,
         trigger=analysis.trigger,
     ))
     db.commit()

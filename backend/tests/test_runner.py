@@ -142,6 +142,67 @@ async def test_extract_attempts_resets_when_progress_is_made(ctx, monkeypatch):
     assert a.status == "reducing"
 
 
+async def test_extracted_this_run_accumulates_across_multiple_batches(ctx, monkeypatch):
+    """M18: 추출은 batch_max_requests_per_file 단위로 여러 청크로 쪼개져 여러 루프
+    틱에 걸쳐 저장될 수 있다 — extracted_this_run이 메모리 변수가 아니라 DB 컬럼이어야
+    하는 이유의 회귀 테스트. 첫 청크에서 p1만 저장되고(p2는 남음), 다음 루프 틱(다음
+    batch 결과 도착)에서 p2가 저장되는 상황을 흉내낸다."""
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="extracting", query_hash="h",
+                 batch_job_id="job-1")
+    db.add(a)
+    db.commit()
+
+    p1 = Paper(paper_key="k1", title="T1", abstract="A1", year=2025, source="openalex",
+               korea_flag=True)
+    p2 = Paper(paper_key="k2", title="T2", abstract="A2", year=2025, source="openalex",
+               korea_flag=True)
+    db.add_all([p1, p2])
+    db.commit()
+    db.add(AnalysisPaper(analysis_id=a.id, paper_id=p1.id))
+    db.add(AnalysisPaper(analysis_id=a.id, paper_id=p2.id))
+    db.commit()
+
+    monkeypatch.setattr(runner.gemini_batch, "poll", lambda job_id: ("succeeded", [{"key": "k1"}]))
+
+    # 청크 1: before=[p1,p2](2건), 저장 후 still_pending=[p2](1건) — p1만 이번에 저장됨.
+    calls = {"n": 0}
+
+    def fake_pending_chunk1(db, analysis, papers):
+        calls["n"] += 1
+        return [p1, p2] if calls["n"] == 1 else [p2]
+
+    monkeypatch.setattr(runner.mapper, "pending_papers", fake_pending_chunk1)
+    monkeypatch.setattr(runner.mapper, "save_results", lambda db, a, results: 1)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert a.extracted_this_run == 1
+    assert a.status == "extracting"  # p2가 아직 남아 다음 청크를 기다림
+    assert a.batch_job_id is None
+
+    # 다음 루프 틱: 두 번째 청크가 이미 제출·완료됐다고 흉내(제출 로직은 다른 테스트가
+    # 커버) — batch_job_id를 직접 채워 폴링 경로로 들어가게 한다.
+    a.batch_job_id = "job-2"
+    db.commit()
+    monkeypatch.setattr(runner.gemini_batch, "poll", lambda job_id: ("succeeded", [{"key": "k2"}]))
+
+    # 청크 2: before=[p2](1건), 저장 후 still_pending=[](0건) — 이제 다 끝남.
+    calls2 = {"n": 0}
+
+    def fake_pending_chunk2(db, analysis, papers):
+        calls2["n"] += 1
+        return [p2] if calls2["n"] == 1 else []
+
+    monkeypatch.setattr(runner.mapper, "pending_papers", fake_pending_chunk2)
+    monkeypatch.setattr(runner.mapper, "save_results", lambda db, a, results: 1)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert a.extracted_this_run == 2  # 두 청크의 저장 건수(1+1)가 합산 누적됨
+    assert a.status == "reducing"
+
+
 async def test_extract_attempts_fails_after_max_when_no_progress(ctx, monkeypatch):
     """파싱 불가 논문 때문에 pending 건수가 줄지 않는 상황이 max_extract_attempts회
     반복되면 무한 재제출 대신 failed로 전환돼야 한다."""
@@ -429,6 +490,19 @@ def test_enqueue_resets_extract_and_search_attempts_on_revival(ctx):
     assert again[0].search_attempts == 0
 
 
+def test_enqueue_resets_extracted_this_run_on_revival(ctx):
+    """M18: 지난 실행에서 누적된 extracted_this_run이 이번 AnalysisRun.new_papers에
+    섞여 들어가면 안 된다 — enqueue()가 되살릴 때 0으로 리셋해야 한다."""
+    db, sf = ctx
+    first = runner.enqueue(db, sf, 2025, 2025, force=False)[0]
+    first.status = "done"
+    first.extracted_this_run = 7  # 지난 실행에서 남은 값
+    db.commit()
+
+    again = runner.enqueue(db, sf, 2025, 2025, force=True)
+    assert again[0].extracted_this_run == 0
+
+
 # ── C4: 신규 추출 0건이면 reduce_subfield(LLM) 호출을 생략 ──
 
 def _reducing_analysis(db, sf, *, report_md=None, analyzed_count=0, report_model_ver=None,
@@ -456,6 +530,7 @@ async def test_do_reduce_skips_llm_when_no_new_extractions(ctx, monkeypatch):
     db, sf = ctx
     a = _reducing_analysis(db, sf, report_md="기존 보고서", analyzed_count=1,
                            report_model_ver=runner.mapper.model_ver())
+    # extracted_this_run 기본값 0 — 이번 실행에서 _do_extract가 아무것도 저장하지 않았음
     _link_extracted_paper(db, a, sf, "k1")
 
     called = {"n": 0}
@@ -472,6 +547,9 @@ async def test_do_reduce_skips_llm_when_no_new_extractions(ctx, monkeypatch):
     assert a.report_md == "기존 보고서"  # 그대로 유지
     assert a.status == "done"
     assert a.analyzed_count == 1  # 통계 근거는 여전히 갱신됨
+
+    runs = db.query(AnalysisRun).filter(AnalysisRun.analysis_id == a.id).all()
+    assert runs[0].new_papers == 0  # 신규 추출 0건이면 new_papers도 0
 
 
 async def test_do_reduce_calls_llm_when_extractions_increased(ctx, monkeypatch):
@@ -518,6 +596,8 @@ async def test_do_reduce_regenerates_when_model_ver_changed_even_if_count_same(c
     db, sf = ctx
     a = _reducing_analysis(db, sf, report_md="옛 모델 보고서", analyzed_count=1,
                            report_model_ver="old-model/low/v1")
+    a.extracted_this_run = 1  # _do_extract가 이번 실행에서 1건을 실제로 재추출해 누적한 값
+    db.commit()
     _link_extracted_paper(db, a, sf, "k1")  # 현재 model_ver로 추출된 1건 — 건수는 그대로
 
     called = {"n": 0}
@@ -534,11 +614,18 @@ async def test_do_reduce_regenerates_when_model_ver_changed_even_if_count_same(c
     assert a.report_md == "재생성된 보고서"
     assert a.report_model_ver == runner.mapper.model_ver()
 
+    # M18 회귀 테스트: 총계 차이(1-1=0)가 아니라 실제 추출 건수(1)가 기록돼야 한다.
+    # 실측 버그(analysis 4, 양자컴퓨팅 2026): 스키마 v1→v2로 10건 전량 재추출됐는데
+    # new_papers=0으로 기록된 사례가 이 시나리오다.
+    runs = db.query(AnalysisRun).filter(AnalysisRun.analysis_id == a.id).all()
+    assert runs[0].new_papers == 1
+
 
 async def test_do_reduce_records_analysis_run(ctx, monkeypatch):
     db, sf = ctx
     a = _reducing_analysis(db, sf, report_md=None, analyzed_count=0, trigger="scheduled")
     a.searched_count = 3
+    a.extracted_this_run = 1  # _do_extract가 이번 실행에서 누적했을 값을 흉내(reduce만 검증)
     db.commit()
     _link_extracted_paper(db, a, sf, "k1")
 
