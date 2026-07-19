@@ -182,7 +182,9 @@ export default function Admin() {
           );
         })()}
 
-        <h2 className="mb-3 mt-10 font-display text-lg font-semibold text-accent">실행 상태</h2>
+        {/* 세부기술·검색식 / 분석 실행 섹션과 같은 카드로 묶어 시각적 단위를 맞춘다. */}
+        <section className="mt-6 border border-border bg-surface p-5">
+        <h2 className="mb-3 font-display text-lg font-semibold text-accent">실행 상태</h2>
 
         {!data && !error && <p className="text-sm text-muted">불러오는 중…</p>}
 
@@ -256,6 +258,7 @@ export default function Admin() {
             </table>
           </div>
         )}
+        </section>
       </main>
       <Footer />
     </div>
