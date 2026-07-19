@@ -9,8 +9,9 @@ from app.clients import kci, openalex
 from app.config import settings
 from app.database import get_db
 from app.deps import require_admin
-from app.models.analysis import Analysis
+from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import Field, Subfield
+from app.models.schedule import AnalysisRun
 from app.services import budget, mapper, runner
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -282,6 +283,39 @@ def run_schedule_now(db: Session = Depends(get_db)):
     """스케줄 시각 판정을 우회해 즉시 1회 큐잉한다. 되돌릴 수 없는 동작이므로 프론트에서
     확인 단계를 거친 뒤에만 호출해야 한다."""
     return {"queued_count": runner.run_scheduled_now(db)}
+
+
+@router.delete("/analyses/{analysis_id}")
+def delete_analysis(analysis_id: int, db: Session = Depends(get_db)):
+    """개별 분석(보고서) 삭제.
+
+    세부기술 삭제는 분석 이력이 있으면 409로 막힌다(delete_subfield) — 분석 결과는 비용을
+    들여 만든 자산이라서다. 그런데 보고서를 개별로 지울 방법이 없으면 한 번 분석한
+    세부기술은 영영 삭제할 수 없는 막다른 길이 된다. 이 엔드포인트가 그 탈출구다.
+
+    Paper/PaperExtraction은 절대 지우지 않는다: 추출 결과는 LLM 비용을 들여 만든 캐시이고
+    paper_key + model_ver로 다른 세부기술·연도의 분석과 공유된다(mapper.pending_papers가
+    이 캐시를 조회) — 여기서 지우는 건 이 분석이 만든 보고서·통계·링크(AnalysisPaper)·
+    실행 이력(AnalysisRun)뿐이다. 재실행하면 캐시 히트로 추출 비용 없이 다시 만들어진다.
+    """
+    analysis = db.get(Analysis, analysis_id)
+    if not analysis:
+        raise HTTPException(status_code=404, detail="분석을 찾을 수 없습니다.")
+    if analysis.status in runner.ACTIVE_STATES:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"진행 중인 분석입니다(상태: "
+                f"{runner.STEP_LABELS.get(analysis.status, analysis.status)}). "
+                f"이미 배치 작업이 제출됐을 수 있어 중간에 삭제하면 고아 상태가 됩니다. "
+                f"완료되거나 실패한 뒤에 삭제하세요."
+            ),
+        )
+    db.query(AnalysisRun).filter(AnalysisRun.analysis_id == analysis_id).delete()
+    db.query(AnalysisPaper).filter(AnalysisPaper.analysis_id == analysis_id).delete()
+    db.delete(analysis)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/analyses/{analysis_id}/retry")

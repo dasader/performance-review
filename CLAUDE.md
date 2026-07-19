@@ -154,6 +154,15 @@ $0.0040까지 떨어진다.
 (`app/clients/openalex.py`). 키를 다른 서비스와 공유하므로 잔여 예산을 추정하지 않고
 `X-RateLimit-Remaining` 헤더 실측값을 그대로 신뢰한다.
 
+## 분석 삭제 정책 — `DELETE /api/admin/analyses/{id}`
+
+분석(보고서) 삭제는 `Analysis`/`AnalysisPaper`/`AnalysisRun`(보고서·통계·링크·이력)만 지우고
+`papers`/`paper_extractions`는 절대 건드리지 않는다 — 추출 결과는 LLM 비용을 들여 만든 캐시라
+다른 세부기술·연도와 공유되기 때문이다(재실행 시 캐시 히트로 추출 비용 없이 복원됨).
+진행 중(`ACTIVE_STATES`)인 분석은 409로 삭제를 거부한다(batch가 이미 제출됐을 수 있어 고아
+상태 방지). 세부기술 삭제(`DELETE /api/admin/subfields/{id}`)는 분석 이력이 하나라도 남아
+있으면 409로 막힌다 — 개별 분석을 먼저 지워야 막다른 길 없이 세부기술도 지울 수 있다.
+
 ## 모델 import — `app/models/__init__.py`
 
 SQLAlchemy가 FK를 해석하려면 관련 모델 클래스가 전부 import되어 있어야 한다.

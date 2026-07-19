@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, get, post, type AdminSubfield, type DashboardResponse, type Field } from "../api";
+import {
+  ApiError,
+  del,
+  get,
+  post,
+  type AdminSubfield,
+  type DashboardResponse,
+  type DashboardRow,
+  type Field,
+} from "../api";
 import { useAdminKey } from "../useAdminKey";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
@@ -7,6 +16,10 @@ import StatusBadge from "../components/StatusBadge";
 import SubfieldEditor from "../components/SubfieldEditor";
 import RunDialog from "../components/RunDialog";
 import ScheduleSection from "../components/ScheduleSection";
+
+// runner.py::ACTIVE_STATES와 동일 — 진행 중인 분석은 batch가 이미 제출됐을 수 있어
+// 삭제하면 고아 상태가 된다(백엔드도 같은 기준으로 409를 던진다).
+const ACTIVE_STATUSES = new Set(["pending", "searching", "extracting", "reducing"]);
 
 export default function Admin() {
   // 백엔드의 default_year_range는 "최근 N개년"의 N(정수)이다. 연도 범위가 아니라 개수.
@@ -21,6 +34,7 @@ export default function Admin() {
   const [fieldsError, setFieldsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryingId, setRetryingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   // /admin/subfields (active 포함) 결과 — SubfieldEditor가 이미 불러온 것을 끌어올려
   // RunDialog의 실행 대상 목록에서 비활성 세부기술을 제외하는 데 재사용한다.
@@ -50,6 +64,26 @@ export default function Admin() {
   useEffect(() => {
     if (key) loadDashboard(key);
   }, [key, loadDashboard]);
+
+  const handleDeleteAnalysis = async (row: DashboardRow, cell: { analysis_id: number; year: number }) => {
+    const ok = confirm(
+      `'${row.subfield_name}' ${cell.year}년 분석을 삭제할까요?\n\n` +
+        `지워지는 것: 보고서·통계·실행 이력\n` +
+        `남는 것: 수집한 논문과 추출 결과(캐시) — 재실행 시 추출 비용 없이 다시 만들어집니다.\n\n` +
+        `이 작업은 취소할 수 없습니다. 계속할까요?`,
+    );
+    if (!ok) return;
+    setDeletingId(cell.analysis_id);
+    try {
+      await del(`/admin/analyses/${cell.analysis_id}`, key);
+      await loadDashboard(key);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) return onUnauthorized();
+      setError(e instanceof Error ? e.message : "삭제 요청에 실패했습니다.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const loadFields = useCallback(() => {
     setFieldsError(null);
@@ -231,7 +265,7 @@ export default function Admin() {
                       <td className="py-3 pr-3 text-xs text-faint">
                         {cell.snapshot_at ? new Date(cell.snapshot_at).toLocaleDateString("ko-KR") : "—"}
                       </td>
-                      <td className="py-3 text-right">
+                      <td className="py-3 text-right whitespace-nowrap">
                         {(cell.status === "failed" || cell.status === "paused") && (
                           <button
                             type="button"
@@ -248,9 +282,21 @@ export default function Admin() {
                                 setRetryingId(null);
                               }
                             }}
-                            className="border border-border px-2 py-1 text-xs text-ink-light hover:border-accent hover:text-accent disabled:opacity-40"
+                            className="mr-2 border border-border px-2 py-1 text-xs text-ink-light hover:border-accent hover:text-accent disabled:opacity-40"
                           >
                             {retryingId === cell.analysis_id ? "요청 중…" : "재실행"}
+                          </button>
+                        )}
+                        {/* 진행 중(ACTIVE_STATUSES)에는 숨긴다 — batch가 이미 제출됐을 수 있어
+                            중간에 지우면 고아 상태가 된다(백엔드도 409로 같은 판단을 한다). */}
+                        {!ACTIVE_STATUSES.has(cell.status) && (
+                          <button
+                            type="button"
+                            disabled={deletingId === cell.analysis_id}
+                            onClick={() => handleDeleteAnalysis(row, cell)}
+                            className="border border-danger/50 px-2 py-1 text-xs text-danger hover:border-danger hover:bg-danger/5 disabled:opacity-40"
+                          >
+                            {deletingId === cell.analysis_id ? "삭제 중…" : "삭제"}
                           </button>
                         )}
                       </td>

@@ -13,7 +13,8 @@ from app.main import app
 from app.models.analysis import Analysis, AnalysisPaper
 from app.models.budget import OpenAlexUsage
 from app.models.field import Field, Subfield
-from app.models.paper import Paper
+from app.models.paper import Paper, PaperExtraction
+from app.models.schedule import AnalysisRun
 from app.routers import admin as admin_module
 
 
@@ -306,6 +307,87 @@ def test_delete_subfield_succeeds_without_analysis_history(client):
     db = app.dependency_overrides[get_db]()
     assert db.get(Subfield, 1) is None
     db.close()
+
+
+# ── 개별 분석(보고서) 삭제 (DELETE /api/admin/analyses/{id}) ──
+
+def test_delete_analysis_requires_admin_key(client):
+    db = app.dependency_overrides[get_db]()
+    db.add(Analysis(subfield_id=1, year=2024, status="done", query_hash="x"))
+    db.commit()
+    db.close()
+
+    assert client.delete("/api/admin/analyses/1").status_code == 401
+
+
+def test_delete_analysis_404_when_missing(client):
+    r = client.delete("/api/admin/analyses/999", headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 404
+
+
+@pytest.mark.parametrize("status", ["pending", "searching", "extracting", "reducing"])
+def test_delete_analysis_blocked_while_active(client, status):
+    db = app.dependency_overrides[get_db]()
+    db.add(Analysis(subfield_id=1, year=2024, status=status, query_hash="x"))
+    db.commit()
+    db.close()
+
+    r = client.delete("/api/admin/analyses/1", headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 409
+    assert "진행 중" in r.json()["detail"]
+
+    db = app.dependency_overrides[get_db]()
+    assert db.get(Analysis, 1) is not None
+    db.close()
+
+
+def test_delete_analysis_keeps_papers_and_extractions_deletes_links_and_runs(client):
+    db = app.dependency_overrides[get_db]()
+    a = Analysis(subfield_id=1, year=2024, status="done", query_hash="x",
+                 report_md="report", analyzed_count=1, searched_count=1)
+    db.add(a)
+    db.flush()
+    p = Paper(paper_key="k1", title="t", source="openalex")
+    db.add(p)
+    db.flush()
+    db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
+    db.add(PaperExtraction(paper_key="k1", subfield_id=1, model_ver="m1"))
+    db.add(AnalysisRun(analysis_id=a.id, ran_at=datetime.now(timezone.utc),
+                        searched_count=1, analyzed_count=1, new_papers=1, trigger="manual"))
+    db.commit()
+    analysis_id = a.id
+    paper_id = p.id
+    db.close()
+
+    r = client.delete(f"/api/admin/analyses/{analysis_id}", headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 200
+
+    db = app.dependency_overrides[get_db]()
+    assert db.get(Analysis, analysis_id) is None
+    assert db.query(AnalysisPaper).filter(AnalysisPaper.analysis_id == analysis_id).count() == 0
+    assert db.query(AnalysisRun).filter(AnalysisRun.analysis_id == analysis_id).count() == 0
+    # papers / paper_extractions는 다른 세부기술·연도와 공유하는 캐시라 반드시 남아 있어야 한다.
+    assert db.get(Paper, paper_id) is not None
+    assert db.query(PaperExtraction).filter(PaperExtraction.paper_key == "k1").count() == 1
+    db.close()
+
+
+def test_delete_analysis_then_subfield_delete_succeeds(client):
+    db = app.dependency_overrides[get_db]()
+    db.add(Analysis(subfield_id=1, year=2024, status="done", query_hash="x"))
+    db.commit()
+    db.close()
+
+    # 분석 이력이 있는 동안은 세부기술 삭제가 막힌다.
+    blocked = client.delete("/api/admin/subfields/1", headers={"X-Admin-Key": settings.admin_key})
+    assert blocked.status_code == 409
+
+    ok = client.delete("/api/admin/analyses/1", headers={"X-Admin-Key": settings.admin_key})
+    assert ok.status_code == 200
+
+    # 분석을 지운 뒤에는 세부기술 삭제가 풀린다.
+    r = client.delete("/api/admin/subfields/1", headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 200
 
 
 # ── report_md 각주 치환 (public.py::_apply_footnotes, GET /api/analyses/{id}) ──
