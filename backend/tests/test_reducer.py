@@ -1,6 +1,18 @@
 from app.config import settings
+from app.models.analysis import Analysis
+from app.models.field import Subfield
 from app.models.paper import Paper, PaperExtraction
 from app.services import reducer
+
+
+class _FakeDb:
+    """reduce_subfield는 세부기술명을 얻으려고 db.get(Subfield, ...) 한 번만 부른다."""
+
+    def get(self, model, pk):
+        return Subfield(id=pk, field_id=1, name="테스트 세부기술", query="q")
+
+
+_ANALYSIS = Analysis(subfield_id=1, year=2026, query_hash="h")
 
 
 class _FakeGenerate:
@@ -84,7 +96,7 @@ async def test_reduce_subfield_skips_llm_when_body_empty_single_group(monkeypatc
     monkeypatch.setattr(reducer.gemini_sync, "generate", fake)
     ext = [_ext("missing", "공정")]
 
-    result = await reducer.reduce_subfield(None, None, ext, {})
+    result = await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, ext, {})
 
     assert fake.calls == []
     assert result == "분석 대상 논문이 없어 성과를 정리할 수 없습니다."
@@ -97,7 +109,7 @@ async def test_reduce_subfield_skips_llm_when_all_groups_empty_three_tier(monkey
     monkeypatch.setattr(reducer.gemini_sync, "generate", fake)
     ext = [_ext("m1", "공정"), _ext("m2", "알고리즘")]
 
-    result = await reducer.reduce_subfield(None, None, ext, {})
+    result = await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, ext, {})
 
     assert fake.calls == []
     assert result == "분석 대상 논문이 없어 성과를 정리할 수 없습니다."
@@ -111,10 +123,30 @@ async def test_reduce_subfield_calls_llm_for_normal_input(monkeypatch):
                           abstract="A", source="openalex", citations=0)}
     ext = [_ext("k1", "공정")]
 
-    result = await reducer.reduce_subfield(None, None, ext, papers)
+    result = await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, ext, papers)
 
     assert len(fake.calls) == 1
     assert result == "report"
+    assert "[세부기술: 테스트 세부기술 / 2026]" in fake.calls[0][1]
+
+
+async def test_three_tier_final_call_still_names_the_subfield(monkeypatch):
+    """3단 경로의 최종 통합 입력은 중간 요약뿐이라 세부기술명이 사라지기 쉽다 — 그러면
+    모델이 H1 제목을 내용만 보고 새로 지어내 목록의 세부기술명과 어긋난다."""
+    monkeypatch.setattr(settings, "reduce_group_threshold", 1)
+    fake = _FakeGenerate(return_value="report")
+    monkeypatch.setattr(reducer.gemini_sync, "generate", fake)
+    papers = {
+        k: Paper(paper_key=k, title=f"{k} 논문", year=2026, journal="J",
+                 abstract="A", source="openalex", citations=0)
+        for k in ("k1", "k2")
+    }
+    ext = [_ext("k1", "공정"), _ext("k2", "알고리즘")]
+
+    await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, ext, papers)
+
+    assert len(fake.calls) == 3  # 그룹 2개 + 최종 통합 1개
+    assert "[세부기술: 테스트 세부기술 / 2026]" in fake.calls[-1][1]
 
 
 async def test_rollup_field_skips_llm_for_empty_input(monkeypatch):

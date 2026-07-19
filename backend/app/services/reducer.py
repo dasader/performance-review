@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.clients import gemini_sync
 from app.config import settings
 from app.models.analysis import Analysis
+from app.models.field import Subfield
 from app.models.paper import Paper, PaperExtraction
 from app.prompts import REDUCE_INSTRUCTION, ROLLUP_INSTRUCTION
 
@@ -72,6 +73,13 @@ async def reduce_subfield(
     if not extractions:
         return no_data_message
 
+    # 대상 세부기술명을 입력에 명시한다. 없으면 모델이 본문 내용만 보고 H1 제목을 새로
+    # 지어내, 목록 화면의 세부기술명과 보고서 제목이 어긋난다(실측: "재생에너지" 분석의
+    # 보고서 제목이 "에너지 변환 및 자원 순환 공학"으로 나왔다). 3단 reduce는 최종 합성
+    # 입력이 중간 요약뿐이라 세부기술명이 아예 사라져 더 크게 어긋난다.
+    subfield = db.get(Subfield, analysis.subfield_id)
+    header = f"[세부기술: {subfield.name if subfield else '미상'} / {analysis.year}]\n"
+
     groups = group_for_reduce(extractions)
     if len(groups) == 1:
         body = format_extractions(next(iter(groups.values())), papers_by_key)
@@ -82,7 +90,7 @@ async def reduce_subfield(
             )
             return no_data_message
         return await gemini_sync.generate(
-            REDUCE_INSTRUCTION, body, thinking=settings.thinking_reduce
+            REDUCE_INSTRUCTION, header + body, thinking=settings.thinking_reduce
         )
 
     partials: list[str] = []
@@ -104,7 +112,8 @@ async def reduce_subfield(
 
     return await gemini_sync.generate(
         REDUCE_INSTRUCTION,
-        "아래는 성과유형별 중간 정리 결과입니다. 이를 하나의 보고서로 통합하세요.\n\n"
+        header
+        + "아래는 성과유형별 중간 정리 결과입니다. 이를 하나의 보고서로 통합하세요.\n\n"
         + "\n\n".join(partials),
         thinking=settings.thinking_reduce,
     )
