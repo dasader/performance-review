@@ -93,4 +93,13 @@ body::before {
     color: inherit;
     text-decoration: none;
   }
+
+  /* 각주([1]) ↔ 참고문헌 상호 이동 링크는 인쇄물에서도 밑줄·색을 유지한다 — 클릭할 순
+     없어도 "이 번호가 참고문헌을 가리킨다"는 관계 자체는 종이에서도 읽혀야 한다.
+     되돌아가기용 "↑" 보조 링크는 인쇄에서 무의미하므로 print:hidden으로 완전히 숨긴다(위 규칙). */
+  a[href^="#ref-"],
+  a[href^="#cite-"] {
+    color: theme("colors.accent.DEFAULT");
+    text-decoration: underline;
+  }
 }

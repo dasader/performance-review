@@ -119,7 +119,7 @@ export default function RunDialog({
 
   return (
     <section className="mt-6 border border-border bg-surface p-5">
-      <h2 className="font-display text-lg font-semibold text-ink">분석 실행</h2>
+      <h2 className="font-display text-lg font-semibold text-accent">분석 실행</h2>
       <p className="mt-1 text-xs text-muted">
         미리보기는 검색만 수행하며 <span className="font-medium text-ink-light">LLM은 호출하지 않지만, OpenAlex 검색 비용(약 $0.002)이 소량 발생합니다.</span>{" "}
         실행 전 반드시 미리보기로 건수와 예상 비용을 확인하세요.

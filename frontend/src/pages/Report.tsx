@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { get, type Analysis, type Reference } from "../api";
 import TopBar from "../components/TopBar";
@@ -17,14 +17,56 @@ import StatsPanel from "../components/StatsPanel";
 // [&>*:first-child]:mt-0 은 (구체적 헤딩 레벨과 무관하게) 블록의 첫 자식 위쪽 여백만 지워
 // SectionDivider 바로 아래가 뜨지 않게 하면서, 두 번째 이후 헤딩(예: "## 주제 클러스터")의
 // 여백은 살려 섹션 경계가 보이게 한다.
+//
+// h2("섹션 제목" 레벨)만 accent 색을 준다 — 모든 레벨에 색을 주면 구분이 사라지므로 h3/본문은
+// prose-headings의 기본 text-ink를 그대로 물려받는다. 크기·굵기 차이는 그대로 유지되므로 색맹
+// 등 색만으로 위계를 못 읽는 경우에도 구분 가능하다(접근성). prose-a는 각주 링크([1] → 참고문헌)
+// 색을 References의 DOI 링크와 통일한다.
 const PROSE_HEADING_CLASSES =
   "prose-headings:font-display prose-headings:tracking-tight prose-headings:text-ink " +
   "[&>*:first-child]:mt-0 " +
-  "prose-h2:text-xl prose-h2:font-bold prose-h2:mt-12 prose-h2:mb-4 " +
-  "prose-h3:text-lg prose-h3:font-bold prose-h3:mt-8 prose-h3:mb-2";
+  "prose-h2:text-xl prose-h2:font-bold prose-h2:mt-12 prose-h2:mb-4 prose-h2:text-accent " +
+  "prose-h3:text-lg prose-h3:font-bold prose-h3:mt-8 prose-h3:mb-2 " +
+  "prose-a:text-accent prose-a:underline prose-a:decoration-border prose-a:underline-offset-2 hover:prose-a:decoration-accent";
 
 function SectionDivider() {
   return <hr className="my-10 border-t border-border" />;
+}
+
+// scroll-mt-20 — 점프 대상(각주 ↔ 참고문헌)이 화면 맨 위에 딱 붙지 않게 여유를 둔다.
+const SCROLL_TARGET_CLASS = "scroll-mt-20";
+
+// report_md 각주 링크([\[1\]](#ref-1))에 "본문으로 돌아가기"용 id를 붙인다. 같은 논문이 여러
+// 번 인용될 수 있어 백엔드는 몇 번째가 "첫 인용"인지 추적하지 않는다 — 여기 프론트는 이미
+// 링크를 하나씩 순서대로 렌더링하고 있으므로, seenRefs Set으로 #ref-n을 처음 만난 시점만
+// 표시하면 된다. 원문에 앵커 태그를 심고 rehype-raw로 파싱하는 것보다 훨씬 단순하다.
+function ReportMarkdown({ md }: { md: string }) {
+  const seenRefs = useRef(new Set<string>());
+
+  const components: Components = {
+    a({ href, children, ...props }) {
+      const refN = href?.startsWith("#ref-") ? href.slice("#ref-".length) : null;
+      if (refN && !seenRefs.current.has(refN)) {
+        seenRefs.current.add(refN);
+        return (
+          <a href={href} id={`cite-${refN}`} className={SCROLL_TARGET_CLASS} {...props}>
+            {children}
+          </a>
+        );
+      }
+      return (
+        <a href={href} {...props}>
+          {children}
+        </a>
+      );
+    },
+  };
+
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      {md}
+    </ReactMarkdown>
+  );
 }
 
 const IN_PROGRESS = new Set(["pending", "searching", "extracting", "reducing"]);
@@ -130,14 +172,17 @@ function ReportBody({ data }: { data: Analysis }) {
           {/* 서술(주요 기술적 성과)을 통계보다 먼저 — 독자는 정책·기획 담당자이며 숫자보다
               무엇을 달성했는지를 먼저 읽는다. */}
           <div className={`prose prose-neutral max-w-none prose-table:text-sm ${PROSE_HEADING_CLASSES}`}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{data.report_md ?? ""}</ReactMarkdown>
+            <ReportMarkdown md={data.report_md ?? ""} />
           </div>
+
+          {/* 참고문헌은 그것을 인용한 본문 바로 다음이 자연스럽다 — 통계(기본 통계) 앞으로 옮긴다.
+              References가 빈 배열이면 자신의 구분선 없이 null을 반환하므로, 그 경우에도
+              아래 구분선 하나만 report_md와 StatsPanel 사이에 남는다. */}
+          <References references={data.references} />
 
           <SectionDivider />
 
           <StatsPanel stats={data.stats} />
-
-          <References references={data.references} />
         </>
       )}
     </>
@@ -176,11 +221,20 @@ function References({ references }: { references: Reference[] }) {
     <>
       <SectionDivider />
       <section className="avoid-break">
-        <h2 className="font-display text-xl font-bold tracking-tight text-ink">참고문헌</h2>
+        <h2 className="font-display text-xl font-bold tracking-tight text-accent">참고문헌</h2>
         <ol className="mt-4 space-y-2 text-sm text-ink-light">
           {references.map((r) => (
-            <li key={r.n} className="flex gap-2">
-              <span className="shrink-0 font-mono text-xs text-muted">[{r.n}]</span>
+            <li key={r.n} id={`ref-${r.n}`} className={`flex gap-2 ${SCROLL_TARGET_CLASS}`}>
+              <span className="shrink-0 font-mono text-xs text-muted">
+                [{r.n}]{" "}
+                <a
+                  href={`#cite-${r.n}`}
+                  aria-label={`본문 ${r.n}번 인용 위치로 이동`}
+                  className="text-accent no-underline hover:underline print:hidden"
+                >
+                  ↑
+                </a>
+              </span>
               <span>
                 {r.title}
                 {(r.journal || r.year) && (

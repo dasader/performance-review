@@ -37,7 +37,7 @@ export default function StatsPanel({ stats }: { stats: Stats | Record<string, ne
 
   return (
     <section className="space-y-10">
-      <h2 className="font-display text-xl font-bold tracking-tight text-ink">기본 통계</h2>
+      <h2 className="font-display text-xl font-bold tracking-tight text-accent">기본 통계</h2>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile label="검색 논문" value={stats.searched_count} />

@@ -277,7 +277,7 @@ def test_analysis_report_footnotes_parenthesized_title(client):
     r = client.get(f"/api/analyses/{a.id}")
     assert r.status_code == 200
     body = r.json()
-    assert "[1]" in body["report_md"]
+    assert "[\\[1\\]](#ref-1)" in body["report_md"]
     assert "Improving Zero-Noise Extrapolation" not in body["report_md"]
     assert body["references"] == [
         {"n": 1, "title": title, "journal": "Nature", "year": 2025, "doi": "10.1234/xyz"}
@@ -306,6 +306,6 @@ def test_analysis_report_reuses_footnote_number_for_repeated_citation(client):
 
     r = client.get(f"/api/analyses/{a.id}")
     body = r.json()
-    assert body["report_md"].count("[1]") == 2
+    assert body["report_md"].count("[\\[1\\]](#ref-1)") == 2
     assert len(body["references"]) == 1
     assert body["references"][0]["n"] == 1

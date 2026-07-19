@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { get, type SiteInfo, type VisitorStats } from "../api";
 
 export default function Footer() {
@@ -34,7 +34,9 @@ export default function Footer() {
           </p>
         </div>
 
-        {visitors && <VisitorPanel visitors={visitors} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />}
+        {visitors && (
+          <VisitorPanel visitors={visitors} expanded={expanded} setExpanded={setExpanded} />
+        )}
       </div>
     </footer>
   );
@@ -43,26 +45,57 @@ export default function Footer() {
 function VisitorPanel({
   visitors,
   expanded,
-  onToggle,
+  setExpanded,
 }: {
   visitors: VisitorStats;
   expanded: boolean;
-  onToggle: () => void;
+  setExpanded: (update: boolean | ((v: boolean) => boolean)) => void;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // 패널이 열려 있을 때만 바깥 클릭/Esc를 감시한다 — 트리거 버튼 클릭은 containerRef 안쪽이라
+  // 여기서 걸리지 않고 버튼 자신의 onClick으로만 토글된다(이중 토글 방지).
+  useEffect(() => {
+    if (!expanded) return;
+    function onPointerDown(e: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setExpanded(false);
+      }
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setExpanded(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [expanded, setExpanded]);
+
   return (
-    <div className="shrink-0 text-right">
+    // relative — 아래 패널이 "위로"(bottom-full) 뜰 때 이 트리거 기준으로 위치를 잡기 위함.
+    // 푸터가 페이지 최하단에 있어 기본 펼침(아래로)이면 뷰포트 밖으로 잘리므로 drop-up으로 연다.
+    <div ref={containerRef} className="relative shrink-0 text-right">
       <button
         type="button"
-        onClick={onToggle}
+        onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
+        aria-controls="visitor-daily-panel"
         aria-label={`오늘 ${visitors.today}명, 이번 주 ${visitors.this_week}명 방문 — 일별 방문자 수 ${expanded ? "접기" : "펼치기"}`}
         className="font-mono tabular-nums text-faint underline decoration-border underline-offset-2 hover:text-muted hover:decoration-accent"
       >
-        오늘 {visitors.today.toLocaleString()} · 이번 주 {visitors.this_week.toLocaleString()}
+        {/* 열림/닫힘을 색만으로 구분하지 않도록 화살표 방향도 함께 바꾼다. */}
+        <span aria-hidden="true">{expanded ? "▾" : "▴"}</span> 오늘 {visitors.today.toLocaleString()} · 이번
+        주 {visitors.this_week.toLocaleString()}
       </button>
 
       {expanded && (
-        <ul className="mt-2 space-y-0.5 font-mono text-[11px] tabular-nums text-faint">
+        <ul
+          id="visitor-daily-panel"
+          aria-label="일별 방문자 수"
+          className="absolute bottom-full right-0 z-10 mb-2 max-h-64 w-56 max-w-[calc(100vw-3rem)] space-y-0.5 overflow-y-auto border border-border bg-surface p-3 text-left font-mono text-[11px] tabular-nums text-faint shadow-lg"
+        >
           {visitors.daily.map((d) => (
             <li key={d.date} className="flex justify-end gap-3">
               <span>{d.date}</span>

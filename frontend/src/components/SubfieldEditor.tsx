@@ -165,7 +165,7 @@ export default function SubfieldEditor({
 
   return (
     <section className="border border-border bg-surface p-5">
-      <h2 className="font-display text-lg font-semibold text-ink">세부기술 · 검색식</h2>
+      <h2 className="font-display text-lg font-semibold text-accent">세부기술 · 검색식</h2>
       <p className="mt-1 text-xs text-muted">
         검색식을 바꾸면 이미 수집된 연도는 다음 실행 상태 표에서 "갱신 필요"로 표시됩니다.
       </p>

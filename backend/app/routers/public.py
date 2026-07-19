@@ -23,7 +23,14 @@ def _normalize_ws(s: str) -> str:
 def _apply_footnotes(report_md: str | None, papers: list[Paper]) -> tuple[str | None, list[dict]]:
     """report_md 안에서 괄호로 인용된 논문 제목을 각주 번호로 치환한다(읽기 시점 후처리,
     LLM 재호출 없음). 매칭은 보수적으로: 괄호 안 텍스트가 공백 정규화 후 논문 제목과
-    정확히 같을 때만 치환한다. 못 찾은 제목은 원문 그대로 둔다."""
+    정확히 같을 때만 치환한다. 못 찾은 제목은 원문 그대로 둔다.
+
+    각주는 `[\\[1\\]](#ref-1)` 형태의 마크다운 링크로 치환된다 — 대괄호를 이스케이프해
+    렌더링 시 보이는 텍스트는 그대로 "[1]"이면서 "#ref-1"(참고문헌 항목)로 이동하는 링크가
+    된다. 첫 인용 지점에 돌아올 앵커(id="cite-1")를 붙이는 책임은 프론트(Report.tsx)에
+    있다 — 같은 논문이 여러 번 인용될 수 있어 "첫 인용 지점"을 여기(파이썬)에서 가리려면
+    별도 상태 추적이 필요하지만, 프론트는 이미 각 인용 링크를 렌더링하는 시점에 있으므로
+    처음 본 #ref-n을 추적하는 쪽이 더 단순하다(추가 마크업/원시 HTML도 필요 없음)."""
     if not report_md:
         return report_md, []
 
@@ -52,7 +59,7 @@ def _apply_footnotes(report_md: str | None, papers: list[Paper]) -> tuple[str | 
                 "year": paper.year,
                 "doi": paper.doi,
             })
-        return f"[{n}]"
+        return f"[\\[{n}\\]](#ref-{n})"
 
     return _PAREN_RE.sub(repl, report_md), references
 
