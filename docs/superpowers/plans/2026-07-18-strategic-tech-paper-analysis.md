@@ -155,6 +155,9 @@ class Settings(BaseSettings):
     default_year_range: int = 3
     loop_interval_seconds: int = 30
 
+    http_max_attempts: int = 5
+    http_timeout_seconds: float = 60.0
+
     class Config:
         env_file = ".env"
 
@@ -288,6 +291,8 @@ MAX_PAPERS_PER_ANALYSIS=5000
 REDUCE_GROUP_THRESHOLD=500
 DEFAULT_YEAR_RANGE=3
 LOOP_INTERVAL_SECONDS=30
+HTTP_MAX_ATTEMPTS=5
+HTTP_TIMEOUT_SECONDS=60
 
 API_PORT=8003
 WEB_PORT=8103
@@ -707,8 +712,8 @@ async def get_with_retry(
     params: dict | None = None,
     service_name: str,
     context: str = "",
-    max_attempts: int = 5,
-    timeout: float = 60.0,
+    max_attempts: int | None = None,   # None이면 settings 값 사용
+    timeout: float | None = None,
 ) -> httpx.Response:
     """GET + 지수 백오프. 429는 헤더로 일시/영구를 구분해 RateLimited로 올린다."""
     for attempt in range(max_attempts):
@@ -762,7 +767,6 @@ SELECT = (
     "id,doi,title,publication_year,cited_by_count,"
     "abstract_inverted_index,primary_location,authorships"
 )
-BASIC_PAGING_LIMIT = 10_000
 
 
 class OpenAlexResult(NamedTuple):
@@ -819,11 +823,17 @@ def _parse_work(work: dict) -> dict:
     }
 
 
+def _sanitize_query(query: str) -> str:
+    """OpenAlex filter DSL은 콤마를 AND, 파이프를 OR 구분자로 쓰고 이스케이프 수단이 없다.
+    검색어에 이 문자가 들어가면 에러 없이 다른 필터로 해석되므로 공백으로 치환한다."""
+    return query.replace(",", " ").replace("|", " ")
+
+
 def _filter_expr(query: str, year_from: int, year_to: int) -> str:
     """연도를 범위로 한 번에 건다 — 연도별 개별 조회 대비 콜수가 1/N이 된다.
     KR 필터를 서버측에 걸어 불필요한 페이지를 받지 않는다."""
     return (
-        f"title_and_abstract.search:{query},"
+        f"title_and_abstract.search:{_sanitize_query(query)},"
         f"publication_year:{year_from}-{year_to},"
         f"authorships.institutions.country_code:KR"
     )
