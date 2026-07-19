@@ -1,2 +1,15 @@
 # 참조용 외부 코드 — 추적하지 않음
 references/
+
+# 로컬 설정 (실제 API 키가 들어감)
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
