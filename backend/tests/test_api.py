@@ -428,3 +428,47 @@ def test_analysis_report_footnotes_exact_match_still_works(client):
     body = r.json()
     assert "[\\[1\\]](#ref-1)" in body["report_md"]
     assert len(body["references"]) == 1
+
+
+def test_analysis_report_footnotes_matches_title_with_nested_parens(client):
+    """분석 7 재현: 논문 제목 자체가 괄호를 포함하면(예: "TrioN (3N0C)") 안쪽 괄호만
+    잡던 이전 정규식은 바깥 인용 전체를 치환하지 못했다 — 한 단계 중첩까지 잡아야 한다."""
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(
+        paper_key="k11",
+        title="Highly-efficient and scalable TrioN (3N0C) synaptic cell for analog process-in-memory",
+        journal="Nature Electronics", year=2025, source="openalex",
+    )
+    md = (
+        "새로운 소자 구조를 제안했다 (Highly-efficient and scalable TrioN (3N0C) "
+        "synaptic cell for analog process-in-memory)."
+    )
+    title = paper.title
+    a = _done_analysis_with_papers(db, md, [paper])
+    db.close()
+
+    r = client.get(f"/api/analyses/{a.id}")
+    body = r.json()
+    assert "[\\[1\\]](#ref-1)" in body["report_md"]
+    assert "TrioN" not in body["report_md"]
+    assert len(body["references"]) == 1
+    assert body["references"][0]["title"] == title
+
+
+def test_analysis_report_footnotes_leaves_enumeration_parens_untouched(client):
+    """중첩 괄호를 허용해도, 논문 인용이 아닌 일반 나열 괄호(예: 소재 종류 나열)는
+    치환되면 안 된다 — 매칭은 여전히 제목 키가 실제로 포함될 때만 성립해야 한다."""
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(
+        paper_key="k12",
+        title="Highly-efficient and scalable TrioN (3N0C) synaptic cell for analog process-in-memory",
+        journal="Nature Electronics", year=2025, source="openalex",
+    )
+    md = "다양한 소재가 검토되었다 (산화물 반도체, 2차원 소재, 강유전체)."
+    a = _done_analysis_with_papers(db, md, [paper])
+    db.close()
+
+    r = client.get(f"/api/analyses/{a.id}")
+    body = r.json()
+    assert body["report_md"] == md
+    assert body["references"] == []

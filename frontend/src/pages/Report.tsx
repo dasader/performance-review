@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkCjkFriendly from "remark-cjk-friendly";
 import { get, type Analysis, type Reference } from "../api";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
@@ -62,8 +63,12 @@ function ReportMarkdown({ md }: { md: string }) {
     },
   };
 
+  // remarkCjkFriendly는 remarkGfm 뒤에 온다 — 패키지 README의 권장 순서(parse -> gfm ->
+  // cjk-friendly -> rehype)를 따른다. CommonMark는 닫는 `**` 바로 뒤에 공백 없이 한글
+  // 등 CJK 글자가 붙으면 강조로 인식하지 않는데(한국어는 조사를 띄어쓰지 않으므로 report_md에서
+  // 구조적으로 계속 발생), 이 플러그인이 그 경우를 강조로 인식하도록 판정을 완화한다.
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]} components={components}>
       {md}
     </ReactMarkdown>
   );
