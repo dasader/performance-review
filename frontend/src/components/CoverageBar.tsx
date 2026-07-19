@@ -16,7 +16,7 @@ export default function CoverageBar({
   return (
     <div className="flex items-center gap-3">
       <div
-        className={`w-full ${height} shrink-0 border border-border bg-border-light`}
+        className={`min-w-0 flex-1 ${height} border border-border bg-border-light`}
         role="img"
         aria-label={`분석 대상 비율 ${pct}%`}
       >

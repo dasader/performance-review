@@ -10,9 +10,10 @@ from app.clients.openalex import OpenAlexResult
 from app.config import settings
 from app.database import Base, get_db
 from app.main import app
-from app.models.analysis import Analysis
+from app.models.analysis import Analysis, AnalysisPaper
 from app.models.budget import OpenAlexUsage
 from app.models.field import Field, Subfield
+from app.models.paper import Paper
 from app.routers import admin as admin_module
 
 
@@ -241,3 +242,70 @@ def test_delete_subfield_succeeds_without_analysis_history(client):
     db = app.dependency_overrides[get_db]()
     assert db.get(Subfield, 1) is None
     db.close()
+
+
+# ── report_md 각주 치환 (public.py::_apply_footnotes, GET /api/analyses/{id}) ──
+
+def _done_analysis_with_papers(db, report_md, papers):
+    a = Analysis(
+        subfield_id=1, year=2025, status="done", query_hash="h", report_md=report_md,
+        searched_count=len(papers), analyzed_count=len(papers),
+    )
+    db.add(a)
+    db.flush()
+    for p in papers:
+        db.add(p)
+    db.flush()
+    for p in papers:
+        db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
+    db.commit()
+    db.refresh(a)
+    return a
+
+
+def test_analysis_report_footnotes_parenthesized_title(client):
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(
+        paper_key="k1", title="Improving Zero-Noise Extrapolation for Quantum Circuits",
+        journal="Nature", year=2025, doi="10.1234/xyz", source="openalex",
+    )
+    md = "오류 완화 기법을 제안했다 (Improving Zero-Noise Extrapolation for Quantum Circuits)."
+    title = paper.title
+    a = _done_analysis_with_papers(db, md, [paper])
+    db.close()
+
+    r = client.get(f"/api/analyses/{a.id}")
+    assert r.status_code == 200
+    body = r.json()
+    assert "[1]" in body["report_md"]
+    assert "Improving Zero-Noise Extrapolation" not in body["report_md"]
+    assert body["references"] == [
+        {"n": 1, "title": title, "journal": "Nature", "year": 2025, "doi": "10.1234/xyz"}
+    ]
+
+
+def test_analysis_report_leaves_unmatched_parenthetical_untouched(client):
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(paper_key="k2", title="Some Unrelated Paper Title", source="openalex")
+    md = "본문 중 (전혀 다른 텍스트)가 있다."
+    a = _done_analysis_with_papers(db, md, [paper])
+    db.close()
+
+    r = client.get(f"/api/analyses/{a.id}")
+    body = r.json()
+    assert body["report_md"] == md
+    assert body["references"] == []
+
+
+def test_analysis_report_reuses_footnote_number_for_repeated_citation(client):
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(paper_key="k3", title="Repeated Paper Title", journal="J", year=2024, source="openalex")
+    md = "처음 언급 (Repeated Paper Title). 다시 언급 (Repeated Paper Title)."
+    a = _done_analysis_with_papers(db, md, [paper])
+    db.close()
+
+    r = client.get(f"/api/analyses/{a.id}")
+    body = r.json()
+    assert body["report_md"].count("[1]") == 2
+    assert len(body["references"]) == 1
+    assert body["references"][0]["n"] == 1

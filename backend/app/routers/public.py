@@ -1,17 +1,71 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.analysis import Analysis
+from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import Field, Subfield
+from app.models.paper import Paper
 from app.services.runner import STEP_LABELS
 
 router = APIRouter(prefix="/api", tags=["public"])
+
+_PAREN_RE = re.compile(r"\(([^()]+)\)")
+
+
+def _normalize_ws(s: str) -> str:
+    return " ".join(s.split())
+
+
+def _apply_footnotes(report_md: str | None, papers: list[Paper]) -> tuple[str | None, list[dict]]:
+    """report_md 안에서 괄호로 인용된 논문 제목을 각주 번호로 치환한다(읽기 시점 후처리,
+    LLM 재호출 없음). 매칭은 보수적으로: 괄호 안 텍스트가 공백 정규화 후 논문 제목과
+    정확히 같을 때만 치환한다. 못 찾은 제목은 원문 그대로 둔다."""
+    if not report_md:
+        return report_md, []
+
+    title_by_norm: dict[str, Paper] = {}
+    for p in papers:
+        key = _normalize_ws(p.title or "")
+        if key and key not in title_by_norm:
+            title_by_norm[key] = p
+
+    numbers: dict[str, int] = {}
+    references: list[dict] = []
+
+    def repl(m: re.Match) -> str:
+        norm = _normalize_ws(m.group(1))
+        paper = title_by_norm.get(norm)
+        if paper is None:
+            return m.group(0)
+        n = numbers.get(norm)
+        if n is None:
+            n = len(references) + 1
+            numbers[norm] = n
+            references.append({
+                "n": n,
+                "title": paper.title,
+                "journal": paper.journal,
+                "year": paper.year,
+                "doi": paper.doi,
+            })
+        return f"[{n}]"
+
+    return _PAREN_RE.sub(repl, report_md), references
 
 
 def _serialize(db: Session, analysis: Analysis) -> dict:
     subfield = db.get(Subfield, analysis.subfield_id)
     field = db.get(Field, subfield.field_id)
+
+    paper_ids = [
+        row.paper_id
+        for row in db.query(AnalysisPaper.paper_id).filter(AnalysisPaper.analysis_id == analysis.id)
+    ]
+    papers = db.query(Paper).filter(Paper.id.in_(paper_ids)).all() if paper_ids else []
+    report_md, references = _apply_footnotes(analysis.report_md, papers)
+
     return {
         "id": analysis.id,
         "field_name": field.name,
@@ -19,7 +73,8 @@ def _serialize(db: Session, analysis: Analysis) -> dict:
         "year": analysis.year,
         "status": analysis.status,
         "status_label": STEP_LABELS.get(analysis.status, analysis.status),
-        "report_md": analysis.report_md,
+        "report_md": report_md,
+        "references": references,
         "stats": analysis.stats_json,
         "searched_count": analysis.searched_count,
         "analyzed_count": analysis.analyzed_count,

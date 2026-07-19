@@ -165,6 +165,14 @@ export interface Stats {
   snapshot_at: string;
 }
 
+export interface Reference {
+  n: number;
+  title: string;
+  journal: string | null;
+  year: number | null;
+  doi: string | null;
+}
+
 export interface Analysis {
   id: number;
   field_name: string;
@@ -173,6 +181,9 @@ export interface Analysis {
   status: string;
   status_label: string;
   report_md: string | null;
+  // report_md 안에서 괄호로 인용된 논문 제목이 [n] 각주로 치환된 뒤, 실제로 참조된
+  // 논문만 등장 순서대로 담긴다. 치환 대상이 없으면 빈 배열.
+  references: Reference[];
   // 미완료 상태에서는 null이 아니라 백엔드 stats_json 컬럼의 default인 빈 객체({})가 온다.
   stats: Stats | Record<string, never>;
   searched_count: number;
