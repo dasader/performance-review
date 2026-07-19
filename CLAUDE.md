@@ -10,6 +10,10 @@
 # alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0003
 docker compose up -d --build
 
+# .env를 고친 뒤에는 restart가 아니라 재생성해야 한다.
+# `docker compose restart`는 env_file을 다시 읽지 않아 옛 값이 그대로 남는다.
+docker compose up -d --force-recreate api
+
 # 로그
 docker compose logs -f api
 

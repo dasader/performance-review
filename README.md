@@ -17,6 +17,11 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+> **`.env`를 수정한 뒤에는 `docker compose restart`가 아니라
+> `docker compose up -d --force-recreate api`를 쓴다.** `restart`는 `env_file`을 다시 읽지 않아
+> 옛 값이 그대로 남는다. 특히 OpenAlex는 키 없이도 소량 호출이 되기 때문에, 키가 반영되지
+> 않은 상태에서도 검색·미리보기는 성공하고 Gemini 호출 단계에 가서야 실패한다.
+
 `api` 컨테이너는 기동 시 entrypoint에서 `alembic upgrade head`를 자동으로 실행한 뒤에야
 uvicorn을 띄운다(수동 실행 불필요) — 새 마이그레이션이 추가된 채 재배포해도 조용히 구
 스키마로 뜨지 않는다. 세 컨테이너(`api` / `web` / `db`)가 모두 `running`이 되면 준비 완료.
