@@ -368,6 +368,54 @@ def test_analysis_report_footnotes_prefers_longer_title_when_substring(client):
     assert body["references"][0]["title"] == long_title
 
 
+def test_analysis_report_footnotes_matches_when_llm_drops_spaces_around_numbers(client):
+    """분석 8 재현: OpenAlex 원문이 태그 앞뒤에 공백을 넣어("Hf <sub>0.5</sub> Zr")
+    strip_html 후 papers.title에 "Hf 0.5 Zr 0.5 O 2"로 저장되지만, Gemini는 인용할 때
+    공백 없이 "Hf0.5Zr0.5O2"로 붙여 쓴다. 단어 단위로 이어 붙이던 이전 정규식 방식은
+    토큰 수 자체가 달라 매칭에 실패했다 — 공백을 완전히 제거한 키 비교로만 잡힌다."""
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(
+        paper_key="k9",
+        title="Low-Thermal-Budget Ferroelectricity of Hf 0.5 Zr 0.5 O 2 Thin Films",
+        journal="APL", year=2025, source="openalex",
+    )
+    md = "저온 공정으로 강유전성을 구현했다 (Low-Thermal-Budget Ferroelectricity of Hf0.5Zr0.5O2 Thin Films)."
+    title = paper.title
+    a = _done_analysis_with_papers(db, md, [paper])
+    db.close()
+
+    r = client.get(f"/api/analyses/{a.id}")
+    body = r.json()
+    assert "[\\[1\\]](#ref-1)" in body["report_md"]
+    assert len(body["references"]) == 1
+    assert body["references"][0]["title"] == title
+
+
+def test_analysis_report_footnotes_matches_when_citation_has_leftover_html_tags(client):
+    """분석 8 재현: 태그 제거 마이그레이션 이전에 생성된 report_md는 Gemini가 원문 그대로
+    받은 HTML 태그(<sub>, <i> 등)를 포함해 제목을 인용한다. DB의 papers.title은 깨끗하므로
+    양쪽에 strip_html을 적용한 키로 비교해야 매칭된다."""
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(
+        paper_key="k10",
+        title="Enhanced Ferroelectricity in Hf 1− X Zr X O 2 Thin Films",
+        journal="ACS", year=2026, source="openalex",
+    )
+    md = (
+        "특성이 개선되었다 (Enhanced Ferroelectricity in Hf <sub> 1− <i>X</i> </sub> "
+        "Zr <i> <sub>X</sub> </i> O <sub>2</sub> Thin Films)."
+    )
+    title = paper.title
+    a = _done_analysis_with_papers(db, md, [paper])
+    db.close()
+
+    r = client.get(f"/api/analyses/{a.id}")
+    body = r.json()
+    assert "[\\[1\\]](#ref-1)" in body["report_md"]
+    assert len(body["references"]) == 1
+    assert body["references"][0]["title"] == title
+
+
 def test_analysis_report_footnotes_exact_match_still_works(client):
     """기존에 동작하던 '괄호 안이 제목과 정확히 일치' 케이스가 회귀 없이 계속 동작해야 한다."""
     db = app.dependency_overrides[get_db]()

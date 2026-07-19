@@ -3,6 +3,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.clients._html import strip_html
 from app.config import settings
 from app.database import get_db
 from app.models.analysis import Analysis, AnalysisPaper
@@ -15,34 +16,38 @@ router = APIRouter(prefix="/api", tags=["public"])
 
 _PAREN_RE = re.compile(r"\(([^()]+)\)")
 
-# 짧은 제목(15자 미만)은 괄호 안 텍스트에 부분 문자열로 우연히 등장할 위험이 커서
-# (예: 제목이 "AI"면 "(AI 기반 진단 시스템)"에도 걸림) 부분 매칭 대상에서 제외하고
-# 완전 일치만 허용한다. 15는 실측 데이터(짧아도 단어 2~3개는 되는 실제 논문 제목들)
-# 기준의 여유 있는 하한선이다 — 과학적으로 도출된 값은 아니다.
+# 짧은 제목(정규화 키 기준 15자 미만)은 괄호 안 텍스트에 부분 문자열로 우연히 등장할
+# 위험이 커서(예: 제목이 "AI"면 "(AI 기반 진단 시스템)"에도 걸림) 부분 매칭 대상에서
+# 제외하고 완전 일치만 허용한다. 15는 실측 데이터(짧아도 단어 2~3개는 되는 실제 논문
+# 제목들) 기준의 여유 있는 하한선이다 — 과학적으로 도출된 값은 아니다.
 _MIN_PARTIAL_TITLE_LEN = 15
 
 
-def _normalize_ws(s: str) -> str:
-    return " ".join(s.split())
+def _footnote_key(s: str) -> str:
+    """각주 매칭용 비교 키: strip_html로 태그를 벗긴 뒤 공백을 전부 제거하고 소문자화한다.
 
-
-def _title_pattern(title: str) -> re.Pattern:
-    """제목의 공백 연속을 \\s+로 완화하고 나머지는 이스케이프한 정규식.
-    LLM이 인용할 때 줄바꿈/공백 개수가 원 제목과 살짝 달라져도 매칭되게 한다."""
-    return re.compile(r"\s+".join(re.escape(w) for w in title.split()), re.IGNORECASE)
+    OpenAlex 원문은 태그 자리에 공백이 있을 때도("Hf <sub>0.5</sub> Zr" -> "Hf 0.5 Zr")
+    없을 때도("MoS<sub>2</sub>" -> "MoS2") 있어 DB에 저장된 제목과 LLM이 실제로 인용한
+    문자열 사이에 공백 개수가 어긋난다("Hf 0.5 Zr 0.5 O 2" vs "Hf0.5Zr0.5O2"). 공백을
+    "하나로 접기"가 아니라 완전히 제거해야 이 둘이 같은 키로 만난다. 길이 판단
+    (_MIN_PARTIAL_TITLE_LEN)도 이 키 기준으로 한다 — 실제 오탐 위험은 원문 글자 수가
+    아니라 이 키(부분 문자열 검사에 실제로 쓰이는 문자열)의 길이에 달려 있다."""
+    return "".join(strip_html(s).split()).lower()
 
 
 def _apply_footnotes(report_md: str | None, papers: list[Paper]) -> tuple[str | None, list[dict]]:
     """report_md 안에서 괄호로 인용된 논문 제목을 각주 번호로 치환한다(읽기 시점 후처리,
-    LLM 재호출 없음). LLM이 실행마다 인용 형식을 조금씩 다르게 쓰므로(연도 접두사, 공백 차이
-    등) 매칭은 "괄호 안 어딘가에 제목이 포함되는가"로 본다 — 괄호 전체와 정확히 같아야만
-    치환하던 이전 방식은 `([2025] 제목)` 같은 형태를 전혀 못 잡았다. 다만 짧은 제목은 부분
-    매칭 시 오탐 위험이 커서(_MIN_PARTIAL_TITLE_LEN 참고) 완전 일치만 허용한다. 못 찾은
-    제목은 원문 그대로 둔다 — 잘못 치환하는 것보다 안전하다.
+    LLM 재호출 없음). LLM이 실행마다 인용 형식을 조금씩 다르게 쓰므로(연도 접두사, 공백 차이,
+    구버전 보고서에 남은 HTML 태그 등) 매칭은 정규화 키("괄호 안 어딘가에 제목의 키가
+    포함되는가")로 본다 — 괄호 전체와 정확히 같아야만 치환하던 이전 방식은 `([2025] 제목)`
+    같은 형태를 전혀 못 잡았고, 단어를 `\\s+`로 이어 붙인 정규식 방식은 공백 개수 자체가
+    달라지는 경우(OpenAlex 원문 태그 공백, 구버전 보고서의 남은 태그)를 못 잡았다. 다만 짧은
+    제목은 부분 매칭 시 오탐 위험이 커서(_MIN_PARTIAL_TITLE_LEN 참고) 키 완전 일치만
+    허용한다. 못 찾은 제목은 원문 그대로 둔다 — 잘못 치환하는 것보다 안전하다.
 
-    제목은 긴 것부터 시도한다. 한 제목이 다른 제목의 부분 문자열인 경우(예: "Graphene
-    Growth Method"가 "Advanced Graphene Growth Method for Flexible Devices"에 포함),
-    짧은 쪽을 먼저 보면 실제로는 긴 제목이 인용된 괄호가 짧은 제목의 논문으로 잘못
+    제목은 긴 것부터(키 길이 기준) 시도한다. 한 제목이 다른 제목의 부분 문자열인 경우(예:
+    "Graphene Growth Method"가 "Advanced Graphene Growth Method for Flexible Devices"에
+    포함), 짧은 쪽을 먼저 보면 실제로는 긴 제목이 인용된 괄호가 짧은 제목의 논문으로 잘못
     귀속된다.
 
     각주는 `[\\[1\\]](#ref-1)` 형태의 마크다운 링크로 치환된다 — 대괄호를 이스케이프해
@@ -54,10 +59,10 @@ def _apply_footnotes(report_md: str | None, papers: list[Paper]) -> tuple[str | 
     if not report_md:
         return report_md, []
 
-    # (paper, 정규식 패턴) 목록. 제목 길이 내림차순 — 위 docstring의 부분 문자열 문제 방지.
-    candidates: list[tuple[Paper, re.Pattern]] = sorted(
-        ((p, _title_pattern(p.title)) for p in papers if p.title and p.title.strip()),
-        key=lambda pc: len(pc[0].title),
+    # (paper, 정규화 키) 목록. 키 길이 내림차순 — 위 docstring의 부분 문자열 문제 방지.
+    candidates: list[tuple[Paper, str]] = sorted(
+        ((p, _footnote_key(p.title)) for p in papers if p.title and p.title.strip()),
+        key=lambda pc: len(pc[1]),
         reverse=True,
     )
 
@@ -65,13 +70,13 @@ def _apply_footnotes(report_md: str | None, papers: list[Paper]) -> tuple[str | 
     references: list[dict] = []
 
     def repl(m: re.Match) -> str:
-        content = m.group(1)
+        content_key = _footnote_key(m.group(1))
         matched: Paper | None = None
-        for paper, pattern in candidates:
-            if len(paper.title) < _MIN_PARTIAL_TITLE_LEN:
-                if _normalize_ws(content).lower() != _normalize_ws(paper.title).lower():
+        for paper, key in candidates:
+            if len(key) < _MIN_PARTIAL_TITLE_LEN:
+                if content_key != key:
                     continue
-            elif not pattern.search(content):
+            elif key not in content_key:
                 continue
             matched = paper
             break
