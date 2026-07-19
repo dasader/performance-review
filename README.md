@@ -110,6 +110,36 @@ NN=03. 레지스트리는 `../PORTS.md` 참고 — NN=00은 backend 포트가 80
 - 관리자 화면(`/admin`)의 "자동 분석 스케줄" 카드에서 on/off · 일정 편집 · 다음 실행 예정 시각 ·
   최근 실행 이력 · 즉시 실행("지금 실행")을 모두 처리한다.
 
+## 다른 환경으로 분석 결과 옮기기 (로컬 → 프로덕션)
+
+분석 결과는 LLM·OpenAlex 비용을 들여 만든 자산이므로, 환경을 옮길 때 재분석하지 말고 DB를
+통째로 복사한다. **별도 export/import 기능은 없다** — `pg_dump`/`pg_restore`로 충분하고,
+앱 레벨 도구를 두면 스키마가 바뀔 때마다 같이 고쳐야 하기 때문이다.
+
+```bash
+# 로컬 — 덤프(커스텀 포맷, 압축 포함)
+docker compose exec -T db pg_dump -U perfrev -Fc perfrev > perfrev.dump
+
+# 프로덕션 — 복원(기존 객체를 드롭한 뒤 복원하므로 대상 DB 내용은 사라진다)
+docker compose exec -T db pg_restore -U perfrev -d perfrev --clean --if-exists < perfrev.dump
+
+# 복원 확인
+docker compose exec -T db psql -U perfrev -d perfrev -c \
+  "select (select count(*) from analyses) 분석, (select count(*) from paper_extractions) 추출캐시;"
+```
+
+`alembic_version`도 함께 복사되므로 마이그레이션 상태가 자동으로 맞는다. 다만 두 가지를
+복원 후에 반드시 확인한다:
+
+- **`schedule_settings`가 덤프에 포함된다.** 로컬이 `enabled=true`면 복원 직후 프로덕션에서
+  스케줄러가 살아나 활성 세부기술 전체를 자동으로 돌린다. 의도한 게 아니면 관리자 화면에서
+  끄거나 `PUT /api/admin/schedule`로 `enabled=false`를 넣는다.
+- **API 키는 넘어가지 않는다.** `.env`(`GEMINI_API_KEY`·`OPENALEX_API_KEY`·`KCI_API_KEY`·
+  `ADMIN_KEY`)는 DB 밖이라 프로덕션에서 따로 채워야 한다.
+
+`--clean --if-exists`는 대상 DB의 기존 객체를 드롭한다. 프로덕션에 지켜야 할 데이터가
+생긴 뒤에는 이 절차를 그대로 쓰면 안 된다 — 그때는 테이블 선별·충돌 처리를 다시 설계해야 한다.
+
 ## 알려진 제약
 
 - **OpenAlex API 키 필수 + 일일 예산 공유**: OpenAlex는 API 키가 필수이며 무료 한도가 **하루 $1(UTC 자정 리셋)**이다.

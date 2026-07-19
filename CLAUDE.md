@@ -7,7 +7,7 @@
 
 ```bash
 # 스택 기동 — api 컨테이너 entrypoint(docker-entrypoint.sh)가 uvicorn 전에
-# alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0008
+# alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0011
 docker compose up -d --build
 
 # .env를 고친 뒤에는 restart가 아니라 재생성해야 한다.
@@ -48,6 +48,31 @@ NN=00은 backend가 8000이 되어 nst-wiki와 충돌하므로 03을 배정했�
 | 4 | stats | `app/services/stats.py::compute` | 코드로만 집계, LLM 미사용 |
 | 5 | reduce | `app/services/reducer.py::reduce_subfield` | 세부기술별 보고서, thinking=high. 건수가 `REDUCE_GROUP_THRESHOLD`(500) 넘으면 3단 reduce |
 | 6 | rollup | `app/services/reducer.py::rollup_field` | 대분류 보고서 합성. **구현은 있으나 호출부는 아직 없음**(초판 범위 밖 — 세부기술 보고서까지만 제공) |
+
+### reduce 입력의 `[세부기술: 이름 / 연도]` 헤더
+
+`reduce_subfield`는 LLM 입력 맨 앞에 이 헤더를 붙이고, `REDUCE_INSTRUCTION`이 이를 근거로
+H1 제목(`# {이름} {연도}년 성과 분석 보고서`)을 고정하게 한다. **빼면 모델이 본문 내용만 보고
+제목을 새로 지어내 목록 화면의 세부기술명과 어긋난다** — 실측으로 "재생에너지" 분석의 보고서
+제목이 "에너지 변환 및 자원 순환 공학"으로 나왔다. 3단 reduce는 최종 통합 입력이 중간 요약뿐이라
+세부기술명이 아예 사라져 더 크게 어긋나므로, 단일·3단 **양쪽 호출 모두**에 붙여야 한다
+(`test_reducer.py::test_three_tier_final_call_still_names_the_subfield`가 3단 쪽을 고정한다).
+
+## 세부기술 체계 — 국가전략기술 제1호 개정안
+
+`fields`/`subfields`는 개정안의 **10대 분야 55개 중점기술**을 그대로 심은 것이다(migration
+`0010`, 검색식 원본도 그 파일의 `FIELDS`/`SUBFIELDS` 상수에 있다). 검색식은 OpenAlex
+`title_and_abstract.search` 전용 영문 불리언이고, `query_kci`는 전부 NULL이라 KCI에도 같은
+영문식이 쓰인다 — 키 갱신 후 국문 검색식을 채워야 국내지가 잡힌다.
+
+`0010`은 분야·세부기술이 전부 새 id를 받으므로 기존 분석·보고서와 `paper_extractions`를 함께
+지운다. **추출 캐시는 `subfield_id`에 묶여 있어**(`uq_extraction`) 세부기술을 교체하면 어차피
+히트하지 않는다 — `papers`(검색 캐시)만 보존된다.
+
+검색식을 고칠 때는 `0010`을 편집하지 말고 새 마이그레이션에서 UPDATE한다(`0011`이 차세대 고성능
+센싱을 1,051건 → 259건으로 좁힌 예). `test_strategic_tech_seed.py`가 개수·괄호 균형과
+`_sanitize_query` 통과 여부(콤마·파이프가 섞이면 검색식이 조용히 쪼개진다)를 고정하므로,
+새 검색식을 추가하면 그 테스트에도 함께 물려야 한다.
 
 ## 캐시 3중 키
 
@@ -202,8 +227,9 @@ SQLAlchemy가 FK를 해석하려면 관련 모델 클래스가 전부 import되�
 | 잡 상태머신 `pending→searching→extracting→reducing→done`, `/retry` | ✅ 검증 |
 | 통계 집계, 모집단 분리 표기(검색 11 / 분석 10 / abstract 미보유 1) | ✅ 검증 |
 | **KCI 검색 (국문 검색식 포함)** | ❌ **미검증** — 키 만료(`사용기간이 종료되었습니다.`) |
-| 3단 reduce 분기 (`REDUCE_GROUP_THRESHOLD` 초과) | ❌ 미검증 — 실행 규모가 작아 도달 안 함 |
-| batch 다중 청크 (1,000건 초과) | ❌ 미검증 — 동일 |
+| 3단 reduce 분기 (`REDUCE_GROUP_THRESHOLD` 초과) | ✅ 검증 (재생에너지 2026, 추출 703건 → 9개 그룹) |
+| 3단 reduce의 그룹 재분할 (`{유형} (n)`) | ❌ 미검증 — 한 성과유형이 500을 넘은 적이 없음 |
+| batch 다중 청크 (1,000건 초과) | ❌ 미검증 — 703건이 단일 청크로 처리됨 |
 | 대량 검색 시 하드 가드(`AnalysisTooLarge`) 실동작 | ❌ 미검증 — 단위 테스트만 |
 
 ### KCI 키가 만료된 상태에서 돌릴 때
