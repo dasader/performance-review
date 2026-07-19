@@ -94,6 +94,16 @@ export default function ScheduleSection({
     }
   };
 
+  // 우측 상단 배지는 "저장된 값"이고 토글·숫자 입력은 "초안"이라, 저장 전에는 둘이
+  // 어긋난다 — 표시가 없으면 "토글을 눌렀는데 배지가 안 바뀐다"로 읽힌다.
+  const dirty =
+    !!data &&
+    !!draft &&
+    (draft.enabled !== data.enabled ||
+      draft.day !== data.day ||
+      draft.hour !== data.hour ||
+      draft.years_back !== data.years_back);
+
   const visibleHistory = data
     ? historyExpanded
       ? data.history
@@ -123,6 +133,11 @@ export default function ScheduleSection({
             <p className="mt-1 text-right font-mono text-xs tabular-nums text-muted">
               다음 실행 {new Date(data.next_run_at).toLocaleString("ko-KR")} ({data.timezone})
             </p>
+            {dirty && (
+              <p className="mt-1 text-right text-xs text-warning">
+                저장되지 않은 변경 — 설정 저장을 눌러야 반영됩니다
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -195,11 +210,11 @@ export default function ScheduleSection({
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
-                disabled={saving}
+                disabled={saving || !dirty}
                 onClick={handleSave}
                 className="border border-ink bg-ink px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/90 disabled:opacity-40"
               >
-                {saving ? "저장 중…" : "설정 저장"}
+                {saving ? "저장 중…" : dirty ? "설정 저장" : "저장됨"}
               </button>
               <button
                 type="button"
