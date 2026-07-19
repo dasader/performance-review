@@ -74,7 +74,7 @@ docker-compose.yml
 ### Task 1: 프로젝트 스캐폴딩 · 설정 · DB 연결
 
 **Files:**
-- Create: `backend/requirements.txt`, `backend/Dockerfile`, `backend/app/__init__.py`, `backend/app/config.py`, `backend/app/database.py`, `backend/app/main.py`, `backend/alembic.ini`, `backend/pytest.ini`, `docker-compose.yml`, `.env.example`
+- Create: `backend/requirements.txt`, `backend/Dockerfile`, `backend/app/__init__.py`, `backend/app/config.py`, `backend/app/database.py`, `backend/app/main.py`, `backend/pytest.ini`, `docker-compose.yml`, `.env.example`
 - Test: `backend/tests/test_config.py`
 
 **Interfaces:**
@@ -318,7 +318,7 @@ git commit -m "feat: 프로젝트 스캐폴딩 · 설정 · DB 연결"
 ### Task 2: 데이터 모델 · 마이그레이션 · 12대 분야 seed
 
 **Files:**
-- Create: `backend/app/models/__init__.py`, `backend/app/models/field.py`, `backend/app/models/paper.py`, `backend/app/models/analysis.py`, `backend/app/models/budget.py`, `backend/alembic/env.py`, `backend/alembic/script.py.mako`, `backend/alembic/versions/0001_initial.py`
+- Create: `backend/alembic.ini` (Step 9의 `alembic init`이 생성), `backend/app/models/__init__.py`, `backend/app/models/field.py`, `backend/app/models/paper.py`, `backend/app/models/analysis.py`, `backend/app/models/budget.py`, `backend/alembic/env.py`, `backend/alembic/script.py.mako`, `backend/alembic/versions/0001_initial.py`
 - Test: `backend/tests/test_models.py`
 
 **Interfaces:**
