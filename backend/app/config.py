@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     gemini_api_key: str
     gemini_model: str = "gemini-3.1-flash-lite"
+    # thinking_level 허용값은 모델 세대별로 다르다(minimal/low/medium/high 중 일부).
+    # API가 값을 거부하면 .env에서 조정한다 — 코드 변경 불필요.
     thinking_map: str = "low"
     thinking_reduce: str = "high"
 
@@ -18,7 +20,7 @@ class Settings(BaseSettings):
     admin_key: str
     database_url: str
 
-    batch_max_enqueued_tokens: int = 5_000_000
+    batch_max_enqueued_tokens: int = 5_000_000  # Tier1 한도 10M의 절반 — 타 작업과 공유 여지
     batch_max_concurrent_jobs: int = 2
     batch_max_requests_per_file: int = 1000
     sync_rpm: int = 60

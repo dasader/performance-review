@@ -28,7 +28,8 @@ def submit(requests: list[dict], *, thinking: str) -> str:
 
     try:
         uploaded = _client.files.upload(
-            file=str(path), config={"mime_type": "application/jsonl"}
+            file=str(path),
+            config=types.UploadFileConfig(display_name=path.name, mime_type="jsonl"),
         )
         job = _client.batches.create(
             model=settings.gemini_model,
