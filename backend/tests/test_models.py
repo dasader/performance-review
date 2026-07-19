@@ -12,13 +12,13 @@ from app.models.paper import Paper, PaperExtraction
 def _session():
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine)()
+    return sessionmaker(bind=engine, autocommit=False, autoflush=False)()
 
 
 def test_subfield_holds_queries_and_analysis_is_unique_per_year():
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
-    db = sessionmaker(bind=engine)()
+    db = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
 
     f = Field(name="반도체·디스플레이", slug="semiconductor", order_no=1)
     db.add(f)

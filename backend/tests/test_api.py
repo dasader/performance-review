@@ -24,7 +24,7 @@ def client():
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
     Base.metadata.create_all(engine)
-    TestingSession = sessionmaker(bind=engine)
+    TestingSession = sessionmaker(bind=engine, autocommit=False, autoflush=False)
     db = TestingSession()
     f = Field(name="양자", slug="quantum", order_no=1)
     db.add(f)

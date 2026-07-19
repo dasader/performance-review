@@ -15,7 +15,7 @@ from app.services import budget, runner, search
 def ctx():
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
-    db = sessionmaker(bind=engine)()
+    db = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
     f = Field(name="양자", slug="quantum", order_no=1)
     db.add(f)
     db.flush()

@@ -169,6 +169,10 @@ async def _do_search(db: Session, analysis: Analysis, subfield: Subfield) -> Non
         if row.id not in existing:
             db.add(AnalysisPaper(analysis_id=analysis.id, paper_id=row.id))
 
+    # 세션이 autoflush=False(app/database.py)이므로 방금 add한 링크는 아직 DB에 없다.
+    # flush 없이 아래 count()를 돌리면 0이 나온다.
+    db.flush()
+
     # I7: len(rows)는 "이번 검색에서 걸린 건수"라 검색식을 좁혀 재실행하면 stats.compute가
     # 쓰는 _analysis_papers()(누적 링크)와 값이 어긋난다. AnalysisPaper 링크 총수(누적
     # 기준)로 통일해 Report.tsx와 StatsPanel.tsx가 항상 같은 숫자를 보게 한다.

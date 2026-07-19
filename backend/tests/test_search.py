@@ -15,7 +15,7 @@ from app.services.search import merge_papers, query_hash, upsert_papers
 def db():
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine)()
+    return sessionmaker(bind=engine, autocommit=False, autoflush=False)()
 
 
 def _paper(key, **kw):
