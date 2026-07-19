@@ -124,3 +124,45 @@ def test_save_results_is_idempotent(ctx):
     mapper.save_results(db, a, payload)
     mapper.save_results(db, a, payload)
     assert db.query(PaperExtraction).count() == 1
+
+
+def test_token_capped_chunk_stops_before_exceeding_token_budget(ctx, monkeypatch):
+    """C2: 토큰 상한을 넘기기 직전에서 끊고, 넘는 나머지는 청크에서 빠져야 한다."""
+    db, a = ctx
+    p1 = _paper(db, "k1", "가" * 2000)
+    p2 = _paper(db, "k2", "나" * 2000)
+    reqs = mapper.build_requests([p1, p2])
+
+    one_paper_tokens = mapper.estimate_tokens([p1])
+    monkeypatch.setattr(mapper.settings, "batch_max_enqueued_tokens", one_paper_tokens + 10)
+
+    capped = mapper.token_capped_chunk([p1, p2], reqs)
+    assert [r["key"] for r in capped] == ["k1"]
+
+
+def test_token_capped_chunk_always_keeps_at_least_one_request(ctx, monkeypatch):
+    """논문 한 편만으로도 토큰 상한을 넘는 극단적인 경우에도 무한 대기에
+    빠지지 않도록 최소 1건은 담아야 한다."""
+    db, a = ctx
+    p1 = _paper(db, "k1", "가" * 5000)
+    reqs = mapper.build_requests([p1])
+    monkeypatch.setattr(mapper.settings, "batch_max_enqueued_tokens", 1)
+
+    capped = mapper.token_capped_chunk([p1], reqs)
+    assert len(capped) == 1
+
+
+def test_token_capped_chunk_keeps_everything_when_under_budget(ctx):
+    db, a = ctx
+    p1 = _paper(db, "k1", "짧음")
+    p2 = _paper(db, "k2", "짧음")
+    reqs = mapper.build_requests([p1, p2])
+    capped = mapper.token_capped_chunk([p1, p2], reqs)
+    assert len(capped) == 2
+
+
+def test_estimate_llm_cost_usd_scales_with_paper_count_and_is_positive():
+    cost_10 = mapper.estimate_llm_cost_usd(10)
+    cost_100 = mapper.estimate_llm_cost_usd(100)
+    assert cost_10 > 0
+    assert cost_100 > cost_10

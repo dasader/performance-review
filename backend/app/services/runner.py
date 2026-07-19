@@ -59,6 +59,8 @@ def enqueue(
             row.query_hash = current_hash
             row.error = None
             row.batch_job_id = None
+            row.extract_attempts = 0  # M11: 재시도 카운터를 리셋하지 않으면 상한에
+            row.search_attempts = 0   # 걸려 failed된 잡이 재실행 즉시 다시 failed된다.
             queued.append(row)
         elif row.status in ACTIVE_STATES:
             queued.append(row)
@@ -114,6 +116,18 @@ async def advance(db: Session, analysis: Analysis) -> None:
         if e.permanent:
             analysis.status = "paused"
             analysis.error = "OpenAlex 일일 크레딧 소진 — 내일 자동 재개됩니다."
+        elif analysis.status == "searching":
+            # I9: get_with_retry가 이미 내부 재시도(기본 5회)를 소진한 뒤 올라온
+            # 비영구 429다. 카운터 없이 두면 30초 간격으로 같은 페이지들을 무한히
+            # 재과금하며 돈다 — extract_attempts와 대칭으로 상한을 둔다.
+            analysis.search_attempts += 1
+            if analysis.search_attempts >= settings.max_search_attempts:
+                analysis.status = "failed"
+                analysis.error = (
+                    f"검색을 {settings.max_search_attempts}회 재시도해도 실패해 중단했습니다: {e}"
+                )
+            else:
+                analysis.error = str(e)
         else:
             analysis.error = str(e)
         db.commit()
@@ -126,15 +140,19 @@ async def advance(db: Session, analysis: Analysis) -> None:
 
 async def _do_search(db: Session, analysis: Analysis, subfield: Subfield) -> None:
     async with httpx.AsyncClient() as client:
-        papers = await search.collect(db, subfield, analysis.year, analysis.year, client=client)
+        result = await search.collect(db, subfield, analysis.year, analysis.year, client=client)
 
-    if len(papers) > settings.max_papers_per_analysis:
+    # C1: search.collect()는 openalex.search(limit=max_papers_per_analysis)로 부르므로
+    # result.papers는 구조적으로 상한을 넘을 수 없다 — len(papers) 기준 가드는 과광범위
+    # 검색식을 "차단"하는 게 아니라 조용히 "절단"만 하고 통과시킨다. 반드시 OpenAlex가
+    # 보고한 잘리기 전 total_count로 판단해야 실제로 차단이 된다.
+    if result.total_count > settings.max_papers_per_analysis:
         raise AnalysisTooLarge(
-            f"검색 결과 {len(papers)}건이 상한 {settings.max_papers_per_analysis}건을 넘습니다. "
-            f"검색식을 좁히거나 세부기술을 분할하세요."
+            f"검색 결과 전체 {result.total_count}건이 상한 {settings.max_papers_per_analysis}건을 "
+            f"넘습니다. 검색식을 좁히거나 세부기술을 분할하세요."
         )
 
-    rows = search.upsert_papers(db, papers)
+    rows = search.upsert_papers(db, result.papers)
     existing = {
         r.paper_id for r in db.query(AnalysisPaper.paper_id).filter(
             AnalysisPaper.analysis_id == analysis.id
@@ -146,6 +164,7 @@ async def _do_search(db: Session, analysis: Analysis, subfield: Subfield) -> Non
 
     analysis.searched_count = len(rows)
     analysis.snapshot_at = datetime.now(timezone.utc)
+    analysis.search_attempts = 0  # I9: 성공했으니 재시도 카운트 리셋.
     analysis.status = "extracting"
     db.commit()
 
@@ -163,7 +182,7 @@ async def _do_extract(db: Session, analysis: Analysis) -> None:
     """batch 제출 전이면 제출하고, 제출됐으면 폴링한다. 24h까지 걸리므로
     잡 이름을 DB에 남겨 재시작 후에도 같은 batch를 이어서 본다."""
     if analysis.batch_job_id:
-        state, results = gemini_batch.poll(analysis.batch_job_id)
+        state, results = await gemini_batch.poll_async(analysis.batch_job_id)
         if state == "running":
             return
         if state == "failed":
@@ -219,11 +238,25 @@ async def _do_extract(db: Session, analysis: Analysis) -> None:
         db.commit()
         return
 
+    # C2: batch_job_id가 채워진(=진행 중인) analysis 수가 상한 이상이면 제출을 미룬다.
+    # 이 검사가 없으면 loop()가 active analysis를 전부 순회하며 각자 submit을 부르므로
+    # 동시 batch 잡 수가 설정 상한을 몇 배씩 넘어갈 수 있다. status는 extracting에
+    # 그대로 두어 다음 루프 주기(30초)에 재시도한다.
+    in_progress = db.query(Analysis).filter(Analysis.batch_job_id.isnot(None)).count()
+    if in_progress >= settings.batch_max_concurrent_jobs:
+        logger.info(
+            "[잡 %d] batch 동시 실행 상한(%d/%d) 도달 — 제출 보류, 다음 루프에서 재시도",
+            analysis.id, in_progress, settings.batch_max_concurrent_jobs,
+        )
+        return
+
     requests = mapper.build_requests(pending)
     batches = mapper.chunks(requests)
-    # ponytail: 청크가 여러 개면 첫 청크만 제출하고 나머지는 다음 루프에서 이어간다.
-    # 동시 batch 잡 수 상한을 넘기지 않는 가장 단순한 방법.
-    analysis.batch_job_id = gemini_batch.submit(batches[0])
+    # 청크가 여러 개면 첫 청크만 제출하고 나머지는 다음 루프에서 이어간다 — 동시 batch
+    # 잡 수 상한을 넘기지 않는 가장 단순한 방법. 그 첫 청크도 batch_max_enqueued_tokens를
+    # 넘으면 안 되므로 mapper.estimate_tokens 기반으로 한 번 더 자른다.
+    first_batch = mapper.token_capped_chunk(pending[:len(batches[0])], batches[0])
+    analysis.batch_job_id = await gemini_batch.submit_async(first_batch)
     db.commit()
 
 

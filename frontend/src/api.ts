@@ -234,7 +234,12 @@ export interface PreviewResponse {
   kci_sample_truncated: boolean;
   samples: PreviewSample[];
   estimated_pages: number;
-  estimated_cost_usd: number;
+  estimated_cost_usd: number; // OpenAlex 검색 비용만(과거 필드, 하위 호환용으로 유지)
+  // 아래 세 값은 모두 추정치다. estimated_papers_to_extract는 검색 없이는 캐시 히트를
+  // 뺄 수 없어 상한선 성격(min(openalex_count, max_papers))으로 계산된다.
+  estimated_papers_to_extract: number;
+  estimated_llm_cost_usd: number;
+  estimated_total_cost_usd: number;
   budget_spent: number;
   budget_limit: number;
   over_limit: boolean;

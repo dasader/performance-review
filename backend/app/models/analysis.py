@@ -28,6 +28,10 @@ class Analysis(Base):
     # 배치 결과 저장 후에도 pending_papers가 줄지 않은(파싱 실패 등으로 진행이 없는)
     # 연속 횟수. max_extract_attempts에 도달하면 무한 재제출을 끊고 failed로 전환한다.
     extract_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # 검색 단계에서 비영구(non-permanent) RateLimited를 만난 연속 횟수(get_with_retry가
+    # 내부 재시도를 이미 소진한 뒤 올라온 것). max_search_attempts에 도달하면 30초마다
+    # 같은 페이지들을 무한히 재과금하며 도는 대신 failed로 전환한다.
+    search_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class AnalysisPaper(Base):

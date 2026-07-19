@@ -93,7 +93,9 @@ export default function RunDialog({
     if (!preview || preview.over_limit || subfieldId === "") return;
     const ok = confirm(
       `'${selectedName}' ${yearFrom}–${yearTo}년 분석을 실행합니다.\n` +
-        `예상 비용 약 $${preview.estimated_cost_usd.toFixed(4)}. 이 작업은 취소할 수 없습니다. 계속할까요?`,
+        `예상 총비용 약 $${preview.estimated_total_cost_usd.toFixed(4)} ` +
+        `(OpenAlex $${preview.estimated_cost_usd.toFixed(4)} + LLM 추정 $${preview.estimated_llm_cost_usd.toFixed(4)}).\n` +
+        `LLM 비용은 논문당 평균 토큰 근사치 기반 추정치입니다. 이 작업은 취소할 수 없습니다. 계속할까요?`,
     );
     if (!ok) return;
     setRunning(true);
@@ -119,7 +121,7 @@ export default function RunDialog({
     <section className="mt-6 border border-border bg-surface p-5">
       <h2 className="font-display text-lg font-semibold text-ink">분석 실행</h2>
       <p className="mt-1 text-xs text-muted">
-        미리보기는 검색만 수행하며 <span className="font-medium text-ink-light">LLM을 호출하지 않아 비용이 들지 않습니다.</span>{" "}
+        미리보기는 검색만 수행하며 <span className="font-medium text-ink-light">LLM은 호출하지 않지만, OpenAlex 검색 비용(약 $0.002)이 소량 발생합니다.</span>{" "}
         실행 전 반드시 미리보기로 건수와 예상 비용을 확인하세요.
       </p>
 
@@ -196,7 +198,7 @@ export default function RunDialog({
           onClick={handlePreview}
           className="border border-ink px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-ink hover:text-paper disabled:opacity-40"
         >
-          {previewing ? "확인 중…" : "미리보기 (비용 없음)"}
+          {previewing ? "확인 중…" : "미리보기"}
         </button>
       </div>
       {staleNotice && <p className="mt-3 text-sm text-warning">{staleNotice}</p>}
@@ -216,7 +218,25 @@ export default function RunDialog({
               }
             />
             <PreviewTile label="예상 호출" value={`${preview.estimated_pages.toLocaleString()}콜`} />
-            <PreviewTile label="예상 비용" value={`$${preview.estimated_cost_usd.toFixed(4)}`} />
+            <PreviewTile
+              label="추출 대상(추정)"
+              value={preview.estimated_papers_to_extract.toLocaleString()}
+              caption="캐시 히트를 빼지 않은 상한선"
+            />
+          </div>
+
+          <div className="mt-3 border border-warning/50 bg-warning/5 px-3 py-2">
+            <p className="text-xs text-ink-light">
+              예상 총비용 <span className="font-medium">(추정치)</span>
+            </p>
+            <p className="mt-0.5 font-mono text-2xl font-semibold tabular-nums text-ink">
+              ${preview.estimated_total_cost_usd.toFixed(4)}
+            </p>
+            <p className="mt-0.5 text-xs text-faint">
+              OpenAlex ${preview.estimated_cost_usd.toFixed(4)} (실측 단가) + LLM(map) $
+              {preview.estimated_llm_cost_usd.toFixed(4)} (논문당 평균 토큰 근사치 기반 추정 — 실제와
+              다를 수 있음)
+            </p>
           </div>
 
           <p className="mt-3 font-mono text-xs tabular-nums text-muted">

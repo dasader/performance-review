@@ -2,12 +2,13 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.clients._http import RateLimited
 from app.config import settings
 from app.database import Base
 from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import Field, Subfield
 from app.models.paper import Paper
-from app.services import budget, runner
+from app.services import budget, runner, search
 
 
 @pytest.fixture
@@ -161,3 +162,171 @@ async def test_extract_attempts_fails_after_max_when_no_progress(ctx, monkeypatc
     assert a.status == "failed"
     assert a.error is not None
     assert "추출" in a.error
+
+
+async def test_do_search_blocks_on_total_count_not_truncated_papers_len(ctx, monkeypatch):
+    """C1: search.collect가 반환하는 papers는 openalex.search(limit=max_papers_per_analysis)
+    호출 결과라 구조적으로 상한을 넘을 수 없다. len(papers) 기준 가드는 절대 발동하지
+    않으므로, 잘리기 전 전체 건수(total_count)로 판단해야 실제로 차단된다."""
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="searching", query_hash="h")
+    db.add(a)
+    db.commit()
+
+    async def fake_collect(db, subfield, year_from, year_to, *, client):
+        # 실제 코드처럼 papers는 상한 이하로 이미 잘려 있지만 total_count는 훨씬 크다.
+        return search.SearchResult(papers=[], total_count=40000)
+
+    monkeypatch.setattr(runner.search, "collect", fake_collect)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert a.status == "failed"
+    assert "40000" in a.error
+    assert str(settings.max_papers_per_analysis) in a.error
+
+
+async def test_do_search_passes_when_total_count_within_limit(ctx, monkeypatch):
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="searching", query_hash="h")
+    db.add(a)
+    db.commit()
+
+    async def fake_collect(db, subfield, year_from, year_to, *, client):
+        return search.SearchResult(papers=[], total_count=10)
+
+    monkeypatch.setattr(runner.search, "collect", fake_collect)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert a.status == "extracting"
+    assert a.error is None
+
+
+async def test_extract_defers_submit_when_concurrent_slot_limit_reached(ctx, monkeypatch):
+    """C2: batch_job_id가 채워진(=진행 중인) analysis 수가 상한 이상이면 새 batch를
+    제출하지 않고 다음 루프에서 재시도해야 한다."""
+    db, sf = ctx
+    for i in range(settings.batch_max_concurrent_jobs):
+        db.add(Analysis(subfield_id=sf.id, year=2020 + i, status="extracting",
+                        query_hash="h", batch_job_id=f"running-{i}"))
+    db.commit()
+
+    a = Analysis(subfield_id=sf.id, year=2025, status="extracting", query_hash="h")
+    db.add(a)
+    db.commit()
+
+    p = Paper(paper_key="k1", title="T", abstract="A", year=2025, source="openalex",
+              korea_flag=True)
+    db.add(p)
+    db.commit()
+    db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
+    db.commit()
+
+    calls = {"n": 0}
+
+    async def fake_submit_async(requests):
+        calls["n"] += 1
+        return "job-should-not-happen"
+
+    monkeypatch.setattr(runner.gemini_batch, "submit_async", fake_submit_async)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+
+    assert calls["n"] == 0
+    assert a.batch_job_id is None
+    assert a.status == "extracting"  # 대기 — 다음 루프 주기에 재시도
+
+
+async def test_extract_submits_when_slot_available(ctx, monkeypatch):
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="extracting", query_hash="h")
+    db.add(a)
+    db.commit()
+
+    p = Paper(paper_key="k1", title="T", abstract="A", year=2025, source="openalex",
+              korea_flag=True)
+    db.add(p)
+    db.commit()
+    db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
+    db.commit()
+
+    async def fake_submit_async(requests):
+        return "job-ok"
+
+    monkeypatch.setattr(runner.gemini_batch, "submit_async", fake_submit_async)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert a.batch_job_id == "job-ok"
+
+
+async def test_search_attempts_increments_on_transient_rate_limit(ctx, monkeypatch):
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="searching", query_hash="h")
+    db.add(a)
+    db.commit()
+
+    async def fake_collect(*args, **kwargs):
+        raise RateLimited("OpenAlex 429 재시도 소진", permanent=False)
+
+    monkeypatch.setattr(runner.search, "collect", fake_collect)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert a.search_attempts == 1
+    assert a.status == "searching"  # 아직 상한 미도달 — 다음 루프에서 재시도
+
+
+async def test_search_attempts_fails_after_max_and_resets_on_success(ctx, monkeypatch):
+    """I9: 검색 단계도 extract_attempts와 대칭으로 시도 상한을 둬야, 이미 재시도를
+    소진한 비영구 429가 30초 간격으로 무한히 재과금하며 도는 것을 막을 수 있다."""
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="searching", query_hash="h")
+    db.add(a)
+    db.commit()
+
+    async def fake_collect_fails(*args, **kwargs):
+        raise RateLimited("OpenAlex 429 재시도 소진", permanent=False)
+
+    monkeypatch.setattr(runner.search, "collect", fake_collect_fails)
+
+    for _ in range(settings.max_search_attempts):
+        await runner.advance(db, a)
+        db.refresh(a)
+
+    assert a.status == "failed"
+    assert a.search_attempts == settings.max_search_attempts
+    assert a.error is not None
+
+    # 성공하면 리셋되어야 한다(재시도 경로 확인용으로 별도 analysis 사용).
+    a2 = Analysis(subfield_id=sf.id, year=2026, status="searching", query_hash="h",
+                  search_attempts=2)
+    db.add(a2)
+    db.commit()
+
+    async def fake_collect_succeeds(db, subfield, year_from, year_to, *, client):
+        return search.SearchResult(papers=[], total_count=0)
+
+    monkeypatch.setattr(runner.search, "collect", fake_collect_succeeds)
+    await runner.advance(db, a2)
+    db.refresh(a2)
+    assert a2.search_attempts == 0
+    assert a2.status == "extracting"
+
+
+def test_enqueue_resets_extract_and_search_attempts_on_revival(ctx):
+    """M11: 상한에 걸려 failed된 잡을 재실행할 때 카운터를 리셋하지 않으면, 되살아난
+    잡이 첫 poll에서 진행이 없기만 해도 즉시 다시 failed로 떨어진다."""
+    db, sf = ctx
+    first = runner.enqueue(db, sf, 2025, 2025, force=False)[0]
+    first.status = "failed"
+    first.extract_attempts = settings.max_extract_attempts
+    first.search_attempts = settings.max_search_attempts
+    db.commit()
+
+    again = runner.enqueue(db, sf, 2025, 2025, force=False)
+    assert len(again) == 1
+    assert again[0].extract_attempts == 0
+    assert again[0].search_attempts == 0

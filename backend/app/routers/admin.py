@@ -11,7 +11,7 @@ from app.database import get_db
 from app.deps import require_admin
 from app.models.analysis import Analysis
 from app.models.field import Field, Subfield
-from app.services import budget, runner
+from app.services import budget, mapper, runner
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -128,6 +128,14 @@ async def preview(payload: PreviewIn, db: Session = Depends(get_db)):
 
     budget.record_usage(db, cost + sample.cost_usd, sample.remaining)
     pages = max(1, -(-min(count, settings.max_papers_per_analysis) // settings.openalex_per_page))
+    openalex_cost = round(pages * settings.openalex_search_cost_usd, 4)
+
+    # C3: 신규 추출 대상 추정. 정확히 하려면 openalex_count에서 이미 paper_extractions에
+    # 있는 건수를 빼야 하지만, 그러려면 실제 검색을 한 번 더 돌려야 해 미리보기 비용이
+    # 두 배가 된다. 대신 상한선 성격으로 min(openalex_count, max_papers)를 쓴다 —
+    # 캐시 히트가 있으면 실제 LLM 호출은 이보다 적을 수 있지만, 이보다 많아지지는 않는다.
+    estimated_papers_to_extract = min(count, settings.max_papers_per_analysis)
+    llm_cost = mapper.estimate_llm_cost_usd(estimated_papers_to_extract)
 
     return {
         "openalex_count": count,
@@ -139,7 +147,11 @@ async def preview(payload: PreviewIn, db: Session = Depends(get_db)):
             for p in sample.papers[:20]
         ],
         "estimated_pages": pages,
-        "estimated_cost_usd": round(pages * settings.openalex_search_cost_usd, 4),
+        "estimated_cost_usd": openalex_cost,
+        # 아래 세 값은 모두 추정치다(특히 LLM 비용 — 논문당 평균 토큰 상수 기반 근사).
+        "estimated_papers_to_extract": estimated_papers_to_extract,
+        "estimated_llm_cost_usd": round(llm_cost, 4),
+        "estimated_total_cost_usd": round(openalex_cost + llm_cost, 4),
         "budget_spent": round(budget.spent_today(db), 4),
         "budget_limit": settings.openalex_daily_budget_usd,
         "over_limit": count > settings.max_papers_per_analysis,
@@ -149,6 +161,12 @@ async def preview(payload: PreviewIn, db: Session = Depends(get_db)):
 
 @router.post("/run")
 def run(payload: RunIn, db: Session = Depends(get_db)):
+    # C1: 여기서 검색 건수(over_limit)를 다시 확인하지 않는다 — 확인하려면 검색을
+    # 한 번 더 돌려야 해 이 요청 자체가 이중과금이 된다. 프론트의 버튼 비활성화가
+    # 유일한 사전 방어이고 curl로는 우회 가능하지만, 실제 하드 가드는 runner._do_search가
+    # OpenAlex total_count로 판단해 AnalysisTooLarge를 던지는 지점에 있다(잡이 failed로
+    # 전환되고 analysis.error에 사유가 남아 대시보드에서 바로 보인다) — 이중과금 없이
+    # 사후에라도 반드시 차단되는 쪽을 택했다.
     if budget.spent_today(db) >= settings.openalex_daily_budget_usd:
         raise HTTPException(
             status_code=429,
@@ -212,5 +230,7 @@ def retry(analysis_id: int, db: Session = Depends(get_db)):
     analysis.status = "pending"
     analysis.error = None
     analysis.batch_job_id = None
+    analysis.extract_attempts = 0  # M11: 상한에 걸려 failed된 잡을 재시도할 때
+    analysis.search_attempts = 0   # 카운터를 리셋 안 하면 첫 재시도에서 즉시 다시 failed된다.
     db.commit()
     return {"ok": True, "id": analysis.id}

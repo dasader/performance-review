@@ -6,12 +6,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.clients.openalex import OpenAlexResult
 from app.config import settings
 from app.database import Base, get_db
 from app.main import app
 from app.models.analysis import Analysis
 from app.models.budget import OpenAlexUsage
 from app.models.field import Field, Subfield
+from app.routers import admin as admin_module
 
 
 @pytest.fixture
@@ -138,6 +140,37 @@ def test_preview_returns_429_when_budget_exhausted(client):
     )
     assert r.status_code == 429
     assert "예산" in r.json()["detail"]
+
+
+def test_preview_includes_llm_cost_estimate(client, monkeypatch):
+    """C3: /preview는 OpenAlex 비용만이 아니라 map 단계 LLM 비용까지 추정해
+    합산 총액을 보여줘야 한다 — 관리자가 실제 지배적 지출을 보지 못한 채
+    확정 버튼을 누르는 상황을 막기 위함."""
+    async def fake_count_only(query, year_from, year_to, *, client):
+        return 42, 0.001
+
+    async def fake_oa_search(query, year_from, year_to, *, client, limit):
+        return OpenAlexResult(papers=[], cost_usd=0.001, remaining="9", total_count=42)
+
+    async def fake_kci_search(query, year_from, year_to, *, client, limit):
+        return []
+
+    monkeypatch.setattr(admin_module.openalex, "count_only", fake_count_only)
+    monkeypatch.setattr(admin_module.openalex, "search", fake_oa_search)
+    monkeypatch.setattr(admin_module.kci, "search", fake_kci_search)
+
+    r = client.post(
+        "/api/admin/preview",
+        headers={"X-Admin-Key": settings.admin_key},
+        json={"subfield_id": 1, "year_from": 2023, "year_to": 2024},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["estimated_papers_to_extract"] == 42
+    assert body["estimated_llm_cost_usd"] > 0
+    assert body["estimated_total_cost_usd"] == pytest.approx(
+        body["estimated_cost_usd"] + body["estimated_llm_cost_usd"]
+    )
 
 
 def test_create_subfield_rejects_blank_query(client):

@@ -1,3 +1,6 @@
+import pytest
+
+from app.clients import openalex
 from app.clients.openalex import _filter_expr, _parse_work, reconstruct_abstract
 from app.clients._doi import strip_doi_prefix
 
@@ -70,3 +73,34 @@ def test_filter_expr_keeps_plain_query_and_appends_year_and_kr():
         "publication_year:2022-2024,"
         "authorships.institutions.country_code:KR"
     )
+
+
+class _FakeResponse:
+    def __init__(self, data, headers=None):
+        self._data = data
+        self.headers = headers or {}
+
+    def json(self):
+        return self._data
+
+
+async def test_search_attaches_partial_cost_to_exception_on_mid_page_failure(monkeypatch):
+    """I6: 페이지 중간에 실패해도 그때까지 이미 과금된 비용을 알 수 있어야
+    호출자(search.collect)가 예산 행에 반영할 수 있다."""
+    calls = {"n": 0}
+
+    async def fake_get_with_retry(url, *, client, params, service_name, context):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return _FakeResponse({
+                "meta": {"cost_usd": 0.01, "count": 500, "next_cursor": "abc"},
+                "results": [{"id": "https://openalex.org/W1", "title": "T", "authorships": []}],
+            })
+        raise RuntimeError("OpenAlex 오류 500")
+
+    monkeypatch.setattr(openalex, "get_with_retry", fake_get_with_retry)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        await openalex.search("q", 2024, 2024, client=None, limit=1000)
+
+    assert exc_info.value.cost_usd == pytest.approx(0.01)

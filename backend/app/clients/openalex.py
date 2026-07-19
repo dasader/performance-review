@@ -116,27 +116,34 @@ async def search(
     total = 0
     cursor = "*"
 
-    while cursor and len(papers) < limit:
-        params = {
-            **_base_params(query, year_from, year_to),
-            "per-page": min(settings.openalex_per_page, limit - len(papers)),
-            "select": SELECT,
-            "cursor": cursor,
-        }
-        response = await get_with_retry(
-            API_URL, client=client, params=params, service_name="OpenAlex", context=query
-        )
-        data = response.json()
-        meta = data.get("meta") or {}
-        cost += float(meta.get("cost_usd") or 0.0)
-        remaining = response.headers.get("X-RateLimit-Remaining", remaining)
-        total = int(meta.get("count") or total)
+    try:
+        while cursor and len(papers) < limit:
+            params = {
+                **_base_params(query, year_from, year_to),
+                "per-page": min(settings.openalex_per_page, limit - len(papers)),
+                "select": SELECT,
+                "cursor": cursor,
+            }
+            response = await get_with_retry(
+                API_URL, client=client, params=params, service_name="OpenAlex", context=query
+            )
+            data = response.json()
+            meta = data.get("meta") or {}
+            cost += float(meta.get("cost_usd") or 0.0)
+            remaining = response.headers.get("X-RateLimit-Remaining", remaining)
+            total = int(meta.get("count") or total)
 
-        results = data.get("results") or []
-        if not results:
-            break
-        papers.extend(_parse_work(w) for w in results)
-        cursor = meta.get("next_cursor")
+            results = data.get("results") or []
+            if not results:
+                break
+            papers.extend(_parse_work(w) for w in results)
+            cursor = meta.get("next_cursor")
+    except Exception as e:
+        # I6: 페이지 중간에 실패해도 그때까지 이미 과금된 비용은 남는다. 호출자
+        # (search.collect)가 예산 행에 반영할 수 있도록 예외에 실어 올린다 — 예외
+        # 타입 자체(RateLimited.permanent 포함)는 그대로 보존해 재전파한다.
+        e.cost_usd = cost
+        raise
 
     logger.info(
         "[OpenAlex] query=%r %d-%d total=%d fetched=%d cost=$%.4f",

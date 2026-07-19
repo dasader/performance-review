@@ -1,5 +1,6 @@
 import hashlib
 import logging
+from typing import NamedTuple
 
 import httpx
 from sqlalchemy.orm import Session
@@ -11,6 +12,11 @@ from app.models.paper import Paper
 from app.services import budget
 
 logger = logging.getLogger(__name__)
+
+
+class SearchResult(NamedTuple):
+    papers: list[dict]  # OpenAlex + KCI 병합 결과 (max_papers_per_analysis로 잘려 있을 수 있음)
+    total_count: int  # OpenAlex가 보고한 잘리기 전 전체 건수 — 하드 가드는 이 값으로 판단해야 한다.
 
 
 def query_hash(subfield: Subfield, year_from: int, year_to: int) -> str:
@@ -63,15 +69,27 @@ async def collect(
     year_to: int,
     *,
     client: httpx.AsyncClient,
-) -> list[dict]:
-    """OpenAlex + KCI 검색 후 병합. OpenAlex 비용은 실측해 예산에 기록한다."""
+) -> SearchResult:
+    """OpenAlex + KCI 검색 후 병합. OpenAlex 비용은 실측해 예산에 기록한다.
+
+    total_count는 OpenAlex가 보고한 잘리기 전 전체 건수다 — papers는 항상
+    max_papers_per_analysis 이하로 잘려 있으므로, 과광범위 검색식을 걸러내는
+    하드 가드는 반드시 이 값을 기준으로 판단해야 한다(C1).
+    """
     count, count_cost = await openalex.count_only(subfield.query, year_from, year_to, client=client)
     pages = max(1, -(-min(count, settings.max_papers_per_analysis) // settings.openalex_per_page))
     budget.check_budget(db, count_cost + pages * count_cost)
 
-    oa = await openalex.search(
-        subfield.query, year_from, year_to, client=client, limit=settings.max_papers_per_analysis
-    )
+    try:
+        oa = await openalex.search(
+            subfield.query, year_from, year_to, client=client, limit=settings.max_papers_per_analysis
+        )
+    except Exception as e:
+        # I6: 페이지 중간에 실패해도 이미 발생한 비용은 예산에 반영해야 한다 — 그러지
+        # 않으면 spent_today가 실제 소비를 못 따라가 예산 게이트가 무력화된다.
+        partial_cost = getattr(e, "cost_usd", 0.0)
+        budget.record_usage(db, count_cost + partial_cost, None)
+        raise
     budget.record_usage(db, count_cost + oa.cost_usd, oa.remaining)
 
     kci_papers = await kci.search(
@@ -81,10 +99,10 @@ async def collect(
 
     merged = merge_papers(oa.papers, kci_papers)
     logger.info(
-        "[검색] %s %d-%d: OpenAlex %d + KCI %d → 병합 %d",
-        subfield.name, year_from, year_to, len(oa.papers), len(kci_papers), len(merged),
+        "[검색] %s %d-%d: OpenAlex %d(전체 %d) + KCI %d → 병합 %d",
+        subfield.name, year_from, year_to, len(oa.papers), oa.total_count, len(kci_papers), len(merged),
     )
-    return merged
+    return SearchResult(papers=merged, total_count=oa.total_count)
 
 
 _FIELDS = ("title", "abstract", "year", "journal", "doi", "authors", "institutions",

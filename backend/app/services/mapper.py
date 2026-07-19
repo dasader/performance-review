@@ -101,6 +101,41 @@ def estimate_tokens(papers: list[Paper]) -> int:
     )
 
 
+def estimate_llm_cost_usd(paper_count: int) -> float:
+    """미리보기용 map 단계 LLM 비용 상한선 추정(C3).
+
+    실제 논문의 title/abstract는 미리보기 시점엔 알 수 없으므로 논문당 평균 토큰
+    설정값(settings.gemini_avg_*_tokens_per_paper)으로 대신한다. instruction 토큰만은
+    실제 MAP_INSTRUCTION 텍스트로 계산한다(estimate_tokens와 같은 근사식 재사용).
+    """
+    instruction_tokens = _estimate_text_tokens(MAP_INSTRUCTION)
+    input_tokens = paper_count * (instruction_tokens + settings.gemini_avg_input_tokens_per_paper)
+    output_tokens = paper_count * settings.gemini_avg_output_tokens_per_paper
+    return (
+        input_tokens / 1_000_000 * settings.gemini_batch_input_usd_per_1m
+        + output_tokens / 1_000_000 * settings.gemini_batch_output_usd_per_1m
+    )
+
+
+def token_capped_chunk(papers: list[Paper], requests: list[dict]) -> list[dict]:
+    """제출 직전 청크(이미 batch_max_requests_per_file건 이하로 잘려 있음)를
+    settings.batch_max_enqueued_tokens도 넘지 않도록 앞에서부터 다시 자른다(C2).
+
+    papers와 requests는 같은 순서로 1:1 대응한다(build_requests가 그렇게 만든다).
+    최소 1건은 항상 담아, 논문 한 편이 토큰 상한을 혼자 넘어도 무한 대기에
+    빠지지 않게 한다. 잘리고 남은 나머지는 다음 루프 틱에서 이어 제출된다.
+    """
+    capped: list[dict] = []
+    tokens = 0
+    for paper, req in zip(papers, requests):
+        paper_tokens = estimate_tokens([paper])
+        if capped and tokens + paper_tokens > settings.batch_max_enqueued_tokens:
+            break
+        capped.append(req)
+        tokens += paper_tokens
+    return capped
+
+
 def save_results(db: Session, analysis: Analysis, results: list[dict]) -> int:
     """추출 결과를 저장한다. 같은 (paper_key, subfield, model_ver)는 덮어쓴다."""
     saved = 0

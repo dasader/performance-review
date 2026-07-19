@@ -24,10 +24,20 @@ class Settings(BaseSettings):
     batch_max_concurrent_jobs: int = 2
     batch_max_requests_per_file: int = 1000
     sync_rpm: int = 60
-    sync_tpm: int = 1_000_000
+
+    # Gemini batch(map) 단가. 정확한 단가는 확인되지 않았다 — Gemini 3.1 Flash Lite의
+    # 공식 batch 요금표를 찾지 못해 같은 세대 flash-lite 계열의 공개 단가를 보수적으로
+    # (실제보다 비싸게) 반영했다. 확인되는 대로 .env에서 조정할 것.
+    gemini_batch_input_usd_per_1m: float = 0.0375
+    gemini_batch_output_usd_per_1m: float = 0.15
+    # 미리보기 시점엔 실제 논문 title/abstract가 없어 길이를 알 수 없으므로 쓰는
+    # 논문당 평균 토큰 근사치. 실측 분포가 쌓이면 .env에서 조정한다.
+    gemini_avg_input_tokens_per_paper: int = 700
+    gemini_avg_output_tokens_per_paper: int = 200
 
     max_papers_per_analysis: int = 5000
     max_extract_attempts: int = 3
+    max_search_attempts: int = 3
     reduce_group_threshold: int = 500
     default_year_range: int = 3
     loop_interval_seconds: int = 30
