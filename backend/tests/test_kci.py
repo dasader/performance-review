@@ -103,3 +103,26 @@ def test_result_error_is_raised_not_swallowed():
 def test_normal_response_does_not_raise():
     """정상 응답에는 result/resultMsg 블록이 없으므로 그대로 파싱돼야 한다."""
     assert len(kci._parse_search_xml(XML)) == 2
+
+
+def test_parse_strips_html_tags_from_title_and_journal():
+    """KCI 실응답에 태그가 섞이는지 확인은 못 했지만(키 만료), OpenAlex에서 실제로
+    확인된 문제라 방어적으로 동일 헬퍼(strip_html)를 적용해뒀다 — 여기서 그 적용을
+    검증한다. XML 안에서 진짜 텍스트로 태그가 들어오려면 이스케이프돼 있어야 한다
+    (이스케이프 없이 그대로 `<sub>`를 쓰면 XML 파서가 자식 엘리먼트로 해석해버려
+    `.text`가 잘려버린다 — 그래서 여기서도 `&lt;sub&gt;` 형태로 이스케이프한다)."""
+    xml = """<MetaData><outputData>
+<record>
+  <journalInfo><journal-name>Journal &lt;i&gt;Name&lt;/i&gt;</journal-name><pub-year>2025</pub-year></journalInfo>
+  <articleInfo article-id="ART003">
+    <title-group>
+      <article-title lang="english">Hf&lt;sub&gt;0.5&lt;/sub&gt;Zr&lt;sub&gt;0.5&lt;/sub&gt;O&lt;sub&gt;2&lt;/sub&gt; Film</article-title>
+    </title-group>
+  </articleInfo>
+</record>
+</outputData></MetaData>"""
+    papers = _parse_search_xml(xml)
+    # 태그가 원문에서 공백 없이 붙어 있었으므로(예: `Hf<sub>0.5</sub>`) 벗긴 뒤에도
+    # 공백을 새로 만들어 넣지 않는다 — 없던 공백을 삽입하면 화학식 표기가 깨진다.
+    assert papers[0]["title"] == "Hf0.5Zr0.5O2 Film"
+    assert papers[0]["journal"] == "Journal Name"

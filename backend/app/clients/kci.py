@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 import httpx
 
 from app.clients._doi import strip_doi_prefix
+from app.clients._html import strip_html
 from app.clients._http import get_with_retry
 from app.config import settings
 
@@ -80,6 +81,7 @@ def _parse_search_xml(xml_text: str) -> list[dict]:
         if journal_info is not None:
             journal_el = journal_info.find("journal-name")
             journal = (journal_el.text or "").strip() if journal_el is not None else None
+            journal = strip_html(journal) if journal else journal
             year_el = journal_info.find("pub-year")
             year = _int_or(year_el.text if year_el is not None else None, 0) or None
 
@@ -88,10 +90,13 @@ def _parse_search_xml(xml_text: str) -> list[dict]:
         citation_el = article.find("citation-count")
         citations = _int_or(citation_el.text if citation_el is not None else None, 0)
 
+        # KCI 실응답에 HTML/MathML 태그가 섞이는지 확인하지 못했다(API 키 만료로 실호출
+        # 불가 — 조사 시점 기준). OpenAlex에서 실제로 확인된 문제라 방어적으로 동일 헬퍼를
+        # 적용해둔다. 태그가 없으면 strip_html은 공백 정규화 외에는 원문을 바꾸지 않는다.
         papers.append({
             "paper_key": doi or f"kci:{article_id}",
-            "title": _pick_by_lang(list(article.findall("title-group/article-title"))),
-            "abstract": _pick_by_lang(list(article.findall("abstract-group/abstract"))),
+            "title": strip_html(_pick_by_lang(list(article.findall("title-group/article-title")))),
+            "abstract": strip_html(_pick_by_lang(list(article.findall("abstract-group/abstract")))),
             "year": year,
             "journal": journal,
             "doi": doi,

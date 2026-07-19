@@ -4,6 +4,7 @@ from typing import NamedTuple
 import httpx
 
 from app.clients._doi import strip_doi_prefix
+from app.clients._html import strip_html
 from app.clients._http import get_with_retry
 from app.config import settings
 
@@ -54,12 +55,13 @@ def _parse_work(work: dict) -> dict:
                 countries.append(code)
 
     location = work.get("primary_location") or {}
+    journal = (location.get("source") or {}).get("display_name")
     return {
         "paper_key": doi or f"openalex:{oa_id}",
-        "title": work.get("title") or "",
-        "abstract": reconstruct_abstract(work.get("abstract_inverted_index")),
+        "title": strip_html(work.get("title") or ""),
+        "abstract": strip_html(reconstruct_abstract(work.get("abstract_inverted_index"))),
         "year": work.get("publication_year"),
-        "journal": (location.get("source") or {}).get("display_name"),
+        "journal": strip_html(journal) if journal else journal,
         "doi": doi,
         "authors": authors,
         "institutions": institutions,

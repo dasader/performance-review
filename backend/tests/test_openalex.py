@@ -52,6 +52,22 @@ def test_parse_work_without_doi_uses_openalex_id():
     assert _parse_work(work)["paper_key"] == "openalex:W2"
 
 
+def test_parse_work_strips_html_tags_from_title_abstract_and_journal():
+    """실측: OpenAlex가 `Hf <sub>0.5</sub> Zr <sub>0.5</sub> O <sub>2</sub>`처럼 태그를
+    섞어 보낸다. 각주 매칭(LLM이 벗긴 제목을 씀)과 화면 표시 둘 다 깨끗한 제목이 필요하다."""
+    work = {
+        "id": "https://openalex.org/W3",
+        "title": "Hf <sub>0.5</sub> Zr <sub>0.5</sub> O <sub>2</sub> Film",
+        "abstract_inverted_index": {"<i>in": [0], "situ</i>": [1], "ALD": [2]},
+        "primary_location": {"source": {"display_name": "J. <i>Applied</i> Physics"}},
+        "authorships": [],
+    }
+    p = _parse_work(work)
+    assert p["title"] == "Hf 0.5 Zr 0.5 O 2 Film"
+    assert p["abstract"] == "in situ ALD"
+    assert p["journal"] == "J. Applied Physics"
+
+
 def test_filter_expr_strips_comma_to_avoid_extra_and_clause():
     # 콤마는 OpenAlex filter DSL에서 AND 절 구분자라 그대로 넣으면 검색식이 쪼개진다
     expr = _filter_expr("quantum computing, error correction", 2022, 2024)
