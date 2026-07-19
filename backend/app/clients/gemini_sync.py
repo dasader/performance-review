@@ -73,4 +73,6 @@ async def generate(system: str, user: str, *, thinking: str, max_retries: int = 
                 await asyncio.sleep(delay)
                 continue
             raise
-    # 도달 불가능: 루프는 매 반복마다 return 또는 raise로 끝난다 (재시도 소진 시 원본 예외 전파).
+    # 루프는 매 반복마다 return 또는 raise로 끝나므로, 여기 도달하려면 range가 비어야 한다
+    # (= max_retries < 0). 호출측 실수이며, 조용히 None을 반환하지 않도록 막는다.
+    raise ValueError(f"max_retries는 0 이상이어야 합니다: {max_retries}")
