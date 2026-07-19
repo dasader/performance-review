@@ -23,12 +23,33 @@ def _paper(key, **kw):
     return base
 
 
-def test_merge_prefers_the_record_with_an_abstract():
-    oa = [_paper("10.1/x", abstract="", source="openalex")]
-    kci = [_paper("10.1/x", abstract="있음", source="kci")]
+def test_merge_combines_abstract_and_authors_from_different_sources():
+    """OpenAlex(abstract 없음, authors 있음) + KCI(abstract 있음, authors 없음)
+    → 레코드 하나를 통째로 고르면 abstract나 authors 중 하나를 잃는다.
+    필드 단위 병합이면 둘 다 살아남아야 한다."""
+    oa = [_paper("10.1/x", abstract="", authors=["Kim"], source="openalex")]
+    kci = [_paper("10.1/x", abstract="있음", authors=[], source="kci")]
     merged = merge_papers(oa, kci)
     assert len(merged) == 1
     assert merged[0]["abstract"] == "있음"
+    assert merged[0]["authors"] == ["Kim"]
+
+
+def test_merge_keeps_max_citations():
+    oa = [_paper("10.1/y", citations=5, source="openalex")]
+    kci = [_paper("10.1/y", citations=12, source="kci")]
+    merged = merge_papers(oa, kci)
+    assert merged[0]["citations"] == 12
+    # 순서를 바꿔도 더 큰 값이 남아야 한다.
+    merged_rev = merge_papers(kci, oa)
+    assert merged_rev[0]["citations"] == 12
+
+
+def test_merge_korea_flag_true_if_any_source_true():
+    oa = [_paper("10.1/z", korea_flag=False, source="openalex")]
+    kci = [_paper("10.1/z", korea_flag=True, source="kci")]
+    merged = merge_papers(oa, kci)
+    assert merged[0]["korea_flag"] is True
 
 
 def test_merge_keeps_distinct_keys():

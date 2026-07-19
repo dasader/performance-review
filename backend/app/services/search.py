@@ -19,20 +19,41 @@ def query_hash(subfield: Subfield, year_from: int, year_to: int) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def _score(paper: dict) -> tuple:
-    """병합 시 우선순위 — abstract 보유 > 저자 정보 보유 > 인용수."""
-    return (bool(paper.get("abstract")), len(paper.get("authors") or []), paper.get("citations") or 0)
+_LONGER_WINS = ("abstract", "title")  # 둘 다 있으면 더 긴 쪽
+_FIRST_NONEMPTY_WINS = ("journal", "doi", "year")  # 둘 다 있으면 먼저 온 쪽
+_LONGER_LIST_WINS = ("authors", "institutions", "countries")  # 원소 더 많은 쪽
 
 
 def merge_papers(*sources: list[dict]) -> list[dict]:
-    """paper_key 기준 중복 제거. 같은 키면 정보가 더 채워진 레코드를 남긴다."""
-    best: dict[str, dict] = {}
+    """paper_key 기준으로 필드 단위 병합한다 (레코드 통째 선택이 아님).
+
+    OpenAlex는 abstract가 자주 빠지고 KCI는 authors/institutions가 항상 비어
+    있으므로, 레코드 하나를 고르면 다른 소스의 값을 통째로 버리게 된다.
+    각 필드마다 비어 있지 않은 값을 채택하고 소스 간 우열은 필드별 규칙을 따른다.
+    """
+    merged: dict[str, dict] = {}
     for source in sources:
         for paper in source:
             key = paper["paper_key"]
-            if key not in best or _score(paper) > _score(best[key]):
-                best[key] = paper
-    return list(best.values())
+            if key not in merged:
+                merged[key] = dict(paper)
+                continue
+            existing = merged[key]
+            for field in _LONGER_WINS:
+                new_val, old_val = paper.get(field) or "", existing.get(field) or ""
+                if new_val and len(new_val) > len(old_val):
+                    existing[field] = paper[field]
+            for field in _FIRST_NONEMPTY_WINS:
+                if not existing.get(field) and paper.get(field):
+                    existing[field] = paper[field]
+            for field in _LONGER_LIST_WINS:
+                new_list, old_list = paper.get(field) or [], existing.get(field) or []
+                if len(new_list) > len(old_list):
+                    existing[field] = paper[field]
+            existing["citations"] = max(existing.get("citations") or 0, paper.get("citations") or 0)
+            existing["korea_flag"] = bool(existing.get("korea_flag")) or bool(paper.get("korea_flag"))
+            # source, paper_key: 먼저 온 소스(existing)를 그대로 유지한다.
+    return list(merged.values())
 
 
 async def collect(
