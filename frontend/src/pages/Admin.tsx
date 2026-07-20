@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  ACTIVE_STATUSES,
   ApiError,
   del,
   get,
@@ -17,12 +18,7 @@ import SubfieldEditor from "../components/SubfieldEditor";
 import RunDialog from "../components/RunDialog";
 import ScheduleSection from "../components/ScheduleSection";
 
-// runner.py::ACTIVE_STATES와 동일 — 진행 중인 분석은 batch가 이미 제출됐을 수 있어
-// 삭제하면 고아 상태가 된다(백엔드도 같은 기준으로 409를 던진다).
-const ACTIVE_STATUSES = new Set(["pending", "searching", "extracting", "reducing"]);
-
 export default function Admin() {
-  // 백엔드의 default_year_range는 "최근 N개년"의 N(정수)이다. 연도 범위가 아니라 개수.
   const currentYear = new Date().getFullYear();
   const { key, save, clear } = useAdminKey();
   const [input, setInput] = useState("");
@@ -200,22 +196,20 @@ export default function Admin() {
           />
         )}
 
-        {data && subfields && (() => {
-          const defaultYearFrom = currentYear - (data.default_year_range - 1);
-          return (
+        {data && subfields && (
           <RunDialog
             adminKey={key}
             rows={subfields
               .filter((s) => s.active)
               .map((s) => ({ subfield_id: s.id, subfield_name: s.name }))}
-            defaultYearFrom={defaultYearFrom}
+            // default_year_range는 "최근 N개년"의 N(개수)이다 — 연도 범위가 아니다.
+            defaultYearFrom={currentYear - (data.default_year_range - 1)}
             defaultYearTo={currentYear}
             subfieldsVersion={subfieldGen}
             onRan={() => loadDashboard(key)}
             onUnauthorized={onUnauthorized}
           />
-          );
-        })()}
+        )}
 
         <ScheduleSection adminKey={key} onUnauthorized={onUnauthorized} />
 

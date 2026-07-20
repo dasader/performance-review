@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkCjkFriendly from "remark-cjk-friendly";
-import { get, type Analysis, type Reference } from "../api";
+import { ACTIVE_STATUSES, get, type Analysis, type Reference } from "../api";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import StatusBadge from "../components/StatusBadge";
@@ -74,8 +74,6 @@ function ReportMarkdown({ md }: { md: string }) {
     </ReactMarkdown>
   );
 }
-
-const IN_PROGRESS = new Set(["pending", "searching", "extracting", "reducing"]);
 
 export default function Report() {
   const { analysisId, subfieldId, year } = useParams();
@@ -156,9 +154,6 @@ function ReportBody({ data }: { data: Analysis }) {
           </div>
           {excluded > 0 && (
             <p className="mt-2 text-xs text-muted">abstract 미보유 등 사유로 {excluded.toLocaleString()}건 제외</p>
-          )}
-          {data.sampled && (
-            <p className="mt-1 text-xs text-muted">성과 서술은 표본 기준, 통계는 전수 기준입니다.</p>
           )}
         </div>
 
@@ -289,7 +284,7 @@ function StatusPanel({ data }: { data: Analysis }) {
     );
   }
 
-  if (IN_PROGRESS.has(data.status)) {
+  if (ACTIVE_STATUSES.has(data.status)) {
     return (
       <div className="border border-border bg-surface p-5">
         <p className="text-sm font-medium text-ink">보고서를 준비하는 중입니다 — {data.status_label}</p>

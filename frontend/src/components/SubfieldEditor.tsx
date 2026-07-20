@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ApiError, del, get, post, put, type AdminSubfield, type Field } from "../api";
 import { lintQuery, type LintResult } from "../lib/queryLint";
 
@@ -70,7 +70,9 @@ export default function SubfieldEditor({
   const [modalHelp, setModalHelp] = useState({ openalex: false, kci: false });
   const fieldSelectRef = useRef<HTMLSelectElement>(null);
 
-  const fieldName = (id: number) => fields.find((f) => f.id === id)?.name ?? `분야 #${id}`;
+  // 표의 행마다 부르므로 선형 탐색을 두면 55행 × 렌더마다 훑는다.
+  const fieldNames = useMemo(() => new Map(fields.map((f) => [f.id, f.name])), [fields]);
+  const fieldName = (id: number) => fieldNames.get(id) ?? `분야 #${id}`;
 
   const load = async () => {
     try {
@@ -156,24 +158,19 @@ export default function SubfieldEditor({
 
     setModalSaving(true);
     try {
+      // active를 add에서 빠뜨리면 "활성 여부" 토글을 꺼도 백엔드 기본값(True)으로
+      // 저장된다 — 그 토글은 add 모드에서도 렌더되므로 조용히 무시되는 셈이었다.
+      const payload: SubfieldBody = {
+        field_id: modal.fieldId,
+        name: modal.name.trim(),
+        query,
+        query_kci: queryKci || null,
+        active: modal.active,
+      };
       if (modal.mode === "add") {
-        await post(
-          "/admin/subfields",
-          { field_id: modal.fieldId, name: modal.name.trim(), query, query_kci: queryKci || null },
-          adminKey,
-        );
+        await post("/admin/subfields", payload, adminKey);
       } else {
-        await put(
-          `/admin/subfields/${modal.id}`,
-          {
-            field_id: modal.fieldId,
-            name: modal.name.trim(),
-            query,
-            query_kci: queryKci || null,
-            active: modal.active,
-          },
-          adminKey,
-        );
+        await put(`/admin/subfields/${modal.id}`, payload, adminKey);
       }
       await load();
       onChanged();
@@ -217,8 +214,19 @@ export default function SubfieldEditor({
     }
   };
 
-  const openalexLint = modal ? lintQuery(modal.query, "openalex") : null;
-  const kciLint = modal ? lintQuery(modal.queryKci, "kci") : null;
+  // 린트 계산을 값이 바뀔 때로 한정한다. 세부기술명 입력·활성 토글처럼 검색식과
+  // 무관한 상태 변경에서는 다시 돌지 않는다(표 재렌더 자체는 여전히 일어난다 —
+  // 모달과 표가 한 컴포넌트라 setModal이 둘 다 다시 그린다).
+  const modalQuery = modal?.query;
+  const modalQueryKci = modal?.queryKci;
+  const openalexLint = useMemo(
+    () => (modalQuery === undefined ? null : lintQuery(modalQuery, "openalex")),
+    [modalQuery],
+  );
+  const kciLint = useMemo(
+    () => (modalQueryKci === undefined ? null : lintQuery(modalQueryKci, "kci")),
+    [modalQueryKci],
+  );
 
   return (
     <section className="border border-border bg-surface p-5">
@@ -522,6 +530,10 @@ function QueryLintFeedback({ result, valueTrimmed }: { result: LintResult; value
 //   (모달을 연 순간의 document.activeElement가 곧 그 트리거 버튼이므로 별도로 전달받지 않는다)
 // - role=dialog + aria-modal + aria-labelledby, 열려 있는 동안 배경 스크롤 잠금
 // - 내용이 길면 모달 내부만 스크롤(max-h)
+// ponytail: 포커스 트랩은 없다 — aria-modal="true"는 어떤 브라우저에서도 포커스를
+// 가두지 않으므로, Tab을 계속 누르면 오버레이 뒤의 편집/삭제 버튼으로 빠져나간다.
+// 고치려면 <dialog>+showModal()로 바꾸는 쪽이 맞다(브라우저가 트랩·Esc·스크롤 잠금을
+// 다 해주므로 위 수동 구현 대부분이 삭제된다). 실제 브라우저에서 확인할 수 있을 때 하자.
 function Modal({
   titleId,
   title,

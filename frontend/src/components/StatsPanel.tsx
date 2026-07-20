@@ -24,7 +24,7 @@ export default function StatsPanel({ stats }: { stats: Stats | Record<string, ne
 
   if (!stats.searched_count) return null;
 
-  const byYear = Object.entries(stats.by_year ?? {})
+  const byYear = Object.entries(stats.by_year)
     .map(([year, count]) => ({ year, count }))
     .sort((a, b) => a.year.localeCompare(b.year));
 

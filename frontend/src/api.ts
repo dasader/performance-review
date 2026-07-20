@@ -107,6 +107,11 @@ export interface Field {
   subfields: Subfield[];
 }
 
+// runner.py::ACTIVE_STATES와 같은 집합 — 진행 중인 분석은 batch가 이미 제출됐을 수
+// 있어 삭제하면 고아 상태가 된다(백엔드도 같은 기준으로 409를 던진다). 파이썬 쪽과의
+// 이중 관리는 남지만, 최소한 프론트 안에서는 한 곳에서만 정의한다.
+export const ACTIVE_STATUSES = new Set(["pending", "searching", "extracting", "reducing"]);
+
 export interface YearRow {
   year: number;
   subfield_count: number;
@@ -188,7 +193,6 @@ export interface Analysis {
   stats: Stats | Record<string, never>;
   searched_count: number;
   analyzed_count: number;
-  sampled: boolean;
   snapshot_at: string | null;
   error: string | null;
 }
@@ -283,7 +287,7 @@ export interface PreviewResponse {
   kci_sample_truncated: boolean;
   samples: PreviewSample[];
   estimated_pages: number;
-  estimated_cost_usd: number; // OpenAlex 검색 비용만(과거 필드, 하위 호환용으로 유지)
+  estimated_cost_usd: number; // OpenAlex 검색 비용만 — 비용 내역 표시에 쓴다(RunDialog)
   // 아래 세 값은 모두 추정치다. estimated_papers_to_extract는 검색 없이는 캐시 히트를
   // 뺄 수 없어 상한선 성격(min(openalex_count, max_papers))으로 계산된다.
   estimated_papers_to_extract: number;
