@@ -1,4 +1,5 @@
 import re
+from typing import Any, Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -40,7 +41,7 @@ def _footnote_key(s: str) -> str:
     return "".join(strip_html(s).split()).lower()
 
 
-def _apply_footnotes(report_md: str | None, papers: list[Paper]) -> tuple[str | None, list[dict]]:
+def _apply_footnotes(report_md: str | None, papers: Sequence[Any]) -> tuple[str | None, list[dict]]:
     """report_md 안에서 괄호로 인용된 논문 제목을 각주 번호로 치환한다(읽기 시점 후처리,
     LLM 재호출 없음). LLM이 실행마다 인용 형식을 조금씩 다르게 쓰므로(연도 접두사, 공백 차이,
     구버전 보고서에 남은 HTML 태그 등) 매칭은 정규화 키("괄호 안 어딘가에 제목의 키가
@@ -65,7 +66,7 @@ def _apply_footnotes(report_md: str | None, papers: list[Paper]) -> tuple[str | 
         return report_md, []
 
     # (paper, 정규화 키) 목록. 키 길이 내림차순 — 위 docstring의 부분 문자열 문제 방지.
-    candidates: list[tuple[Paper, str]] = sorted(
+    candidates: list[tuple[Any, str]] = sorted(
         ((p, _footnote_key(p.title)) for p in papers if p.title and p.title.strip()),
         key=lambda pc: len(pc[1]),
         reverse=True,
@@ -76,7 +77,7 @@ def _apply_footnotes(report_md: str | None, papers: list[Paper]) -> tuple[str | 
 
     def repl(m: re.Match) -> str:
         content_key = _footnote_key(m.group(1))
-        matched: Paper | None = None
+        matched: Any | None = None
         for paper, key in candidates:
             if len(key) < _MIN_PARTIAL_TITLE_LEN:
                 if content_key != key:
@@ -107,11 +108,13 @@ def _serialize(db: Session, analysis: Analysis) -> dict:
     subfield = db.get(Subfield, analysis.subfield_id)
     field = db.get(Field, subfield.field_id)
 
-    paper_ids = [
-        row.paper_id
-        for row in db.query(AnalysisPaper.paper_id).filter(AnalysisPaper.analysis_id == analysis.id)
-    ]
-    papers = db.query(Paper).filter(Paper.id.in_(paper_ids)).all() if paper_ids else []
+    # 각주는 id/title/journal/year/doi만 쓴다. 전체 ORM 행을 실으면 abstract(논문당
+    # 1~2KB)까지 딸려와, 703건짜리 보고서 한 번 여는 데 1MB 가까이 헛읽는다.
+    papers = db.query(
+        Paper.id, Paper.title, Paper.journal, Paper.year, Paper.doi
+    ).join(AnalysisPaper, AnalysisPaper.paper_id == Paper.id).filter(
+        AnalysisPaper.analysis_id == analysis.id
+    ).all()
     report_md, references = _apply_footnotes(analysis.report_md, papers)
 
     return {
@@ -126,7 +129,6 @@ def _serialize(db: Session, analysis: Analysis) -> dict:
         "stats": analysis.stats_json,
         "searched_count": analysis.searched_count,
         "analyzed_count": analysis.analyzed_count,
-        "sampled": analysis.sampled,
         "snapshot_at": analysis.snapshot_at.isoformat() if analysis.snapshot_at else None,
         "error": analysis.error,
     }
@@ -135,6 +137,11 @@ def _serialize(db: Session, analysis: Analysis) -> dict:
 @router.get("/fields")
 def list_fields(db: Session = Depends(get_db)):
     fields = db.query(Field).order_by(Field.order_no).all()
+    # 분야마다 따로 조회하면 랜딩 페이지 한 번에 11번 질의가 나간다 — 한 번에 읽어 묶는다.
+    subfields_by_field: dict[int, list] = {}
+    for s in db.query(Subfield).all():
+        subfields_by_field.setdefault(s.field_id, []).append(s)
+
     return [
         {
             "id": f.id,
@@ -142,7 +149,7 @@ def list_fields(db: Session = Depends(get_db)):
             "slug": f.slug,
             "subfields": [
                 {"id": s.id, "name": s.name, "active": s.active}
-                for s in db.query(Subfield).filter(Subfield.field_id == f.id).all()
+                for s in subfields_by_field.get(f.id, [])
             ],
         }
         for f in fields
@@ -152,8 +159,13 @@ def list_fields(db: Session = Depends(get_db)):
 @router.get("/fields/{field_id}/years")
 def field_years(field_id: int, db: Session = Depends(get_db)):
     """이 분야에서 보고서가 존재하는 연도 목록."""
-    subfield_ids = [s.id for s in db.query(Subfield).filter(Subfield.field_id == field_id)]
-    rows = db.query(Analysis).filter(Analysis.subfield_id.in_(subfield_ids)).all()
+    # 연도별로 세기만 하므로 두 컬럼이면 충분하다 — 전체 행을 실으면 report_md(건당
+    # 12KB 규모)와 stats_json까지 읽어온다.
+    rows = db.query(Analysis.year, Analysis.status).filter(
+        Analysis.subfield_id.in_(
+            db.query(Subfield.id).filter(Subfield.field_id == field_id)
+        )
+    ).all()
 
     by_year: dict[int, dict] = {}
     for row in rows:
@@ -176,9 +188,14 @@ def field_summary(field_id: int, year: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="분야를 찾을 수 없습니다.")
 
     subfields = db.query(Subfield).filter(Subfield.field_id == field_id).order_by(Subfield.name).all()
+    # 여기서 읽는 건 다섯 컬럼뿐이다 — 전체 행을 실으면 report_md(건당 12KB 규모)와
+    # stats_json까지 딸려온다(dashboard·field_years와 같은 이유).
     analyses_by_subfield = {
         a.subfield_id: a
-        for a in db.query(Analysis).filter(
+        for a in db.query(
+            Analysis.id, Analysis.subfield_id, Analysis.status,
+            Analysis.searched_count, Analysis.analyzed_count,
+        ).filter(
             Analysis.subfield_id.in_([s.id for s in subfields]), Analysis.year == year
         )
     }

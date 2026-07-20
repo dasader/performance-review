@@ -97,12 +97,17 @@ def _estimate_text_tokens(text: str) -> int:
     return ascii_len // 4 + non_ascii_len // 2
 
 
+# MAP_INSTRUCTION은 상수라 토큰 수도 상수다. token_capped_chunk가 논문마다
+# estimate_tokens([paper])를 부르므로, 캐시하지 않으면 1.5KB 프롬프트를 논문 수만큼
+# 문자 단위로 다시 훑는다(1,000건 제출 시 150만 회 규모).
+_INSTRUCTION_TOKENS = _estimate_text_tokens(MAP_INSTRUCTION)
+
+
 def estimate_tokens(papers: list[Paper]) -> int:
     """제출 전 게이트 판단용 근사치 — ±20% 오차면 충분하고, 논문마다
     count_tokens를 부르면 그 호출 자체가 낭비다."""
-    instruction_tokens = _estimate_text_tokens(MAP_INSTRUCTION)
     return sum(
-        instruction_tokens + _estimate_text_tokens(p.title) + _estimate_text_tokens(p.abstract)
+        _INSTRUCTION_TOKENS + _estimate_text_tokens(p.title) + _estimate_text_tokens(p.abstract)
         for p in papers
     )
 
@@ -114,8 +119,7 @@ def estimate_llm_cost_usd(paper_count: int) -> float:
     설정값(settings.gemini_avg_*_tokens_per_paper)으로 대신한다. instruction 토큰만은
     실제 MAP_INSTRUCTION 텍스트로 계산한다(estimate_tokens와 같은 근사식 재사용).
     """
-    instruction_tokens = _estimate_text_tokens(MAP_INSTRUCTION)
-    input_tokens = paper_count * (instruction_tokens + settings.gemini_avg_input_tokens_per_paper)
+    input_tokens = paper_count * (_INSTRUCTION_TOKENS + settings.gemini_avg_input_tokens_per_paper)
     output_tokens = paper_count * settings.gemini_avg_output_tokens_per_paper
     return (
         input_tokens / 1_000_000 * settings.gemini_batch_input_usd_per_1m
@@ -144,25 +148,39 @@ def token_capped_chunk(papers: list[Paper], requests: list[dict]) -> list[dict]:
 
 def save_results(db: Session, analysis: Analysis, results: list[dict]) -> int:
     """추출 결과를 저장한다. 같은 (paper_key, subfield, model_ver)는 덮어쓴다."""
+    # 결과 1건마다 SELECT를 날리면 703건 배치에서 703번 질의가 폴링 루프 한 틱 안에
+    # 몰린다. 기존 행을 한 번에 읽어 사전으로 들고 쓴다. model_ver()도 행마다
+    # 문자열을 다시 만들 이유가 없어 루프 밖으로 뺀다.
+    ver = model_ver()
+    existing = {
+        row.paper_key: row
+        for row in db.query(PaperExtraction).filter(
+            PaperExtraction.paper_key.in_([item["key"] for item in results]),
+            PaperExtraction.subfield_id == analysis.subfield_id,
+            PaperExtraction.model_ver == ver,
+        )
+    } if results else {}
+
     saved = 0
     for item in results:
-        row = db.query(PaperExtraction).filter(
-            PaperExtraction.paper_key == item["key"],
-            PaperExtraction.subfield_id == analysis.subfield_id,
-            PaperExtraction.model_ver == model_ver(),
-        ).first()
+        row = existing.get(item["key"])
         if row is None:
             row = PaperExtraction(
                 paper_key=item["key"],
                 subfield_id=analysis.subfield_id,
-                model_ver=model_ver(),
+                model_ver=ver,
             )
             db.add(row)
+            # 사전에도 넣어둔다 — 같은 배치에 같은 key가 두 번 오면 두 번째는 이 행을
+            # 다시 찾아 덮어쓴다. 넣지 않으면 둘 다 신규로 보고 중복 행을 만든다.
+            existing[item["key"]] = row
+            # 비용이 발생한 건수(analysis.extracted_this_run → AnalysisRun.new_papers)라
+            # 신규 행일 때만 센다. 같은 key가 두 번 와도 LLM 호출은 한 번이었다.
+            saved += 1
         row.tech_summary = item.get("tech_summary", "")
         row.achievement_type = item.get("achievement_type")
         row.metrics_json = item.get("metrics") or []
         row.approach = item.get("approach") or ""
         row.improvement = item.get("improvement") or ""
-        saved += 1
     db.commit()
     return saved

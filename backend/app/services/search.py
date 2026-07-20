@@ -93,9 +93,15 @@ async def collect(
     max_papers_per_analysis 이하로 잘려 있으므로, 과광범위 검색식을 걸러내는
     하드 가드는 반드시 이 값을 기준으로 판단해야 한다(C1).
     """
+    # 여기서는 count_only를 유지한다 — 페이징에 실제로 돈을 쓰기 전에 예산 게이트를
+    # 통과시키는 게 목적이라, search()의 total_count를 보려고 먼저 페이징을 시작할 수 없다.
     count, count_cost = await openalex.count_only(subfield.query, year_from, year_to, client=client)
-    pages = max(1, -(-min(count, settings.max_papers_per_analysis) // settings.openalex_per_page))
-    budget.check_budget(db, count_cost + pages * count_cost)
+    # 페이지 단가는 설정값을 쓴다 — count_cost는 per-page=1 탐색 요청의 실측 비용이라
+    # 페이지 단가로 곱하면 단위가 어긋나고, meta.cost_usd가 비어 0으로 오면 견적이
+    # 통째로 0이 되어 게이트가 무력화된다(대량 크롤이 그대로 통과한다).
+    budget.check_budget(
+        db, count_cost + openalex.estimate_pages(count) * settings.openalex_search_cost_usd
+    )
 
     try:
         oa = await openalex.search(

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
@@ -22,7 +22,6 @@ class Analysis(Base):
     snapshot_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     searched_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     analyzed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    sampled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     batch_job_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 배치 결과 저장 후에도 pending_papers가 줄지 않은(파싱 실패 등으로 진행이 없는)

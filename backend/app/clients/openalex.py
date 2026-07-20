@@ -95,6 +95,13 @@ def _base_params(query: str, year_from: int, year_to: int) -> dict:
     }
 
 
+def estimate_pages(count: int) -> int:
+    """이 건수를 다 받으려면 cursor 페이징이 몇 콜 필요한지. OpenAlex는 요청 건당
+    과금하므로 이 값이 곧 예상 비용의 배수다(미리보기 견적·예산 사전 게이트 공용)."""
+    capped = min(count, settings.max_papers_per_analysis)
+    return max(1, -(-capped // settings.openalex_per_page))
+
+
 async def count_only(
     query: str, year_from: int, year_to: int, *, client: httpx.AsyncClient
 ) -> tuple[int, float]:

@@ -4,8 +4,9 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.clients import gemini_batch
 from app.clients._http import RateLimited
@@ -89,11 +90,6 @@ def enqueue(
 
     db.commit()
     return queued
-
-
-def is_stale(db: Session, analysis: Analysis, subfield: Subfield) -> bool:
-    """검색식이 바뀌어 갱신이 필요한 상태인지."""
-    return analysis.query_hash != search.query_hash(subfield, analysis.year, analysis.year)
 
 
 def resume_paused(db: Session) -> None:
@@ -232,6 +228,10 @@ async def _do_extract(db: Session, analysis: Analysis) -> None:
         analysis.batch_job_id = None
         db.commit()
 
+        # _analysis_papers를 여기서 다시 부른다. save_results가 commit하고 세션은
+        # expire_on_commit=True(기본값)라, 저장 전에 실어둔 Paper 인스턴스를 재사용하면
+        # 속성 접근마다 행 단위 refresh가 나간다 — 실측 1,128건 기준 SELECT 1,130회 대
+        # 재조회 3회로, 아끼려던 쿼리보다 훨씬 크게 손해다.
         still_pending = mapper.pending_papers(db, analysis, _analysis_papers(db, analysis))
         # poll()이 성공을 반환해도 개별 요청이 대량 파싱 실패했을 수 있다. 제출 시점의
         # 건수를 그대로 비교할 수 없으니(제출과 폴링 사이 시점 차) 저장 전후로 남은
@@ -313,10 +313,12 @@ async def _do_reduce(db: Session, analysis: Analysis) -> None:
     # 재실행 1회 비용의 약 47%가 보고서 재생성이다. model_ver가 바뀌면 같은 논문
     # 집합이 전량 재추출된 것이라 건수가 그대로여도 "늘어난 것"으로 취급해야 하므로
     # analyzed_count 비교만이 아니라 report_model_ver로 이를 별도로 확인한다.
+    # report_md 검사를 맨 뒤에 둔다 — loop()가 이 컬럼을 defer로 빼놨기 때문에 이걸
+    # 먼저 보면 값싼 두 비교로 걸러낼 수 있는 경우에도 12KB 본문을 굳이 읽어온다.
     skip_reduce = (
-        analysis.report_md is not None
+        analysis.report_model_ver == current_model_ver
         and new_count <= prior_analyzed_count
-        and analysis.report_model_ver == current_model_ver
+        and analysis.report_md is not None
     )
     if skip_reduce:
         logger.info(
@@ -399,6 +401,24 @@ def next_scheduled_run_at(db: Session, now: datetime | None = None) -> datetime:
     return this_month.replace(year=year, month=month)
 
 
+def _queue_all_active(
+    db: Session, cfg: ScheduleSetting, now: datetime, *, trigger: str
+) -> tuple[int, int, list[int]]:
+    """활성 세부기술 전부 × 당해~(당해-years_back)연도를 force=True로 큐잉한다.
+
+    정기 실행(run_scheduled_if_due)과 수동 즉시 실행(run_scheduled_now)이 공유하는 부분.
+    두 함수가 진짜로 다른 것은 run_month 키 구성과 due 판정뿐이므로 그쪽은 호출부에 남긴다.
+    반환값은 (큐잉 건수, 활성 세부기술 수, 대상 연도) — 뒤 둘은 호출부 로그 문구에 쓰인다.
+    """
+    years = [now.year - i for i in range(cfg.years_back + 1)]
+    subfields = db.query(Subfield).filter(Subfield.active.is_(True)).all()
+    queued = 0
+    for subfield in subfields:
+        for year in years:
+            queued += len(enqueue(db, subfield, year, year, force=True, trigger=trigger))
+    return queued, len(subfields), years
+
+
 def run_scheduled_if_due(db: Session, *, now: datetime | None = None) -> int | None:
     """매월 (DB) schedule_day일 schedule_hour시대(schedule_timezone)에 활성 세부기술
     전부를 당해~(당해-schedule_years_back)연도로 enqueue한다. 설정은 get_schedule_settings로
@@ -432,18 +452,12 @@ def run_scheduled_if_due(db: Session, *, now: datetime | None = None) -> int | N
         logger.debug("[스케줄러] %s 이미 실행됨 — 건너뜀", run_month)
         return None
 
-    years = [now.year - i for i in range(cfg.years_back + 1)]
-    subfields = db.query(Subfield).filter(Subfield.active.is_(True)).all()
-    queued = 0
-    for subfield in subfields:
-        for year in years:
-            queued += len(enqueue(db, subfield, year, year, force=True, trigger="scheduled"))
-
+    queued, subfield_count, years = _queue_all_active(db, cfg, now, trigger="scheduled")
     row.queued_count = queued
     db.commit()
     logger.info(
         "[스케줄러] %s 월간 자동 분석 큐잉 완료 — 활성 세부기술 %d개 × 연도 %s, %d건 큐잉",
-        run_month, len(subfields), years, queued,
+        run_month, subfield_count, years, queued,
     )
     return queued
 
@@ -474,18 +488,12 @@ def run_scheduled_now(db: Session, *, now: datetime | None = None) -> int:
     db.add(row)
     db.flush()
 
-    years = [now.year - i for i in range(cfg.years_back + 1)]
-    subfields = db.query(Subfield).filter(Subfield.active.is_(True)).all()
-    queued = 0
-    for subfield in subfields:
-        for year in years:
-            queued += len(enqueue(db, subfield, year, year, force=True, trigger="manual"))
-
+    queued, subfield_count, years = _queue_all_active(db, cfg, now, trigger="manual")
     row.queued_count = queued
     db.commit()
     logger.info(
         "[스케줄러] 수동 즉시 실행 완료 — 활성 세부기술 %d개 × 연도 %s, %d건 큐잉",
-        len(subfields), years, queued,
+        subfield_count, years, queued,
     )
     return queued
 
@@ -506,14 +514,25 @@ def schedule_history(db: Session, *, limit: int = 12) -> list[dict]:
     이 행 소관이 아니다 — 그래서 같은 trigger 중 "가장 최근" 실행 행에만 채우고
     (is_current_snapshot=True), 더 오래된 행은 0으로 둔다.
     """
+    # 내림차순 limit건 한 번만 싣는다. "시간순 다음 실행"은 이 정렬에서 바로 앞 행이고
+    # (rows[i-1]), trigger별 최신 실행도 각 trigger가 처음 등장하는 행이다 — 전체 테이블을
+    # 다시 싣고 행마다 선형 탐색할 필요가 없다(scheduled_runs는 실행할 때마다 늘어난다).
     rows = db.query(ScheduledRun).order_by(ScheduledRun.ran_at.desc()).limit(limit).all()
     if not rows:
         return []
 
-    all_asc = db.query(ScheduledRun).order_by(ScheduledRun.ran_at.asc()).all()
     latest_ran_at_by_trigger: dict[str, datetime] = {}
-    for r in all_asc:
-        latest_ran_at_by_trigger[r.trigger] = r.ran_at  # 오름차순이라 마지막 값이 최신
+    for r in rows:
+        latest_ran_at_by_trigger.setdefault(r.trigger, r.ran_at)  # 내림차순이라 첫 값이 최신
+
+    # 상태 집계도 (trigger, status)별로 한 번에 세어 둔다 — is_current 행마다 3개씩
+    # 따로 세면 같은 테이블을 6번 훑는다.
+    status_counts: dict[tuple[str, str], int] = {
+        (trigger, status): count
+        for trigger, status, count in db.query(
+            Analysis.trigger, Analysis.status, func.count(Analysis.id)
+        ).group_by(Analysis.trigger, Analysis.status).all()
+    }
 
     tz = ZoneInfo(settings.schedule_timezone)
 
@@ -521,8 +540,8 @@ def schedule_history(db: Session, *, limit: int = 12) -> list[dict]:
         return schedule_tz_naive.replace(tzinfo=tz).astimezone(timezone.utc).replace(tzinfo=None)
 
     result = []
-    for row in rows:
-        next_ran_at = next((r.ran_at for r in all_asc if r.ran_at > row.ran_at), None)
+    for i, row in enumerate(rows):
+        next_ran_at = rows[i - 1].ran_at if i else None  # 내림차순 — 바로 앞 행이 다음 실행
         window_start = to_utc_naive(row.ran_at)
         window_end = (
             to_utc_naive(next_ran_at) if next_ran_at
@@ -536,15 +555,11 @@ def schedule_history(db: Session, *, limit: int = 12) -> list[dict]:
 
         is_current = latest_ran_at_by_trigger.get(row.trigger) == row.ran_at
         if is_current:
-            failed_count = db.query(Analysis).filter(
-                Analysis.trigger == row.trigger, Analysis.status == "failed"
-            ).count()
-            paused_count = db.query(Analysis).filter(
-                Analysis.trigger == row.trigger, Analysis.status == "paused"
-            ).count()
-            in_progress_count = db.query(Analysis).filter(
-                Analysis.trigger == row.trigger, Analysis.status.in_(ACTIVE_STATES)
-            ).count()
+            failed_count = status_counts.get((row.trigger, "failed"), 0)
+            paused_count = status_counts.get((row.trigger, "paused"), 0)
+            in_progress_count = sum(
+                status_counts.get((row.trigger, s), 0) for s in ACTIVE_STATES
+            )
         else:
             failed_count = paused_count = in_progress_count = 0
 
@@ -572,7 +587,17 @@ async def loop() -> None:
             try:
                 run_scheduled_if_due(db)
                 resume_paused(db)
-                active = db.query(Analysis).filter(Analysis.status.in_(ACTIVE_STATES)).all()
+                # report_md(보고서 마크다운, 건당 12KB 규모)와 stats_json은 advance()가
+                # 읽지 않는다 — _do_reduce가 쓰기만 한다. defer하지 않으면 30초마다
+                # 활성 분석 전체의 보고서 본문을 통째로 읽어온다(월간 실행 직후엔
+                # 55개 세부기술 × 연도 규모라 수 MB에 이른다). 지연 로딩이라
+                # _do_reduce의 대입은 그대로 동작한다.
+                active = (
+                    db.query(Analysis)
+                    .filter(Analysis.status.in_(ACTIVE_STATES))
+                    .options(defer(Analysis.report_md), defer(Analysis.stats_json))
+                    .all()
+                )
                 for analysis in active:
                     await advance(db, analysis)
             finally:

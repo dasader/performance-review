@@ -19,7 +19,9 @@ class Paper(Base):
     institutions_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     countries_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     citations: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    source: Mapped[str] = mapped_column(String(20), nullable=False)  # openalex | kci
+    # openalex | kci | both — "both"는 양쪽에서 같은 논문이 걸렸다는 뜻이다
+    # (search.combine_source, I10). stats.by_source가 이 세 값을 그대로 구분해 센다.
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
     korea_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 

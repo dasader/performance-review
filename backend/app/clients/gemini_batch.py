@@ -4,25 +4,14 @@ import logging
 import tempfile
 from pathlib import Path
 
-from google import genai
 from google.genai import types
 
-from app.clients.gemini_sync import _executor
+# 클라이언트 지연 생성과 스레드풀은 gemini_sync가 이미 갖고 있다 — 같은 것을 두 벌
+# 두면 "키 없이도 컨테이너는 떠야 한다"는 불변식이 두 곳으로 갈라진다.
+from app.clients.gemini_sync import _executor, _get_client
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-
-# 지연 생성: GEMINI_API_KEY가 비어 있으면 genai.Client()가 즉시 ValueError를 던진다.
-# 모듈 import 시점(=컨테이너 기동)에 만들면 키 없이 앱 전체가 뜨지 못하므로, 실제로
-# batch를 부르는 시점까지 미룬다.
-_client: genai.Client | None = None
-
-
-def _get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        _client = genai.Client(api_key=settings.gemini_api_key)
-    return _client
 
 
 _TERMINAL_OK = "JOB_STATE_SUCCEEDED"

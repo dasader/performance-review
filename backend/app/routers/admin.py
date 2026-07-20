@@ -12,7 +12,7 @@ from app.deps import require_admin
 from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import Field, Subfield
 from app.models.schedule import AnalysisRun
-from app.services import budget, mapper, runner
+from app.services import budget, mapper, runner, search
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -132,23 +132,31 @@ async def preview(payload: PreviewIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="세부기술을 찾을 수 없습니다.")
 
     try:
-        budget.check_budget(db, 2 * settings.openalex_search_cost_usd)
+        budget.check_budget(db, settings.openalex_search_cost_usd)
     except budget.BudgetExceeded as e:
         raise HTTPException(status_code=429, detail=str(e)) from e
 
     async with httpx.AsyncClient() as client:
-        count, cost = await openalex.count_only(
-            subfield.query, payload.year_from, payload.year_to, client=client
-        )
-        sample = await openalex.search(
-            subfield.query, payload.year_from, payload.year_to, client=client, limit=20
-        )
+        # count_only를 따로 부르지 않는다 — search()가 돌려주는 total_count가 meta.count,
+        # 즉 잘리기 전 전체 건수라 count_only와 같은 값이다. 두 번 부르면 OpenAlex가
+        # 요청 건당(반환 수와 무관하게) 과금하므로 미리보기 클릭마다 값이 두 배가 된다.
+        try:
+            sample = await openalex.search(
+                subfield.query, payload.year_from, payload.year_to, client=client, limit=20
+            )
+        except Exception as e:
+            # 페이지 도중 실패해도 이미 과금된 몫은 예산에 남겨야 한다(search.collect와
+            # 같은 패턴). count_only를 없앤 뒤로는 이 호출이 미리보기의 유일한 과금
+            # 지점이라, 여기서 놓치면 실패한 미리보기의 비용이 통째로 누락된다.
+            budget.record_usage(db, getattr(e, "cost_usd", 0.0), None)
+            raise
         kci_papers = await kci.search(
             subfield.kci_query(), payload.year_from, payload.year_to, client=client, limit=20
         )
 
-    budget.record_usage(db, cost + sample.cost_usd, sample.remaining)
-    pages = max(1, -(-min(count, settings.max_papers_per_analysis) // settings.openalex_per_page))
+    count = sample.total_count
+    budget.record_usage(db, sample.cost_usd, sample.remaining)
+    pages = openalex.estimate_pages(count)
     openalex_cost = round(pages * settings.openalex_search_cost_usd, 4)
 
     # C3: 신규 추출 대상 추정. 정확히 하려면 openalex_count에서 이미 paper_extractions에
@@ -213,9 +221,23 @@ def run(payload: RunIn, db: Session = Depends(get_db)):
 @router.get("/dashboard")
 def dashboard(db: Session = Depends(get_db)):
     """세부기술 × 연도 격자. 검색식이 바뀐 항목은 stale=True로 표시된다."""
+    subfields = db.query(Subfield).order_by(Subfield.field_id, Subfield.name).all()
+
+    # 세부기술마다 따로 조회하면 55개 세부기술에 56번 질의하게 되고, 전체 ORM 행을
+    # 실으면 화면이 쓰지도 않는 report_md(건당 12KB 규모)와 stats_json까지 딸려온다.
+    # 필요한 컬럼만 한 번에 읽어 subfield_id로 묶는다. stale 판정도 여기서 같이 받은
+    # query_hash로 계산해 셀마다 질의가 나가지 않게 한다.
+    by_subfield: dict[int, list] = {}
+    for a in db.query(
+        Analysis.id, Analysis.subfield_id, Analysis.year, Analysis.status,
+        Analysis.searched_count, Analysis.analyzed_count, Analysis.snapshot_at,
+        Analysis.error, Analysis.query_hash,
+    ).all():
+        by_subfield.setdefault(a.subfield_id, []).append(a)
+
     rows = []
-    for subfield in db.query(Subfield).order_by(Subfield.field_id, Subfield.name).all():
-        analyses = db.query(Analysis).filter(Analysis.subfield_id == subfield.id).all()
+    for subfield in subfields:
+        analyses = by_subfield.get(subfield.id, [])
         rows.append({
             "subfield_id": subfield.id,
             "subfield_name": subfield.name,
@@ -229,7 +251,7 @@ def dashboard(db: Session = Depends(get_db)):
                     "searched_count": a.searched_count,
                     "analyzed_count": a.analyzed_count,
                     "snapshot_at": a.snapshot_at.isoformat() if a.snapshot_at else None,
-                    "stale": runner.is_stale(db, a, subfield),
+                    "stale": a.query_hash != search.query_hash(subfield, a.year, a.year),
                     "error": a.error,
                 }
                 for a in sorted(analyses, key=lambda x: x.year, reverse=True)
@@ -268,14 +290,9 @@ def update_schedule(payload: ScheduleIn, db: Session = Depends(get_db)):
     cfg.hour = payload.hour
     cfg.years_back = payload.years_back
     db.commit()
-    return {
-        "enabled": cfg.enabled,
-        "day": cfg.day,
-        "hour": cfg.hour,
-        "years_back": cfg.years_back,
-        "timezone": settings.schedule_timezone,
-        "next_run_at": runner.next_scheduled_run_at(db).isoformat(),
-    }
+    # 프론트가 저장 후 곧바로 재조회하는 화면이라, GET과 같은 응답(history 포함)을
+    # 그대로 돌려준다 — 응답 dict를 두 벌 유지하면 한쪽만 고쳐져 어긋난다.
+    return get_schedule(db)
 
 
 @router.post("/schedule/run-now")
