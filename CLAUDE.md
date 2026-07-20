@@ -43,7 +43,7 @@ NN=00은 backend가 8000이 되어 nst-wiki와 충돌하므로 03을 배정했�
 | # | 단계 | 파일 | 비고 |
 |---|---|---|---|
 | 1 | search | `app/services/search.py` (`collect`, `upsert_papers`) | OpenAlex + KCI 병렬 검색, DOI/title 정규화 후 중복 제거 |
-| 2 | filter | `app/services/mapper.py::pending_papers` | 한국 판정·abstract 없는 레코드 제외·추출 캐시 히트 제외 |
+| 2 | filter | `app/services/mapper.py::pending_papers` | abstract 없는 레코드 제외·추출 캐시 히트 제외. **한국 판정은 여기 없다** — OpenAlex 서버측 `country_code:KR` 필터가 이미 걸러 온다 |
 | 3 | map | `app/services/mapper.py::build_requests` + `app/clients/gemini_batch.py` | Batch JSONL 제출 → 폴링 → 결과 저장, thinking=low |
 | 4 | stats | `app/services/stats.py::compute` | 코드로만 집계, LLM 미사용 |
 | 5 | reduce | `app/services/reducer.py::reduce_subfield` | 세부기술별 보고서, thinking=high. 건수가 `REDUCE_GROUP_THRESHOLD`(500) 넘으면 3단 reduce |
