@@ -6,6 +6,7 @@ import FieldList from "./pages/FieldList";
 const FieldDetail = lazy(() => import("./pages/FieldDetail"));
 const Report = lazy(() => import("./pages/Report"));
 const Admin = lazy(() => import("./pages/Admin"));
+const FieldReportPage = lazy(() => import("./pages/FieldReportPage"));
 
 export default function App() {
   return (
@@ -14,6 +15,12 @@ export default function App() {
         <Routes>
           <Route path="/" element={<FieldList />} />
           <Route path="/fields/:fieldId" element={<FieldDetail />} />
+          {/* 분야 보고서 전용 페이지 — 통독·PDF 출력용. 분야 화면의 접힌 섹션은 훑어보기용이다. */}
+          <Route path="/fields/:fieldId/report/:year" element={<FieldReportPage kind="report" />} />
+          <Route
+            path="/fields/:fieldId/roadmap-check/:year"
+            element={<FieldReportPage kind="roadmap-check" />}
+          />
           <Route path="/analyses/:analysisId" element={<Report />} />
           <Route path="/subfields/:subfieldId/:year" element={<Report />} />
           <Route path="/admin" element={<Admin />} />

@@ -105,6 +105,9 @@ export interface Field {
   name: string;
   slug: string;
   subfields: Subfield[];
+  // 랜딩 화면 진행 파이용 — 서버 기준 "올해"와 그 해에 분석이 끝난 활성 세부기술 수.
+  current_year: number;
+  current_year_done: number;
 }
 
 // runner.py::ACTIVE_STATES와 같은 집합 — 진행 중인 분석은 batch가 이미 제출됐을 수
@@ -134,6 +137,37 @@ export interface FieldSummary {
   subfields: SummarySubfield[];
   total_searched: number;
   total_analyzed: number;
+}
+
+// 분야(대분류) 보고서 — 세부기술 보고서들을 LLM 1콜로 합성한 결과. 생성은 관리자만
+// 할 수 있고(POST /admin/fields/{id}/report), 조회는 공개다. 아직 생성 전이면 404.
+export interface FieldReport {
+  field_id: number;
+  year: number;
+  // pending(큐잉됨) | done | failed. "생성"은 즉시 실행이 아니라 큐잉이라, 화면은
+  // status를 폴링해 done될 때 갱신한다.
+  status: "pending" | "done" | "failed";
+  error: string | null;
+  report_md: string;
+  // 합성에 들어간 세부기술 보고서 수 / 지금 완성돼 있는 수. 다르면 stale.
+  source_count: number;
+  current_count: number;
+  stale: boolean;
+  generated_at: string | null;
+}
+
+// 분야 종합 보고서 전용 페이지의 "세부기술 보고서 포함" 토글용. report_md는 세부기술
+// 보고서 화면과 똑같이 각주 치환이 적용된 상태로 온다(논문 제목 → [n]), references는
+// 그 각주가 가리키는 목록이다.
+export interface SubfieldReportBody {
+  name: string;
+  report_md: string;
+  references: Reference[];
+}
+export interface SubfieldReportsResponse {
+  field_id: number;
+  year: number;
+  reports: SubfieldReportBody[];
 }
 
 export interface CitationStats {
@@ -323,4 +357,35 @@ export interface VisitorStats {
   today: number;
   this_week: number;
   daily: DailyVisitorCount[];
+}
+
+// 로드맵 이행 점검 — 로드맵의 단계별 목표를 전수로 대조한 보고서.
+// 분야 종합 보고서(FieldReport)와 별개다: 로드맵이 없는 분야도 종합 보고서는 쓸 수
+// 있어야 하고, 로드맵만 개정됐을 때 점검만 다시 돌릴 수 있어야 한다.
+export interface RoadmapCheck {
+  field_id: number;
+  year: number;
+  status: "pending" | "done" | "failed";
+  error: string | null;
+  report_md: string;
+  source_count: number;
+  current_count: number;
+  // 로드맵에서 코드로 센 목표 행 수 / 생성된 보고서에서 실제로 점검된 행 수.
+  goal_count: number;
+  checked_count: number;
+  // 둘이 다르면 모델이 목표를 뭉뚱그려 일부가 빠졌다는 뜻 — "빠짐없이 점검했다"로
+  // 읽히면 안 되므로 화면에서 경고한다.
+  incomplete: boolean;
+  roadmap_version: string;
+  // 세부기술 보고서가 늘었거나 로드맵 판본이 바뀌면 true.
+  stale: boolean;
+  generated_at: string | null;
+}
+
+export interface Roadmap {
+  version_label: string;
+  content_md: string;
+  // 저장된 원문에서 센 목표 행 수. 0이면 표 형식이 아니라 전수 점검을 강제할 수 없다.
+  goal_count: number;
+  updated_at: string | null;
 }

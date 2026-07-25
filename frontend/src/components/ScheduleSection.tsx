@@ -212,7 +212,7 @@ export default function ScheduleSection({
                 type="button"
                 disabled={saving || !dirty}
                 onClick={handleSave}
-                className="border border-ink bg-ink px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/90 disabled:opacity-40"
+                className="btn btn-primary"
               >
                 {saving ? "저장 중…" : dirty ? "설정 저장" : "저장됨"}
               </button>
@@ -220,7 +220,7 @@ export default function ScheduleSection({
                 type="button"
                 disabled={runningNow}
                 onClick={handleRunNow}
-                className="border border-warning/50 px-4 py-2 text-sm font-medium text-warning transition-colors hover:bg-warning/10 disabled:opacity-40"
+                className="btn btn-warning"
               >
                 {runningNow ? "실행 요청 중…" : "지금 실행"}
               </button>

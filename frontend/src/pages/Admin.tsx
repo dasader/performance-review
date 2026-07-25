@@ -17,8 +17,24 @@ import StatusBadge from "../components/StatusBadge";
 import SubfieldEditor from "../components/SubfieldEditor";
 import RunDialog from "../components/RunDialog";
 import ScheduleSection from "../components/ScheduleSection";
+import RoadmapEditor from "../components/RoadmapEditor";
+import FieldReportsPanel from "../components/FieldReportsPanel";
+
+// 관리자 화면이 세로로 길어져 스크롤로만 탐색하게 됐다. 작업 단위로 묶는다.
+// "분석 실행"과 "실행 상태"는 한 탭에 둔다 — 실행한 뒤 바로 상태를 보는 흐름이라
+// 나누면 탭을 오가야 한다.
+const TABS = [
+  { id: "subfields", label: "세부기술·검색식" },
+  { id: "run", label: "분석 실행·상태" },
+  { id: "schedule", label: "자동 스케줄" },
+  { id: "roadmap", label: "전략기술로드맵" },
+  { id: "field-reports", label: "분야 보고서" },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
 
 export default function Admin() {
+  const [tab, setTab] = useState<TabId>("subfields");
   const currentYear = new Date().getFullYear();
   const { key, save, clear } = useAdminKey();
   const [input, setInput] = useState("");
@@ -32,7 +48,11 @@ export default function Admin() {
   const [retryingId, setRetryingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  // /admin/subfields (active 포함) 결과 — SubfieldEditor가 이미 불러온 것을 끌어올려
+  // /admin/subfields (active 포함) 결과 — 탭이 나뉜 뒤로는 Admin이 직접 읽는다.
+  // SubfieldEditor가 끌어올려 주던 값에 의존하면, 사용자가 "분석 실행" 탭으로 바로
+  // 들어갔을 때 SubfieldEditor가 마운트되지 않아 실행 폼이 영영 뜨지 않는다.
+  // 아래 주석은 그 시절의 설명이다:
+  // (구) SubfieldEditor가 이미 불러온 것을 끌어올려
   // RunDialog의 실행 대상 목록에서 비활성 세부기술을 제외하는 데 재사용한다.
   const [subfields, setSubfields] = useState<AdminSubfield[] | null>(null);
   // SubfieldEditor에서 검색식이 바뀔 때마다 증가하는 세대 카운터. RunDialog는 이 값이
@@ -88,9 +108,17 @@ export default function Admin() {
       .catch((e) => setFieldsError(e instanceof Error ? e.message : "분야 목록을 불러오지 못했습니다."));
   }, []);
 
+  const loadSubfields = useCallback(() => {
+    if (!key) return;
+    get<AdminSubfield[]>("/admin/subfields", key)
+      .then(setSubfields)
+      .catch(() => setSubfields([]));
+  }, [key]);
+
   useEffect(() => {
     loadFields();
-  }, [loadFields]);
+    loadSubfields();
+  }, [loadFields, loadSubfields]);
 
   if (!key) {
     return (
@@ -135,7 +163,7 @@ export default function Admin() {
             <button
               type="submit"
               disabled={authing || !input}
-              className="mt-4 w-full border border-ink bg-ink py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/90 disabled:opacity-40"
+              className="mt-4 btn btn-primary w-full"
             >
               {authing ? "확인 중…" : "접속"}
             </button>
@@ -165,12 +193,28 @@ export default function Admin() {
             <button
               type="button"
               onClick={clear}
-              className="border border-border px-3 py-1.5 text-xs text-ink-light hover:border-accent hover:text-accent"
+              className="btn btn-neutral btn-sm"
             >
               로그아웃
             </button>
           </div>
         </header>
+
+        {/* role="tablist"를 제대로 쓰려면 화살표 키 이동·aria-controls까지 필요하다.
+            여기 필요한 건 화면 전환 토글이라 FieldDetail의 연도 선택과 같이 aria-pressed를 쓴다. */}
+        <div className="mb-6 flex flex-wrap gap-2 border-b border-border pb-3" aria-label="관리 메뉴">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={tab === t.id}
+              onClick={() => setTab(t.id)}
+className="btn btn-toggle btn-sm"
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
 
         {error && <p className="mb-6 border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</p>}
 
@@ -183,20 +227,20 @@ export default function Admin() {
             </button>
           </p>
         )}
-        {fields && (
+        {tab === "subfields" && fields && (
           <SubfieldEditor
             adminKey={key}
             fields={fields}
             onChanged={() => {
               loadDashboard(key);
+              loadSubfields();
               setSubfieldGen((g) => g + 1);
             }}
             onUnauthorized={onUnauthorized}
-            onItemsLoaded={setSubfields}
           />
         )}
 
-        {data && subfields && (
+        {tab === "run" && data && subfields && (
           <RunDialog
             adminKey={key}
             rows={subfields
@@ -211,9 +255,16 @@ export default function Admin() {
           />
         )}
 
-        <ScheduleSection adminKey={key} onUnauthorized={onUnauthorized} />
+        {tab === "schedule" && <ScheduleSection adminKey={key} onUnauthorized={onUnauthorized} />}
+
+        {tab === "roadmap" && fields && <RoadmapEditor adminKey={key} fields={fields} />}
+
+        {tab === "field-reports" && (
+          <FieldReportsPanel adminKey={key} onUnauthorized={onUnauthorized} />
+        )}
 
         {/* 세부기술·검색식 / 분석 실행 섹션과 같은 카드로 묶어 시각적 단위를 맞춘다. */}
+        {tab === "run" && (
         <section className="mt-6 border border-border bg-surface p-5">
         <h2 className="mb-3 font-display text-lg font-semibold text-accent">실행 상태</h2>
 
@@ -276,7 +327,7 @@ export default function Admin() {
                                 setRetryingId(null);
                               }
                             }}
-                            className="mr-2 border border-border px-2 py-1 text-xs text-ink-light hover:border-accent hover:text-accent disabled:opacity-40"
+                            className="mr-2 btn btn-neutral btn-sm"
                           >
                             {retryingId === cell.analysis_id ? "요청 중…" : "재실행"}
                           </button>
@@ -288,7 +339,7 @@ export default function Admin() {
                             type="button"
                             disabled={deletingId === cell.analysis_id}
                             onClick={() => handleDeleteAnalysis(row, cell)}
-                            className="border border-danger/50 px-2 py-1 text-xs text-danger hover:border-danger hover:bg-danger/5 disabled:opacity-40"
+                            className="btn btn-danger btn-sm"
                           >
                             {deletingId === cell.analysis_id ? "삭제 중…" : "삭제"}
                           </button>
@@ -302,6 +353,7 @@ export default function Admin() {
           </div>
         )}
         </section>
+        )}
       </main>
       <Footer />
     </div>

@@ -22,7 +22,7 @@ export default function TopBar() {
           {!isAdmin && (
             <Link
               to="/admin"
-              className="inline-flex items-center gap-1.5 border border-border px-3 py-1.5 text-xs text-ink-light hover:border-accent hover:text-accent"
+              className="inline-flex items-center gap-1.5 btn btn-neutral btn-sm"
             >
               <span aria-hidden="true">⚙</span>
               관리자

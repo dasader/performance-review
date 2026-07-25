@@ -618,3 +618,414 @@ def test_analysis_report_footnotes_leaves_enumeration_parens_untouched(client):
     body = r.json()
     assert body["report_md"] == md
     assert body["references"] == []
+
+
+def _seed_done_analysis(client, subfield_name, report_md):
+    """분야 1에 세부기술 하나를 추가하고 done 상태 분석을 붙인다."""
+    db = app.dependency_overrides[get_db]()
+    s = Subfield(field_id=1, name=subfield_name, query="q")
+    db.add(s)
+    db.flush()
+    db.add(Analysis(
+        subfield_id=s.id, year=2026, status="done", query_hash="h",
+        report_md=report_md, stats_json={},
+    ))
+    db.commit()
+    db.close()
+
+
+def _drain_report_queue():
+    """pending 분야 보고서·로드맵 점검을 전부 처리한다 — runner.loop 없이 테스트에서
+    직접 소화한다. POST는 이제 pending 큐잉만 하므로, done을 기대하는 테스트는 이걸
+    호출한 뒤 조회한다. advance_field_reports가 한 틱에 하나씩 처리하므로 반복한다."""
+    import asyncio
+
+    from app.models.field import FieldReport, RoadmapCheck
+    from app.services import runner
+
+    for _ in range(100):  # 무한 루프 방지 상한
+        db = app.dependency_overrides[get_db]()
+        pending = (
+            db.query(FieldReport).filter(FieldReport.status == "pending").count()
+            + db.query(RoadmapCheck).filter(RoadmapCheck.status == "pending").count()
+        )
+        if not pending:
+            db.close()
+            return
+        asyncio.run(runner.advance_field_reports(db))
+        db.close()
+
+
+def test_field_report_roundtrip(client, monkeypatch):
+    """rollup 호출부: 완성된 세부기술 보고서만 합성 입력으로 들어가고,
+    결과가 캐시돼 공개 조회로 읽힌다."""
+    _seed_done_analysis(client, "초전도 큐비트", "## 성과\n큐비트 성과 본문")
+    # 보고서 없이 done인 행은 입력에서 빠져야 한다 — 넣으면 모델이 지어낸다.
+    _seed_done_analysis(client, "빈 세부기술", None)
+
+    captured = {}
+
+    async def fake_generate(system, user, *, thinking, **kwargs):
+        captured["user"] = user
+        return "# 양자 2026년 분야 보고서"
+
+    monkeypatch.setattr("app.clients.gemini_sync.generate", fake_generate)
+
+    # POST는 pending 큐잉만 한다(즉시 실행 아님).
+    r = client.post("/api/admin/fields/1/report?year=2026",
+                    headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "pending"
+    assert client.get("/api/fields/1/report?year=2026").json()["status"] == "pending"
+
+    _drain_report_queue()  # runner가 처리
+
+    assert "큐비트 성과 본문" in captured["user"]
+    assert "빈 세부기술" not in captured["user"]
+    got = client.get("/api/fields/1/report?year=2026").json()
+    assert got["status"] == "done"
+    assert got["report_md"] == "# 양자 2026년 분야 보고서"
+    assert got["source_count"] == 1
+    assert got["stale"] is False
+
+
+def test_field_report_marks_stale_when_new_subfield_completes(client, monkeypatch):
+    _seed_done_analysis(client, "초전도 큐비트", "본문 A")
+
+    async def fake_generate(system, user, *, thinking, **kwargs):
+        return "합성 결과"
+
+    monkeypatch.setattr("app.clients.gemini_sync.generate", fake_generate)
+    client.post("/api/admin/fields/1/report?year=2026",
+                headers={"X-Admin-Key": settings.admin_key})
+    _drain_report_queue()
+
+    _seed_done_analysis(client, "이온트랩", "본문 B")
+    assert client.get("/api/fields/1/report?year=2026").json()["stale"] is True
+
+
+def test_field_report_refuses_when_no_subfield_report(client):
+    """빈 입력으로 LLM을 부르면 분야 성과를 통째로 지어낸다 — 큐잉 시점(enqueue)에
+    409로 막는다."""
+    r = client.post("/api/admin/fields/1/report?year=2026",
+                    headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 409
+
+
+def test_field_report_404_for_unknown_field(client):
+    """없는 분야는 404 — "보고서가 없다"(409)와 구분되어야 한다."""
+    r = client.post("/api/admin/fields/999/report?year=2026",
+                    headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 404
+
+
+def test_field_report_404_before_generation(client):
+    assert client.get("/api/fields/1/report?year=2026").status_code == 404
+
+
+# ── 로드맵 이행 점검 ──
+
+_ROADMAP_MD = """# 테스트 로드맵
+
+## 1. 중점기술 A
+
+| 단계 | 시기 | 기술적 목표 |
+|------|------|------------|
+| 1단계 | ~'26년 | 목표 하나 |
+| 2단계 | ~'30년 | 목표 둘 |
+
+## 2. 중점기술 B
+
+| 구분 | 기술적 목표 |
+|------|------------|
+| 통합 | 목표 셋 |
+"""
+
+
+def _put_roadmap(client, content=_ROADMAP_MD, version="v1"):
+    return client.put("/api/admin/fields/1/roadmap",
+                      json={"version_label": version, "content_md": content},
+                      headers={"X-Admin-Key": settings.admin_key})
+
+
+def test_count_goal_rows_skips_headers_and_separators():
+    """헤더 행과 구분선을 빼고 본문 행만 센다 — 이 숫자가 프롬프트에 주입돼
+    전수 점검을 강제하므로, 틀리면 점검이 조용히 축소된다."""
+    from app.services import reducer
+    assert reducer.count_goal_rows(_ROADMAP_MD) == 3
+    assert reducer.count_goal_rows("표가 전혀 없는 본문") == 0
+
+
+def test_roadmap_put_rejects_content_without_table(client):
+    """표가 없으면 goal_count가 0이 되어 전수 점검 강제가 무력화된다 — 저장 시점에 막는다."""
+    r = _put_roadmap(client, content="단계별 목표를 표 없이 줄글로만 썼습니다.")
+    assert r.status_code == 422
+
+
+def test_roadmap_put_and_get(client):
+    assert _put_roadmap(client).json()["goal_count"] == 3
+    got = client.get("/api/admin/fields/1/roadmap",
+                     headers={"X-Admin-Key": settings.admin_key}).json()
+    assert got["version_label"] == "v1"
+    assert got["goal_count"] == 3
+
+
+def test_roadmap_get_returns_blank_when_absent(client):
+    """미등록 분야는 404가 아니라 빈 값 — 편집 화면이 그대로 새 입력 폼이 된다."""
+    got = client.get("/api/admin/fields/1/roadmap",
+                     headers={"X-Admin-Key": settings.admin_key}).json()
+    assert got["content_md"] == ""
+    assert got["goal_count"] == 0
+
+
+def test_roadmap_check_refuses_without_roadmap(client):
+    _seed_done_analysis(client, "세부기술 A", "본문 A")
+    r = client.post("/api/admin/fields/1/roadmap-check?year=2026",
+                    headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 409
+    assert "로드맵" in r.json()["detail"]
+
+
+def test_roadmap_check_refuses_without_subfield_report(client):
+    _put_roadmap(client)
+    r = client.post("/api/admin/fields/1/roadmap-check?year=2026",
+                    headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 409
+
+
+def test_roadmap_check_injects_goal_count_and_verifies_row_count(client, monkeypatch):
+    """목표 행 수가 프롬프트에 주입되고, 생성된 보고서의 행 수가 그와 일치하면
+    incomplete=False로 저장된다."""
+    _seed_done_analysis(client, "세부기술 A", "본문 A")
+    _put_roadmap(client)
+
+    captured = {}
+    # 목표 3행과 같은 3행짜리 점검 표를 돌려준다.
+    good = ("| 단계 | 목표 | 판정 | 근거 |\n|---|---|---|---|\n"
+            "| 1단계 | 목표 하나 | 관련 연구 확인 | 본문 A |\n"
+            "| 2단계 | 목표 둘 | 데이터 없음 | - |\n"
+            "| 통합 | 목표 셋 | 데이터 없음 | - |\n")
+
+    async def fake_generate(system, user, *, thinking, **kwargs):
+        captured["system"] = system
+        captured["user"] = user
+        return good
+
+    monkeypatch.setattr("app.clients.gemini_sync.generate", fake_generate)
+    r = client.post("/api/admin/fields/1/roadmap-check?year=2026",
+                    headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "pending"
+    _drain_report_queue()
+
+    # 행 수가 프롬프트에 실제로 박혔는지 — 이게 빠지면 모델이 목표를 뭉뚱그린다.
+    assert "총 3개" in captured["system"]
+    # 로드맵(A)과 보고서(B)가 둘 다 입력에 들어갔다.
+    assert "목표 하나" in captured["user"] and "본문 A" in captured["user"]
+
+    got = client.get("/api/fields/1/roadmap-check?year=2026").json()
+    assert got["status"] == "done"
+    assert got["goal_count"] == 3 and got["checked_count"] == 3
+    assert got["incomplete"] is False
+    assert got["stale"] is False
+    assert got["roadmap_version"] == "v1"
+
+
+def test_roadmap_check_flags_incomplete_when_rows_are_dropped(client, monkeypatch):
+    """모델이 목표를 뭉뚱그려 행이 줄면(실측된 실패 모드) incomplete=True로 남는다."""
+    _seed_done_analysis(client, "세부기술 A", "본문 A")
+    _put_roadmap(client)
+
+    short = ("| 단계 | 목표 | 판정 | 근거 |\n|---|---|---|---|\n"
+             "| 1~2단계 | 목표 하나~둘 | 관련 연구 확인 | 본문 A |\n")
+
+    async def fake_generate(system, user, *, thinking, **kwargs):
+        return short
+
+    monkeypatch.setattr("app.clients.gemini_sync.generate", fake_generate)
+    client.post("/api/admin/fields/1/roadmap-check?year=2026",
+                headers={"X-Admin-Key": settings.admin_key})
+    _drain_report_queue()
+
+    got = client.get("/api/fields/1/roadmap-check?year=2026").json()
+    assert got["goal_count"] == 3 and got["checked_count"] == 1
+    assert got["incomplete"] is True
+
+
+def test_roadmap_check_goes_stale_when_roadmap_version_changes(client, monkeypatch):
+    """로드맵만 개정돼도 재생성 대상이다 — 세부기술 보고서 수는 그대로일 수 있다."""
+    _seed_done_analysis(client, "세부기술 A", "본문 A")
+    _put_roadmap(client, version="v1")
+
+    async def fake_generate(system, user, *, thinking, **kwargs):
+        return "| 단계 | 목표 | 판정 | 근거 |\n|---|---|---|---|\n| 1 | a | 데이터 없음 | - |\n"
+
+    monkeypatch.setattr("app.clients.gemini_sync.generate", fake_generate)
+    client.post("/api/admin/fields/1/roadmap-check?year=2026",
+                headers={"X-Admin-Key": settings.admin_key})
+    _drain_report_queue()
+    assert client.get("/api/fields/1/roadmap-check?year=2026").json()["stale"] is False
+
+    _put_roadmap(client, version="v2")
+    assert client.get("/api/fields/1/roadmap-check?year=2026").json()["stale"] is True
+
+
+def test_roadmap_delete_keeps_existing_check(client, monkeypatch):
+    """로드맵을 지워도 그 판본으로 만든 점검 보고서는 남는다."""
+    _seed_done_analysis(client, "세부기술 A", "본문 A")
+    _put_roadmap(client)
+
+    async def fake_generate(system, user, *, thinking, **kwargs):
+        return "| 단계 | 목표 | 판정 | 근거 |\n|---|---|---|---|\n| 1 | a | 데이터 없음 | - |\n"
+
+    monkeypatch.setattr("app.clients.gemini_sync.generate", fake_generate)
+    client.post("/api/admin/fields/1/roadmap-check?year=2026",
+                headers={"X-Admin-Key": settings.admin_key})
+    _drain_report_queue()
+    client.delete("/api/admin/fields/1/roadmap", headers={"X-Admin-Key": settings.admin_key})
+    assert client.get("/api/fields/1/roadmap-check?year=2026").status_code == 200
+
+
+def test_roadmap_check_requires_admin_key(client):
+    assert client.post("/api/admin/fields/1/roadmap-check?year=2026").status_code == 401
+    assert client.get("/api/admin/fields/1/roadmap").status_code == 401
+
+
+def test_roadmap_instruction_has_only_goal_count_placeholder():
+    """ROADMAP_CHECK_INSTRUCTION은 .format(goal_count=...)으로 렌더된다 — 본문에
+    다른 중괄호를 넣으면(예시 제목에 {연도}를 쓰는 등) 렌더가 통째로 터진다.
+    실제로 한 번 깨뜨렸던 지점이라 자리표시자 집합을 고정한다."""
+    import string
+    from app.prompts import ROADMAP_CHECK_INSTRUCTION
+
+    fields = {f for _, f, _, _ in string.Formatter().parse(ROADMAP_CHECK_INSTRUCTION) if f is not None}
+    assert fields == {"goal_count"}
+    # 렌더 자체가 되는지도 확인한다.
+    assert "총 65개" in ROADMAP_CHECK_INSTRUCTION.format(goal_count=65)
+
+
+def test_fields_reports_current_year_progress(client):
+    """랜딩 화면 진행 파이용 — 당해연도 done 건수. 비활성 세부기술은 분모(활성 수)에서
+    빠지므로 분자에서도 빠져야 한다. 그러지 않으면 파이가 100%를 넘는다."""
+    from datetime import datetime, timezone
+
+    year = datetime.now(timezone.utc).year
+    db = app.dependency_overrides[get_db]()
+    active = Subfield(field_id=1, name="활성 세부기술", query="q", active=True)
+    inactive = Subfield(field_id=1, name="비활성 세부기술", query="q", active=False)
+    db.add_all([active, inactive])
+    db.flush()
+    for s in (active, inactive):
+        db.add(Analysis(subfield_id=s.id, year=year, status="done", query_hash="h",
+                        report_md="본문", stats_json={}))
+    db.commit()
+    db.close()
+
+    row = next(f for f in client.get("/api/fields").json() if f["id"] == 1)
+    assert row["current_year"] == year
+    # 활성 1건만 센다(비활성 1건 제외). 픽스처의 "양자컴퓨팅"은 분석이 없다.
+    assert row["current_year_done"] == 1
+
+
+# ── 분야 보고서 큐잉·일괄 실행 ──
+
+def test_field_report_failure_marks_failed_not_crash_loop(client, monkeypatch):
+    """생성 중 예외가 나면 그 행만 failed로 남고, 루프(_process_report)가 흡수해
+    다른 큐 항목을 계속 처리한다."""
+    _seed_done_analysis(client, "세부기술 A", "본문 A")
+
+    async def boom(system, user, *, thinking, **kwargs):
+        raise RuntimeError("LLM 폭발")
+
+    monkeypatch.setattr("app.clients.gemini_sync.generate", boom)
+    client.post("/api/admin/fields/1/report?year=2026",
+                headers={"X-Admin-Key": settings.admin_key})
+    _drain_report_queue()
+
+    got = client.get("/api/fields/1/report?year=2026").json()
+    assert got["status"] == "failed"
+    assert "LLM 폭발" in got["error"]
+
+
+def test_run_all_queues_only_eligible_fields(client, monkeypatch):
+    """일괄 실행은 세부기술 보고서가 있는 분야만 큐잉하고 나머지는 건너뛴다."""
+    from datetime import datetime, timezone
+
+    year = datetime.now(timezone.utc).year
+    # 분야 1(픽스처)에만 완성 보고서를 둔다. 다른 분야는 없음 → skip.
+    _seed_done_analysis(client, "세부기술 A", "본문 A")
+    db = app.dependency_overrides[get_db]()
+    from app.models.field import Field
+    db.add(Field(name="빈 분야", slug="empty", order_no=2))
+    db.commit()
+    db.close()
+
+    r = client.post(f"/api/admin/field-reports/run-all?year={year}&kind=report",
+                    headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["queued"] == 1 and body["skipped"] >= 1
+
+
+def test_run_all_rejects_bad_kind(client):
+    r = client.post("/api/admin/field-reports/run-all?year=2026&kind=nonsense",
+                    headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 422
+
+
+def test_field_reports_overview_lists_status(client, monkeypatch):
+    """관리자 현황 표 — 분야별 종합/점검 상태를 한 번에 내려준다."""
+    _seed_done_analysis(client, "세부기술 A", "본문 A")
+
+    async def fake_generate(system, user, *, thinking, **kwargs):
+        return "합성 결과"
+
+    monkeypatch.setattr("app.clients.gemini_sync.generate", fake_generate)
+    client.post("/api/admin/fields/1/report?year=2026",
+                headers={"X-Admin-Key": settings.admin_key})
+    _drain_report_queue()
+
+    ov = client.get("/api/admin/field-reports?year=2026",
+                    headers={"X-Admin-Key": settings.admin_key}).json()
+    row = next(r for r in ov["rows"] if r["field_id"] == 1)
+    assert row["report"]["status"] == "done"
+    assert row["roadmap_check"] is None  # 점검은 안 돌렸다
+    assert row["has_roadmap"] is False
+
+
+def test_subfield_reports_endpoint_returns_bodies(client):
+    """세부기술 첨부 토글용 — 완성된 세부기술 보고서 본문을 목록으로 내려준다."""
+    _seed_done_analysis(client, "세부기술 A", "## 성과\nA 본문")
+    _seed_done_analysis(client, "빈 것", None)  # 본문 없는 건 제외
+
+    got = client.get("/api/fields/1/subfield-reports?year=2026").json()
+    assert len(got["reports"]) == 1
+    assert got["reports"][0]["name"] == "세부기술 A"
+    assert "A 본문" in got["reports"][0]["report_md"]
+
+
+def test_subfield_reports_apply_footnotes(client):
+    """부록도 세부기술 보고서 화면과 똑같이 각주 치환을 해야 한다 — 안 하면 논문 제목이
+    full name 그대로 노출된다(사용자 신고). 괄호 인용이 [n] 각주로 바뀌고 references가
+    함께 내려와야 한다."""
+    db = app.dependency_overrides[get_db]()
+    s = Subfield(field_id=1, name="세부기술 X", query="q")
+    db.add(s)
+    db.flush()
+    a = Analysis(subfield_id=s.id, year=2026, status="done", query_hash="h",
+                 report_md="성과를 달성했다 (Improving Zero-Noise Extrapolation).", stats_json={})
+    db.add(a)
+    db.flush()
+    p = Paper(paper_key="pk", title="Improving Zero-Noise Extrapolation",
+              journal="Nature", year=2025, doi="10.1/x", source="openalex")
+    db.add(p)
+    db.flush()
+    db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
+    db.commit()
+    db.close()
+
+    rep = client.get("/api/fields/1/subfield-reports?year=2026").json()["reports"][0]
+    # 논문 제목 full name이 각주 링크로 치환됐다.
+    assert "Improving Zero-Noise Extrapolation" not in rep["report_md"]
+    assert "(#ref-1)" in rep["report_md"]
+    assert rep["references"][0]["title"] == "Improving Zero-Noise Extrapolation"

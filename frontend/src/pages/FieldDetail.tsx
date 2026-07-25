@@ -1,10 +1,20 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { get, type Field, type FieldSummary, type YearRow } from "../api";
+import {
+  get,
+  type Field,
+  type FieldReport,
+  type FieldSummary,
+  type RoadmapCheck,
+  type YearRow,
+} from "../api";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import StatusBadge from "../components/StatusBadge";
 import CoverageBar from "../components/CoverageBar";
+import GeneratedReportSection from "../components/GeneratedReportSection";
+import { formatGeneratedAt } from "../lib/format";
+import { useAdminKey } from "../useAdminKey";
 
 export default function FieldDetail() {
   const { fieldId } = useParams();
@@ -13,6 +23,9 @@ export default function FieldDetail() {
   const [year, setYear] = useState<number | null>(null);
   const [summary, setSummary] = useState<FieldSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 분야 보고서 생성 버튼을 관리자에게만 노출하기 위한 것뿐이다 — 권한 판정 자체는
+  // 백엔드(require_admin)가 하고, 여기서 키가 비어 있으면 조회 전용으로 보인다.
+  const { key: adminKey } = useAdminKey();
 
   useEffect(() => {
     get<Field[]>("/fields")
@@ -89,11 +102,7 @@ export default function FieldDetail() {
                   type="button"
                   aria-pressed={y.year === year}
                   onClick={() => setYear(y.year)}
-                  className={`border px-3 py-1.5 font-mono text-sm transition-colors ${
-                    y.year === year
-                      ? "border-ink bg-ink text-paper"
-                      : "border-border text-ink-light hover:border-accent"
-                  }`}
+className="btn btn-toggle btn-sm font-mono"
                 >
                   {y.year}
                   <span className="ml-1.5 opacity-70">
@@ -103,14 +112,79 @@ export default function FieldDetail() {
               ))}
             </div>
 
+            {year != null && (
+              <>
+                <GeneratedReportSection<FieldReport>
+                  title="분야 종합 보고서"
+                  path={`fields/${fieldId}/report?year=${year}`}
+                  viewPath={`/fields/${fieldId}/report/${year}`}
+                  adminKey={adminKey}
+                  emptyText="아직 생성되지 않았습니다. 완성된 세부기술 보고서를 합성해 분야 전체의 기술적 진전을 정리합니다."
+                  meta={(r) =>
+                    `세부기술 보고서 ${r.source_count}건 기준 · ${formatGeneratedAt(r.generated_at)} 생성`
+                  }
+                  staleText={(r) =>
+                    `생성 이후 완성된 세부기술 보고서가 ${r.current_count}건으로 늘었습니다. 최신 내용을 반영하려면 다시 생성하세요.`
+                  }
+                />
+
+                <GeneratedReportSection<RoadmapCheck>
+                  title="로드맵 이행 점검"
+                  path={`fields/${fieldId}/roadmap-check?year=${year}`}
+                  viewPath={`/fields/${fieldId}/roadmap-check/${year}`}
+                  adminKey={adminKey}
+                  emptyText="아직 생성되지 않았습니다. 로드맵을 등록하면 단계별 목표별로 관련 연구가 확인되는지 전수 점검합니다."
+                  buildNote="⚠ 생성 시 로드맵 원문이 Gemini API로 전송됩니다."
+                  meta={(r) => (
+                    <>
+                      로드맵 {r.roadmap_version} · 목표 {r.goal_count}개 · 세부기술 보고서{" "}
+                      {r.source_count}건 기준 · {formatGeneratedAt(r.generated_at)} 생성
+                      {/* 전수 점검이 깨진 채 저장된 보고서는 "빠짐없이 봤다"로 읽히면 안 된다. */}
+                      {r.incomplete && (
+                        <span className="ml-2 text-danger">
+                          목표 {r.goal_count}개 중 {r.checked_count}개만 점검됨 — 다시 생성하세요
+                        </span>
+                      )}
+                    </>
+                  )}
+                  staleText={(r) =>
+                    r.current_count !== r.source_count
+                      ? `생성 이후 완성된 세부기술 보고서가 ${r.current_count}건으로 늘었습니다. 다시 생성하세요.`
+                      : "로드맵 판본이 바뀌었습니다. 다시 생성하세요."
+                  }
+                />
+              </>
+            )}
+
             {summary && (
               <>
-                <p className="mt-4 text-sm text-ink-light">
-                  {summary.year}년 검색 {summary.total_searched.toLocaleString()}건 / 분석 대상{" "}
-                  {summary.total_analyzed.toLocaleString()}건
+                {/* 이 숫자는 아래 표의 합계다. 보고서 카드와 표 사이에 홀로 떠 있으면
+                    무엇의 합계인지 드러나지 않아, 표의 머리말로 붙여 소유자를 만든다. */}
+                <div className="mt-10 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <h2 className="font-display text-xl font-bold tracking-tight text-ink">
+                    세부기술별 분석 현황
+                  </h2>
+                  <p className="text-sm text-ink-light">
+                    {summary.year}년 합계 · 검색{" "}
+                    <span className="font-mono tabular-nums">
+                      {summary.total_searched.toLocaleString()}
+                    </span>
+                    건 / 분석 대상{" "}
+                    <span className="font-mono tabular-nums">
+                      {summary.total_analyzed.toLocaleString()}
+                    </span>
+                    건
+                  </p>
+                </div>
+                {/* 두 수가 다른 이유를 여기서 밝힌다 — 표의 "모집단" 열이 같은 관계를
+                    막대로 보여주는데, 그 막대가 무엇의 비율인지 설명이 없었다. */}
+                <p className="mt-1 text-xs text-muted">
+                  <strong className="font-medium text-ink-light">분석 대상</strong>은 검색된 논문에서
+                  초록 미보유 등의 사유로 제외하고 남아 실제 성과 추출에 사용된 논문 수입니다.
+                  아래 ‘모집단’ 막대가 그 비율입니다.
                 </p>
 
-                <div className="mt-6 overflow-x-auto border-t border-border">
+                <div className="mt-4 overflow-x-auto border-t border-border">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border text-left text-xs text-muted">

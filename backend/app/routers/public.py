@@ -1,14 +1,16 @@
 import re
+from datetime import datetime, timezone
 from typing import Any, Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.clients._html import strip_html
 from app.config import settings
 from app.database import get_db
 from app.models.analysis import Analysis, AnalysisPaper
-from app.models.field import Field, Subfield
+from app.models.field import Field, FieldReport, Roadmap, RoadmapCheck, Subfield
 from app.models.paper import Paper
 from app.services import visitors as visitors_service
 from app.services.runner import STEP_LABELS
@@ -104,10 +106,12 @@ def _apply_footnotes(report_md: str | None, papers: Sequence[Any]) -> tuple[str 
     return _PAREN_RE.sub(repl, report_md), references
 
 
-def _serialize(db: Session, analysis: Analysis) -> dict:
-    subfield = db.get(Subfield, analysis.subfield_id)
-    field = db.get(Field, subfield.field_id)
+def _footnoted_report(db: Session, analysis: Analysis) -> tuple[str | None, list[dict]]:
+    """analysis의 report_md에 각주 치환을 적용하고 (치환된 md, references)를 돌려준다.
 
+    report_md 원문은 "(논문 제목)" 형태로 저장돼 있고, 각주 [n] 치환은 조회 시점에
+    한다 — 세부기술 보고서 화면과 분야 종합보고서 부록(세부기술 첨부)이 이걸 공유한다.
+    빼먹으면 논문 제목이 full name 그대로 노출된다."""
     # 각주는 id/title/journal/year/doi만 쓴다. 전체 ORM 행을 실으면 abstract(논문당
     # 1~2KB)까지 딸려와, 703건짜리 보고서 한 번 여는 데 1MB 가까이 헛읽는다.
     papers = db.query(
@@ -115,7 +119,14 @@ def _serialize(db: Session, analysis: Analysis) -> dict:
     ).join(AnalysisPaper, AnalysisPaper.paper_id == Paper.id).filter(
         AnalysisPaper.analysis_id == analysis.id
     ).all()
-    report_md, references = _apply_footnotes(analysis.report_md, papers)
+    return _apply_footnotes(analysis.report_md, papers)
+
+
+def _serialize(db: Session, analysis: Analysis) -> dict:
+    subfield = db.get(Subfield, analysis.subfield_id)
+    field = db.get(Field, subfield.field_id)
+
+    report_md, references = _footnoted_report(db, analysis)
 
     return {
         "id": analysis.id,
@@ -142,6 +153,26 @@ def list_fields(db: Session = Depends(get_db)):
     for s in db.query(Subfield).all():
         subfields_by_field.setdefault(s.field_id, []).append(s)
 
+    # 랜딩 화면의 진행 파이("세부기술 4개 중 3개 분석됨")용. 여기서도 분야마다 따로
+    # 세면 11번 질의가 되므로 당해연도 done 건수를 한 번에 읽어 분야별로 묶는다.
+    # 대상 연도는 서버의 "올해"다 — 사용자가 고르는 값이 아니라 "지금 기준 최신
+    # 연도의 진행 상황"을 보여주는 것이 이 화면의 목적이다.
+    current_year = datetime.now(timezone.utc).year
+    done_by_field = dict(
+        db.query(Subfield.field_id, func.count(Analysis.id))
+        .join(Analysis, Analysis.subfield_id == Subfield.id)
+        .filter(
+            Analysis.year == current_year,
+            Analysis.status == "done",
+            Analysis.report_md.isnot(None),
+            # 파이의 분모가 활성 세부기술 수이므로 분자도 같은 모집단이어야 한다 —
+            # 분석을 마친 세부기술을 나중에 비활성화하면 done이 분모를 넘어선다.
+            Subfield.active.is_(True),
+        )
+        .group_by(Subfield.field_id)
+        .all()
+    )
+
     return [
         {
             "id": f.id,
@@ -151,6 +182,8 @@ def list_fields(db: Session = Depends(get_db)):
                 {"id": s.id, "name": s.name, "active": s.active}
                 for s in subfields_by_field.get(f.id, [])
             ],
+            "current_year": current_year,
+            "current_year_done": done_by_field.get(f.id, 0),
         }
         for f in fields
     ]
@@ -225,6 +258,122 @@ def field_summary(field_id: int, year: int, db: Session = Depends(get_db)):
         "total_searched": total_searched,
         "total_analyzed": total_analyzed,
     }
+
+
+def _done_report_count(db: Session, field_id: int, year: int) -> int:
+    """지금 완성돼 있는 세부기술 보고서 수. 생성 시점의 source_count와 비교해
+    "재생성이 필요한가"(stale)를 판정한다. report_md는 건당 12KB라 count로만 읽는다."""
+    return (
+        db.query(Analysis.id)
+        .join(Subfield, Analysis.subfield_id == Subfield.id)
+        .filter(
+            Subfield.field_id == field_id,
+            Analysis.year == year,
+            Analysis.status == "done",
+            Analysis.report_md.isnot(None),
+        )
+        .count()
+    )
+
+
+@router.get("/fields/{field_id}/report")
+def field_report(field_id: int, year: int, db: Session = Depends(get_db)):
+    """대분류 보고서 조회. 생성은 관리자만 할 수 있고(POST /api/admin/fields/{id}/report)
+    여기서는 캐시된 결과만 읽는다."""
+    row = (
+        db.query(FieldReport)
+        .filter(FieldReport.field_id == field_id, FieldReport.year == year)
+        .one_or_none()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="분야 보고서가 아직 생성되지 않았습니다.")
+
+    current = _done_report_count(db, field_id, year)
+    return {
+        "field_id": row.field_id,
+        "year": row.year,
+        # pending/failed도 그대로 내려준다 — 처음 생성 중이면 report_md는 빈 문자열,
+        # 재생성 중이면 이전 본문이 담겨 있어 화면이 옛 보고서를 보여주며 폴링한다.
+        "status": row.status,
+        "error": row.error,
+        "report_md": row.report_md,
+        "source_count": row.source_count,
+        "current_count": current,
+        "stale": current != row.source_count,
+        "generated_at": row.generated_at.isoformat() if row.generated_at else None,
+    }
+
+
+@router.get("/fields/{field_id}/roadmap-check")
+def roadmap_check(field_id: int, year: int, db: Session = Depends(get_db)):
+    """로드맵 이행 점검 보고서 조회. 캐시된 결과만 읽는다.
+
+    로드맵 원문 자체는 내려주지 않는다 — 비공개 판본일 수 있고, 화면에 필요한 건
+    점검 결과이지 원문이 아니다.
+    """
+    row = (
+        db.query(RoadmapCheck)
+        .filter(RoadmapCheck.field_id == field_id, RoadmapCheck.year == year)
+        .one_or_none()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="로드맵 점검 보고서가 아직 생성되지 않았습니다.")
+
+    current = _done_report_count(db, field_id, year)
+    roadmap = db.query(Roadmap).filter(Roadmap.field_id == field_id).one_or_none()
+    return {
+        "field_id": row.field_id,
+        "year": row.year,
+        "status": row.status,
+        "error": row.error,
+        "report_md": row.report_md,
+        "source_count": row.source_count,
+        "current_count": current,
+        "goal_count": row.goal_count,
+        "checked_count": row.checked_count,
+        # 전수 점검이 깨진 채로 저장된 보고서 — 빠진 목표가 있다는 뜻이라
+        # "빠짐없이 점검했다"로 읽히면 안 된다.
+        "incomplete": row.checked_count != row.goal_count,
+        "roadmap_version": row.roadmap_version,
+        # 세부기술 보고서가 늘었거나 로드맵 판본이 바뀌면 재생성 대상이다.
+        "stale": current != row.source_count
+        or (roadmap is not None and roadmap.version_label != row.roadmap_version),
+        "generated_at": row.generated_at.isoformat() if row.generated_at else None,
+    }
+
+
+@router.get("/fields/{field_id}/subfield-reports")
+def subfield_reports(field_id: int, year: int, db: Session = Depends(get_db)):
+    """분야 종합 보고서 전용 페이지의 "세부기술 보고서 포함" 토글용 — 이 분야·연도에서
+    완성된 세부기술 보고서를 이어붙이기 좋게 목록으로 내려준다.
+
+    세부기술 보고서 화면(get_by_subfield_year)과 똑같이 각주 치환을 적용한다 —
+    빼면 부록에 논문 제목이 full name 그대로 노출된다(_footnoted_report). 참고문헌도
+    함께 내려 화면이 [n] 각주 아래 목록을 붙일 수 있게 한다.
+    """
+    subfields = (
+        db.query(Subfield)
+        .filter(Subfield.field_id == field_id)
+        .order_by(Subfield.name)
+        .all()
+    )
+    reports = []
+    for sf in subfields:
+        analysis = (
+            db.query(Analysis)
+            .filter(
+                Analysis.subfield_id == sf.id,
+                Analysis.year == year,
+                Analysis.status == "done",
+                Analysis.report_md.isnot(None),
+            )
+            .first()
+        )
+        if analysis is None or not analysis.report_md:
+            continue
+        md, references = _footnoted_report(db, analysis)
+        reports.append({"name": sf.name, "report_md": md, "references": references})
+    return {"field_id": field_id, "year": year, "reports": reports}
 
 
 @router.get("/site-info")

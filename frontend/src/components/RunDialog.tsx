@@ -196,7 +196,7 @@ export default function RunDialog({
           type="button"
           disabled={subfieldId === "" || previewing}
           onClick={handlePreview}
-          className="border border-ink px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-ink hover:text-paper disabled:opacity-40"
+          className="btn btn-primary disabled:opacity-40"
         >
           {previewing ? "확인 중…" : "미리보기"}
         </button>
@@ -269,7 +269,7 @@ export default function RunDialog({
             type="button"
             disabled={preview.over_limit || running}
             onClick={handleRun}
-            className="mt-4 border border-ink bg-ink px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/90 disabled:opacity-40"
+            className="mt-4 btn btn-primary"
           >
             {running ? "실행 요청 중…" : "이 내용으로 분석 실행"}
           </button>

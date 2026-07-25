@@ -7,7 +7,7 @@
 
 ```bash
 # 스택 기동 — api 컨테이너 entrypoint(docker-entrypoint.sh)가 uvicorn 전에
-# alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0011
+# alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0014
 docker compose up -d --build
 
 # .env를 고친 뒤에는 restart가 아니라 재생성해야 한다.
@@ -47,7 +47,91 @@ NN=00은 backend가 8000이 되어 nst-wiki와 충돌하므로 03을 배정했�
 | 3 | map | `app/services/mapper.py::build_requests` + `app/clients/gemini_batch.py` | Batch JSONL 제출 → 폴링 → 결과 저장, thinking=low |
 | 4 | stats | `app/services/stats.py::compute` | 코드로만 집계, LLM 미사용 |
 | 5 | reduce | `app/services/reducer.py::reduce_subfield` | 세부기술별 보고서, thinking=high. 건수가 `REDUCE_GROUP_THRESHOLD`(500) 넘으면 3단 reduce |
-| 6 | rollup | `app/services/reducer.py::rollup_field` | 대분류 보고서 합성. **구현은 있으나 호출부는 아직 없음**(초판 범위 밖 — 세부기술 보고서까지만 제공) |
+| 6 | rollup | `app/services/reducer.py::rollup_field` | 대분류 보고서 합성. 잡 루프가 아니라 관리자가 직접 호출한다(`build_field_report`) |
+
+### 분야 단위 보고서 두 종류 — 잡 루프로 큐잉 처리
+
+1~6단계 세부기술 파이프라인(검색·추출)과 달리 분야 보고서는 입력이 이미 완성된
+세부기술 보고서라 LLM 1콜(약 10~17초)로 끝난다. 그래도 **동기 응답이 아니라 큐잉**한다:
+관리자가 "생성"을 누르면 행을 `status="pending"`으로만 만들고 즉시 응답하고(화면은 그
+자리에서 폴링), 실제 LLM 호출은 `runner.advance_field_reports(db)`가 **한 틱(30초)에 하나씩**
+처리한다. 일괄로 수십 건을 큐잉해도 API가 동시에 얻어맞지 않게 — 세부기술 분석 잡과
+자원을 나눠 쓰는 rate-limit 철학과 일치(실측: 일괄 10건이 30초당 하나씩 순차 완료).
+
+`enqueue_*`(검증+pending 큐잉)와 `process_*`(실제 LLM 호출)을 나눈 이유: 검증(분야 존재·
+세부기술 보고서 유무·로드맵 유무)을 **큐잉 시점**에 해 관리자가 즉시 404/409를 받게 하고,
+생성은 잡 루프가 나중에 한다. `_process_report`가 예외를 흡수해 그 행만 `failed`로 남기므로
+한 건의 실패가 루프 전체를 멈추지 않는다(세부기술 잡 `advance`와 대칭).
+
+| 보고서 | 큐잉 / 처리 | 캐시 | 생성 |
+|---|---|---|---|
+| 분야 종합 | `reducer.enqueue_field_report` / `process_field_report` | `field_reports(field_id, year)` | `POST /api/admin/fields/{id}/report?year=` |
+| 로드맵 이행 점검 | `reducer.enqueue_roadmap_check` / `process_roadmap_check` | `roadmap_checks(field_id, year)` | `POST /api/admin/fields/{id}/roadmap-check?year=` |
+
+`field_reports`·`roadmap_checks`는 `status`(pending|done|failed)+`error` 컬럼을 갖는다(migration
+`0015`). **재생성 시 기존 `report_md`는 그대로 두고 `status`만 pending으로 되돌린다** — 처리가
+끝나기 전까지 이전 보고서를 계속 보여주기 위해서다.
+
+**일괄 실행**: `POST /api/admin/field-reports/run-all?year=&kind=report|roadmap-check`가 당해연도
+전체 분야를 큐잉한다. 검증에 걸리는 분야(세부기술 보고서 없음·로드맵 미등록)는 조용히
+건너뛴다 — 하나가 막혀 전체가 실패하면 안 되므로 `enqueue_*`의 예외를 잡아 skip한다.
+관리자 "분야 보고서" 탭(`GET /api/admin/field-reports?year=`)이 분야별 상태를 한 표로 보여준다.
+
+**둘을 한 보고서로 합치지 않은 이유**: 로드맵이 없는 분야도 종합 보고서는 쓸 수 있어야
+하고, 로드맵만 개정됐을 때 점검만 다시 돌릴 수 있어야 한다.
+
+공개 조회는 캐시만 읽는다(`GET /api/fields/{id}/report`·`/roadmap-check`). 행 자체가 없을 때만
+404이고, **pending/failed도 그대로 내려준다**(화면이 status로 폴링·경고를 판단).
+**로드맵 원문은 공개 API로 내려주지 않는다** — 비공개 판본일 수 있고, 화면에 필요한 건
+점검 결과이지 원문이 아니다.
+
+**세부기술 첨부**: 분야 종합 전용 페이지(`/fields/{id}/report/{year}?withSub=1`)에서 "세부기술
+보고서 포함" 토글을 켜면 `GET /api/fields/{id}/subfield-reports?year=`로 하위 세부기술 보고서
+본문을 받아 종합보고서 뒤에 이어붙인다(인쇄 시 `break-before-page`로 세부기술마다 새 페이지).
+각 본문은 `stripLeadingH1`(프론트)로 자체 H1을 걷어낸다 — 화면이 제목을 붙이는 것과 같은 이유.
+
+### 로드맵 전수 점검 — `goal_count`를 코드로 세어 프롬프트에 주입
+
+`reducer.count_goal_rows()`가 로드맵 마크다운의 표 본문 행 수를 세고,
+`ROADMAP_CHECK_INSTRUCTION`의 `{goal_count}`에 박아 "당신의 표도 정확히 N행이어야 한다"고
+지시한다. **이 숫자를 빼고 "모든 목표를 빠짐없이"라고만 쓰면 모델이 여러 단계를 한 행으로
+뭉갠다** — 실측으로 65행짜리 로드맵이 19행(29%)으로 줄었고, 줄어든 보고서는 "빠진 목표가
+없다"로 오독된다. 숫자를 넣자 65/65가 나왔다. 문구를 약화시키지 말 것.
+
+생성 후에도 `count_goal_rows(report_md)`로 다시 세어 `checked_count`에 남긴다.
+`goal_count`와 다르면 조회 응답의 `incomplete=true`로 화면에 경고가 뜬다 — 보고서는
+버리지 않고 남기되 재생성 여부는 관리자가 판단한다.
+
+로드맵 저장(`PUT /api/admin/fields/{id}/roadmap`)은 `goal_count == 0`이면 **422로 거부**한다.
+표가 아닌 줄글을 넣으면 전수 점검 강제가 통째로 무력화되는데, 그 사실이 보고서 생성
+시점까지 드러나지 않으면 원인을 찾기 어렵다.
+
+**판정 4단계를 합치지 말 것**: `데이터 없음`(논문은 분석했으나 근거가 없다)과
+`분석 범위 밖`(그 중점기술의 세부기술 분석 자체를 아직 안 돌렸다)은 후속 조치가 다르다.
+
+### 논문 데이터의 원리적 한계 — 로드맵 후반 단계는 답할 수 없다
+
+실측(반도체 2026, 세부기술 6건 × 목표 65행): 로드맵 1단계는 관련 연구 확인 77%인데
+3단계 이상은 22%로 떨어진다. 후반 단계 목표가 대부분 *양산성·가격 경쟁력·자급률·실증*
+(웨이퍼당 $500, 자급도 30%, 수입의존도 95%→50%)이고 **논문에는 그런 내용이 실리지 않기
+때문**이다. 검색식이 좁아서가 아니다.
+
+그래서 프롬프트에 "### 4. 이 점검의 한계" 절을 강제해, 그런 목표가 `데이터 없음`으로
+표기된 것이 연구 부진을 뜻하지 않는다는 점을 보고서 자체가 밝히게 했다. 빼면 읽는 사람이
+`데이터 없음`을 "연구가 부진하다"로 오독한다.
+
+### 로드맵 원문은 Gemini API로 나간다
+
+`check_roadmap`이 원문을 프롬프트에 그대로 실어 보낸다. 관리자 화면(`RoadmapEditor`)에
+이 사실을 명시하고, 비공개 판본인지는 관리자가 판단한다. **임베딩을 로컬화해도 이 문제는
+해결되지 않는다** — 최종 종합을 외부 모델이 하는 한 원문은 프롬프트로 나간다.
+외부로 내보낼 수 없는 판본을 다뤄야 하면 `check_roadmap`이 부르는 `gemini_sync.generate`를
+로컬 모델 클라이언트로 분기하면 되고, 프롬프트·전수 점검 검증·저장 구조는 그대로 쓸 수
+있다. 다만 **65행 전수 점검을 로컬 모델이 지켜내는지는 별도 검증이 필요하다**(미검증).
+
+RAG/임베딩은 쓰지 않는다. 전수 대조는 "목표가 몇 개인지 알고 그 개수를 채우는" 작업이라
+top-k 검색과 애초에 맞지 않고, 로드맵 전문(13KB) + 세부기술 보고서 6건이 합쳐도 57KB라
+컨텍스트에 여유롭게 들어간다.
 
 ### reduce 입력의 `[세부기술: 이름 / 연도]` 헤더
 

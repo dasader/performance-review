@@ -13,7 +13,7 @@ from app.clients._http import RateLimited
 from app.config import settings
 from app.database import SessionLocal
 from app.models.analysis import Analysis, AnalysisPaper
-from app.models.field import Subfield
+from app.models.field import FieldReport, RoadmapCheck, Subfield
 from app.models.paper import Paper, PaperExtraction
 from app.models.schedule import AnalysisRun, ScheduledRun, ScheduleSetting
 from app.services import mapper, reducer, search, stats
@@ -577,6 +577,52 @@ def schedule_history(db: Session, *, limit: int = 12) -> list[dict]:
     return result
 
 
+async def advance_field_reports(db: Session) -> None:
+    """pending인 분야 종합 보고서·로드맵 점검을 한 틱에 하나씩 처리한다.
+
+    한 틱에 전부 부르지 않는 이유: 각 생성이 LLM 1콜(약 10~17초)이라, 일괄로 큐잉된
+    수십 건을 한 루프에서 다 돌리면 루프가 수 분간 블로킹돼 세부기술 분석 잡까지
+    밀리고 RPM 버킷도 압박받는다. 가장 오래 기다린 것부터 하나씩, 세부기술 분석과
+    자원을 나눠 쓴다(느리지만 rate-limit 철학과 일치).
+
+    분야 종합을 로드맵 점검보다 먼저 처리한다 — 점검이 더 오래 걸려(17초) 종합이
+    그 뒤에 줄서면 오래 대기하기 때문이다.
+    """
+    field_row = (
+        db.query(FieldReport)
+        .filter(FieldReport.status == "pending")
+        .order_by(FieldReport.id)
+        .first()
+    )
+    if field_row is not None:
+        await _process_report(db, field_row, reducer.process_field_report, "분야 종합")
+        return
+
+    check_row = (
+        db.query(RoadmapCheck)
+        .filter(RoadmapCheck.status == "pending")
+        .order_by(RoadmapCheck.id)
+        .first()
+    )
+    if check_row is not None:
+        await _process_report(db, check_row, reducer.process_roadmap_check, "로드맵 점검")
+
+
+async def _process_report(db: Session, row, processor, label: str) -> None:
+    """report 행 하나를 처리하고, 실패하면 status=failed + error로 남긴다.
+    한 건의 실패가 루프 전체를 멈추지 않게 여기서 흡수한다(세부기술 잡의 advance와 대칭)."""
+    try:
+        logger.info("[%s] field=%d year=%d 처리 시작", label, row.field_id, row.year)
+        await processor(db, row)
+        logger.info("[%s] field=%d year=%d 완료", label, row.field_id, row.year)
+    except Exception as e:
+        logger.exception("[%s] field=%d year=%d 실패", label, row.field_id, row.year)
+        db.rollback()
+        row.status = "failed"
+        row.error = str(e)
+        db.commit()
+
+
 async def loop() -> None:
     """미완 잡을 주기적으로 스캔해 전진시킨다. 상태가 전부 DB에 있으므로
     프로세스가 죽었다 살아나도 그대로 이어진다."""
@@ -587,6 +633,7 @@ async def loop() -> None:
             try:
                 run_scheduled_if_due(db)
                 resume_paused(db)
+                await advance_field_reports(db)
                 # report_md(보고서 마크다운, 건당 12KB 규모)와 stats_json은 advance()가
                 # 읽지 않는다 — _do_reduce가 쓰기만 한다. defer하지 않으면 30초마다
                 # 활성 분석 전체의 보고서 본문을 통째로 읽어온다(월간 실행 직후엔

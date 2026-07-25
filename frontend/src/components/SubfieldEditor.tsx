@@ -47,15 +47,11 @@ export default function SubfieldEditor({
   fields,
   onChanged,
   onUnauthorized,
-  onItemsLoaded,
 }: {
   adminKey: string;
   fields: Field[];
   onChanged: () => void;
   onUnauthorized: () => void;
-  // 대시보드(/admin/dashboard)는 active 여부를 안 주므로, 이미 이 컴포넌트가 받아오는
-  // /admin/subfields 결과(active 포함)를 부모로 끌어올려 재사용한다 — 중복 호출 방지.
-  onItemsLoaded?: (items: AdminSubfield[]) => void;
 }) {
   const [items, setItems] = useState<AdminSubfield[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -79,7 +75,6 @@ export default function SubfieldEditor({
       const list = await get<AdminSubfield[]>("/admin/subfields", adminKey);
       setItems(list);
       setListError(null);
-      onItemsLoaded?.(list);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return onUnauthorized();
       setListError(e instanceof Error ? e.message : "목록을 불러오지 못했습니다.");
@@ -240,7 +235,7 @@ export default function SubfieldEditor({
         <button
           type="button"
           onClick={openAdd}
-          className="shrink-0 border border-ink bg-ink px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/90"
+          className="shrink-0 btn btn-primary"
         >
           세부기술 추가
         </button>
@@ -256,14 +251,14 @@ export default function SubfieldEditor({
                 const item = items?.find((i) => i.id === deleteConflict.id);
                 if (item) toggleActive(item).then((ok) => ok && setDeleteConflict(null));
               }}
-              className="border border-border px-3 py-1.5 text-xs text-ink-light hover:border-accent hover:text-accent"
+              className="btn btn-neutral btn-sm"
             >
               대신 비활성화
             </button>
             <button
               type="button"
               onClick={() => setDeleteConflict(null)}
-              className="px-3 py-1.5 text-xs text-muted hover:text-ink"
+              className="btn btn-neutral btn-sm"
             >
               닫기
             </button>
@@ -319,20 +314,19 @@ export default function SubfieldEditor({
                         aria-checked={item.active}
                         disabled={isBusy}
                         onClick={() => toggleActive(item)}
-                        className={`min-w-[4.5rem] border px-2 py-1 text-center text-xs disabled:opacity-40 ${
-                          item.active
-                            ? "border-positive/40 text-positive"
-                            : "border-border text-faint"
+                        className={`btn btn-sm min-w-[4.5rem] ${
+                          item.active ? "btn-positive" : "btn-neutral"
                         }`}
                       >
                         {item.active ? "활성" : "비활성"}
                       </button>
                     </td>
-                    <td className="py-3 text-right whitespace-nowrap">
+                    <td className="py-3 whitespace-nowrap">
+                      <div className="flex justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => openEdit(item)}
-                        className="mr-2 border border-border px-2 py-1 text-xs text-ink-light hover:border-accent hover:text-accent"
+                        className="btn btn-neutral btn-sm"
                       >
                         편집
                       </button>
@@ -340,10 +334,11 @@ export default function SubfieldEditor({
                         type="button"
                         disabled={isBusy}
                         onClick={() => handleDelete(item)}
-                        className="border border-border px-2 py-1 text-xs text-danger hover:border-danger disabled:opacity-40"
+                        className="btn btn-danger btn-sm"
                       >
                         삭제
                       </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -460,8 +455,8 @@ export default function SubfieldEditor({
                 aria-checked={modal.active}
                 aria-labelledby="modal-active-label"
                 onClick={() => setModal((m) => m && { ...m, active: !m.active })}
-                className={`min-w-[4.5rem] border px-2 py-1 text-center text-xs ${
-                  modal.active ? "border-positive/40 text-positive" : "border-border text-faint"
+                className={`btn btn-sm min-w-[4.5rem] ${
+                  modal.active ? "btn-positive" : "btn-neutral"
                 }`}
               >
                 {modal.active ? "활성" : "비활성"}
@@ -475,14 +470,14 @@ export default function SubfieldEditor({
                 type="button"
                 onClick={closeModal}
                 disabled={modalSaving}
-                className="border border-border px-4 py-2 text-sm text-ink-light hover:border-accent hover:text-accent disabled:opacity-40"
+                className="btn btn-neutral"
               >
                 취소
               </button>
               <button
                 type="submit"
                 disabled={modalSaving || openalexLint.errors.length > 0 || kciLint.errors.length > 0}
-                className="border border-ink bg-ink px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/90 disabled:opacity-40"
+                className="btn btn-primary"
               >
                 {modalSaving ? "저장 중…" : "저장"}
               </button>

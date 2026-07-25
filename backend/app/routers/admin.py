@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Annotated
 
 import httpx
@@ -10,9 +11,9 @@ from app.config import settings
 from app.database import get_db
 from app.deps import require_admin
 from app.models.analysis import Analysis, AnalysisPaper
-from app.models.field import Field, Subfield
+from app.models.field import Field, FieldReport, Roadmap, RoadmapCheck, Subfield
 from app.models.schedule import AnalysisRun
-from app.services import budget, mapper, runner, search
+from app.services import budget, mapper, reducer, runner, search
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -38,6 +39,11 @@ class SubfieldIn(BaseModel):
     query: NonBlankStr
     query_kci: str | None = None
     active: bool = True
+
+
+class RoadmapIn(BaseModel):
+    version_label: NonBlankStr
+    content_md: NonBlankStr
 
 
 class PreviewIn(_YearRangeMixin):
@@ -300,6 +306,152 @@ def run_schedule_now(db: Session = Depends(get_db)):
     """스케줄 시각 판정을 우회해 즉시 1회 큐잉한다. 되돌릴 수 없는 동작이므로 프론트에서
     확인 단계를 거친 뒤에만 호출해야 한다."""
     return {"queued_count": runner.run_scheduled_now(db)}
+
+
+@router.get("/fields/{field_id}/roadmap")
+def get_roadmap(field_id: int, db: Session = Depends(get_db)):
+    """등록된 로드맵 원문. 없으면 404가 아니라 빈 값 — 편집 화면이 그대로 새 입력을
+    받는 폼으로 쓰인다."""
+    row = db.query(Roadmap).filter(Roadmap.field_id == field_id).one_or_none()
+    if row is None:
+        return {"version_label": "", "content_md": "", "goal_count": 0, "updated_at": None}
+    return {
+        "version_label": row.version_label,
+        "content_md": row.content_md,
+        "goal_count": reducer.count_goal_rows(row.content_md),
+        "updated_at": row.updated_at.isoformat(),
+    }
+
+
+@router.put("/fields/{field_id}/roadmap")
+def put_roadmap(field_id: int, payload: RoadmapIn, db: Session = Depends(get_db)):
+    """로드맵 원문 저장(분야당 1건, 덮어쓰기).
+
+    목표 행을 하나도 못 찾으면 저장을 거부한다 — 표 형식이 아닌 텍스트를 넣으면
+    전수 점검 강제(goal_count 주입)가 무력화되는데, 그 사실이 보고서 생성 시점까지
+    드러나지 않으면 원인을 찾기 어렵다.
+    """
+    if db.get(Field, field_id) is None:
+        raise HTTPException(status_code=404, detail="분야를 찾을 수 없습니다.")
+
+    goal_count = reducer.count_goal_rows(payload.content_md)
+    if goal_count == 0:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "로드맵에서 단계별 목표 행을 찾지 못했습니다. 목표가 마크다운 표"
+                "(| 단계 | 시기 | 기술적 목표 | 형식)로 되어 있는지 확인하세요."
+            ),
+        )
+
+    row = db.query(Roadmap).filter(Roadmap.field_id == field_id).one_or_none()
+    if row is None:
+        row = Roadmap(field_id=field_id)
+        db.add(row)
+    row.version_label = payload.version_label
+    row.content_md = payload.content_md
+    row.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.commit()
+    return {"goal_count": goal_count}
+
+
+@router.delete("/fields/{field_id}/roadmap")
+def delete_roadmap(field_id: int, db: Session = Depends(get_db)):
+    """로드맵 원문 삭제. 이미 생성된 점검 보고서는 남긴다 — 그 시점의 판본으로 만든
+    기록이고, roadmap_version에 어느 판본이었는지 적혀 있다."""
+    db.query(Roadmap).filter(Roadmap.field_id == field_id).delete()
+    db.commit()
+    return {"ok": True}
+
+
+def _enqueue_or_http(fn, db, field_id: int, year: int) -> dict:
+    """enqueue_* 공통 래퍼 — LookupError→404, ValueError→409로 옮기고 pending 응답을 만든다.
+
+    생성은 즉시 실행하지 않고 pending으로 큐잉만 한다(실제 LLM 호출은 runner.loop이
+    한 틱에 하나씩). 화면은 응답을 받은 뒤 그 자리에서 status를 폴링한다.
+    """
+    try:
+        row = fn(db, field_id, year)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"field_id": row.field_id, "year": row.year, "status": row.status}
+
+
+@router.post("/fields/{field_id}/roadmap-check")
+def enqueue_roadmap_check(field_id: int, year: int, db: Session = Depends(get_db)):
+    """로드맵 이행 점검을 pending으로 큐잉한다. ⚠ 처리 시 로드맵 원문이 Gemini API로
+    전송된다(reducer.process_roadmap_check 주석 참고)."""
+    return _enqueue_or_http(reducer.enqueue_roadmap_check, db, field_id, year)
+
+
+@router.post("/fields/{field_id}/report")
+def enqueue_field_report(field_id: int, year: int, db: Session = Depends(get_db)):
+    """분야 종합 보고서를 pending으로 큐잉한다. 이미 있는 연도를 다시 부르면 재생성
+    큐잉 — 그 사이 새로 done이 된 세부기술을 반영하는 유일한 방법이다."""
+    return _enqueue_or_http(reducer.enqueue_field_report, db, field_id, year)
+
+
+@router.get("/field-reports")
+def field_reports_overview(year: int, db: Session = Depends(get_db)):
+    """관리자 "분야 보고서" 탭용 현황 — 분야별 종합/점검 상태를 한 번에.
+
+    분야마다 따로 조회하면 질의가 분야 수만큼 나가므로, 두 테이블을 각각 한 번에 읽어
+    분야 id로 묶는다. 로드맵 등록 여부도 함께 내려 어느 분야가 점검 대상인지 보인다.
+    """
+    reports = {
+        r.field_id: r
+        for r in db.query(FieldReport).filter(FieldReport.year == year)
+    }
+    checks = {
+        r.field_id: r
+        for r in db.query(RoadmapCheck).filter(RoadmapCheck.year == year)
+    }
+    roadmap_fields = {r.field_id for r in db.query(Roadmap.field_id)}
+
+    def cell(row) -> dict | None:
+        if row is None:
+            return None
+        return {
+            "status": row.status,
+            "source_count": row.source_count,
+            "generated_at": row.generated_at.isoformat() if row.generated_at else None,
+            "error": row.error,
+        }
+
+    rows = []
+    for field in db.query(Field).order_by(Field.order_no).all():
+        rows.append({
+            "field_id": field.id,
+            "field_name": field.name,
+            "has_roadmap": field.id in roadmap_fields,
+            "report": cell(reports.get(field.id)),
+            "roadmap_check": cell(checks.get(field.id)),
+        })
+    return {"year": year, "rows": rows}
+
+
+@router.post("/field-reports/run-all")
+def run_all_field_reports(year: int, kind: str = "report", db: Session = Depends(get_db)):
+    """당해연도 전체 분야를 일괄 큐잉한다. kind: report(분야 종합) | roadmap-check.
+
+    검증에 걸리는 분야(세부기술 보고서 없음·로드맵 미등록 등)는 조용히 건너뛴다 —
+    "가능한 것만 큐잉"이 일괄 실행의 의도이므로 하나가 막혀 전체가 실패하면 안 된다.
+    """
+    if kind not in ("report", "roadmap-check"):
+        raise HTTPException(status_code=422, detail="kind는 report 또는 roadmap-check여야 합니다.")
+    enqueue = (
+        reducer.enqueue_field_report if kind == "report" else reducer.enqueue_roadmap_check
+    )
+    queued, skipped = 0, 0
+    for field in db.query(Field).all():
+        try:
+            enqueue(db, field.id, year)
+            queued += 1
+        except (LookupError, ValueError):
+            skipped += 1
+    return {"kind": kind, "year": year, "queued": queued, "skipped": skipped}
 
 
 @router.delete("/analyses/{analysis_id}")

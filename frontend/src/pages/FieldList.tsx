@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { get, type Field } from "../api";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
+import ProgressPie from "../components/ProgressPie";
 
 export default function FieldList() {
   const [fields, setFields] = useState<Field[] | null>(null);
@@ -44,12 +45,13 @@ export default function FieldList() {
                     <span className="font-mono text-sm text-faint group-hover:text-accent">
                       {String(i + 1).padStart(2, "0")}
                     </span>
-                    <span>
+                    <span className="min-w-0 flex-1">
                       <span className="block font-display font-semibold text-ink">{f.name}</span>
                       <span className="mt-1 block text-xs text-muted">
-                        세부기술 {activeCount}개
+                        세부기술 {activeCount}개 · {f.current_year}년 분석 {f.current_year_done}개
                       </span>
                     </span>
+                    <ProgressPie total={activeCount} done={f.current_year_done} />
                   </Link>
                 </li>
               );
