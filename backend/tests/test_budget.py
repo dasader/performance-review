@@ -57,3 +57,16 @@ def test_row_recovers_from_concurrent_integrity_error(db, monkeypatch):
 
     # IntegrityError 없이 A가 만든 행을 재조회해 반환해야 한다.
     assert spent_today(session_b) == pytest.approx(0.01)
+
+
+def test_first_usage_row_commits_to_release_lock(db, monkeypatch):
+    """spent_today가 그날 첫 usage 행을 만들 때 flush만 하고 커밋하지 않으면, 그
+    INSERT의 usage_date 유니크 락이 요청 끝까지 유지된다 — async 엔드포인트가 그 락을
+    쥔 채 외부 API를 await하다 멈추면 커넥션 풀이 통째로 묶인다(실측: idle in
+    transaction 12시간, 첫 화면·관리자 전면 hang). 첫 행 생성 경로는 즉시 커밋해
+    락을 놓아야 한다."""
+    committed = []
+    real_commit = db.commit
+    monkeypatch.setattr(db, "commit", lambda: committed.append(True) or real_commit())
+    spent_today(db)  # 그날 첫 행을 새로 만든다
+    assert committed, "첫 usage 행 생성 시 커밋되지 않았다 — flush만 하면 락이 요청 끝까지 유지된다"

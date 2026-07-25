@@ -28,7 +28,14 @@ def _row(db: Session) -> OpenAlexUsage:
     row = OpenAlexUsage(usage_date=_today(), cost_usd=0.0)
     db.add(row)
     try:
-        db.flush()
+        # flush가 아니라 commit이다 — 빈 행 INSERT의 usage_date 유니크 락을 즉시 놓기
+        # 위해서다. flush만 하면 락을 잡은 채 트랜잭션이 열려 있고, 읽기 전용인
+        # spent_today/check_budget 경로에는 커밋이 없어 락이 요청 끝까지 유지된다.
+        # preview 같은 async 엔드포인트가 이 락을 쥔 채 외부 API를 await하다 멈추면
+        # 락이 무한정 남아 동시 요청과 커넥션 풀이 줄줄이 묶인다(실측: idle in
+        # transaction 12시간, 첫 화면·관리자 전면 hang). 빈 행이라 즉시 커밋해도
+        # 잃을 것이 없다 — 실제 비용 누적은 record_usage가 이어서 한다.
+        db.commit()
     except IntegrityError:
         # 다른 세션이 같은 usage_date 행을 먼저 커밋한 경우(동시 첫 요청).
         # 롤백 후 재조회하면 그 행을 찾을 수 있다.
