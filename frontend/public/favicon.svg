@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>전략기술 논문성과 분석</title>
+  <!-- 논문(흰 페이지) 위에 성과 추이(오름 막대). 브랜드 accent(#1e4a72) 바탕.
+       16px에서도 형태가 뭉개지지 않도록 요소를 셋으로 줄이고 획을 굵게 잡았다. -->
+  <rect width="32" height="32" rx="6" fill="#1e4a72"/>
+  <!-- 페이지: 우상단이 접힌 문서 실루엣 -->
+  <path d="M8 5h10.5L25 11.5V26a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 7 26V6.5A1.5 1.5 0 0 1 8.5 5z" fill="#f8f6f2"/>
+  <path d="M18.5 5L25 11.5h-6.5V5z" fill="#a9bcd0"/>
+  <!-- 성과 추이: 오름차순 막대. 가장 높은 것만 highlight(#8a6d1f)로 강조 -->
+  <rect x="10.5" y="19" width="3.2" height="4.5" fill="#1e4a72"/>
+  <rect x="15" y="16.5" width="3.2" height="7" fill="#1e4a72"/>
+  <rect x="19.5" y="13.5" width="3.2" height="10" fill="#8a6d1f"/>
+</svg>

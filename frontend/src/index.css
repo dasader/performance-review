@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── 기본 ── */
+html {
+  scrollbar-gutter: stable;
+}
+
+body {
+  @apply bg-paper text-ink font-sans;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
+  margin: 0;
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3 {
+  @apply font-display;
+}
+
+/* 종이 질감 — 은은한 노이즈 오버레이 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  opacity: 0.015;
+  pointer-events: none;
+  z-index: 50;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+:focus-visible {
+  outline: 2px solid theme("colors.accent.DEFAULT");
+  outline-offset: 2px;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── 버튼 ──
+   서비스 전체 버튼의 단일 출처. 이전에는 파일마다 조금씩 다른 클래스 문자열이
+   8종 흩어져 있어 크기(px-2/px-3/px-4, text-xs/text-sm)와 색이 제각각이었다.
+
+   테두리만 있는 버튼은 쓰지 않는다 — 종이 질감 배경(bg-paper) 위에서 눌리는
+   요소로 읽히지 않는다. 모든 변형이 배경색을 가진다. */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap border
+           px-4 py-2 text-sm font-medium transition-colors
+           disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  /* 주 동작 — 화면당 하나가 원칙(저장, 실행, 생성) */
+  .btn-primary {
+    @apply border-ink bg-ink text-paper hover:bg-ink/85 hover:border-ink/85;
+  }
+
+  /* 보조 동작 — 배경을 옅게 깔아 테두리만 있는 상태를 피한다 */
+  .btn-secondary {
+    @apply border-accent-border bg-accent-light text-accent hover:bg-accent hover:text-paper hover:border-accent;
+  }
+
+  /* 중립 동작 — 취소·닫기처럼 강조가 필요 없는 것 */
+  .btn-neutral {
+    @apply border-border bg-surface text-ink-light hover:bg-paper hover:border-accent hover:text-ink;
+  }
+
+  /* 켜짐 상태 토글(세부기술 활성 여부) */
+  .btn-positive {
+    @apply border-positive/40 bg-positive/5 text-positive hover:bg-positive hover:text-paper hover:border-positive;
+  }
+
+  /* 되돌릴 수 없는 동작(즉시 실행 등) — 위험하진 않지만 확인이 필요한 것 */
+  .btn-warning {
+    @apply border-warning/40 bg-warning/5 text-warning hover:bg-warning hover:text-paper hover:border-warning;
+  }
+
+  .btn-danger {
+    @apply border-danger/40 bg-danger/5 text-danger hover:bg-danger hover:text-paper hover:border-danger;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  /* 토글(연도 선택·관리자 탭) — 비활성도 배경을 갖는다 */
+  .btn-toggle {
+    @apply border-border bg-surface text-ink-light hover:border-accent hover:text-ink;
+  }
+
+  .btn-toggle[aria-pressed="true"] {
+    @apply border-ink bg-ink text-paper;
+  }
+}
+
+/* 표 첫 열의 단계 코드("3-1.1")는 좁은 열 폭에서 하이픈 뒤가 잘려 "3-" / "1.1"로
+   줄바꿈된다. 코드 한 덩어리는 붙어 있어야 읽힌다(인쇄에서 특히 두드러진다). */
+.report-prose td:first-child,
+.report-prose th:first-child {
+  white-space: nowrap;
+}
+
+/* ── 인쇄(PDF 저장) ── */
+@media print {
+  @page {
+    margin: 15mm;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  body::before {
+    display: none;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* 차트·통계 타일은 통째로 유지한다. 표는 다르다 — 65행짜리 점검 표에
+     break-inside: avoid를 걸면 한 페이지에 못 들어가 통째로 다음 장으로 밀리고,
+     제목만 남은 빈 페이지가 생긴다. 표는 쪼개되 행 단위로만 끊고, 머리행은
+     페이지마다 반복시킨다. */
+  figure,
+  .recharts-wrapper,
+  .avoid-break {
+    break-inside: avoid;
+  }
+
+  table {
+    break-inside: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr,
+  td,
+  th {
+    break-inside: avoid;
+  }
+
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* 각주([1]) ↔ 참고문헌 상호 이동 링크는 인쇄물에서도 밑줄·색을 유지한다 — 클릭할 순
+     없어도 "이 번호가 참고문헌을 가리킨다"는 관계 자체는 종이에서도 읽혀야 한다.
+     되돌아가기용 "↑" 보조 링크는 인쇄에서 무의미하므로 print:hidden으로 완전히 숨긴다(위 규칙). */
+  a[href^="#ref-"],
+  a[href^="#cite-"] {
+    color: theme("colors.accent.DEFAULT");
+    text-decoration: underline;
+  }
+}

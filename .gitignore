@@ -1,0 +1,20 @@
+# 참조용 외부 코드 — 추적하지 않음
+references/
+
+# 로컬 설정 (실제 API 키가 들어감)
+.env
+
+# 외부에서 드롭된 참고자료 — 전략기술로드맵 원문 등. 공개본인지 비공개본인지
+# 파일만 봐서는 알 수 없으므로 저장소에 들어오지 않게 통째로 막는다.
+.cursor-drop-files/
+*_tech_goals.md
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
