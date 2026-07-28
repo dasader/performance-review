@@ -7,7 +7,9 @@
 
 ```bash
 # 스택 기동 — api 컨테이너 entrypoint(docker-entrypoint.sh)가 uvicorn 전에
-# alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0014
+# alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0015
+# 프론트엔드는 web 컨테이너 안에서 빌드돼 nginx가 정적 파일로 서빙한다 —
+# frontend/를 고쳤으면 반드시 --build로 다시 올려야 화면에 반영된다.
 docker compose up -d --build
 
 # .env를 고친 뒤에는 restart가 아니라 재생성해야 한다.
@@ -19,20 +21,50 @@ docker compose logs -f api
 
 # 테스트 (컨테이너 밖, 로컬 venv)
 cd backend && ./.venv/bin/python -m pytest
+cd backend && ./.venv/bin/python -m pytest tests/test_runner.py::test_step_labels_are_korean  # 단건
+cd backend && ./.venv/bin/python -m pytest -k roadmap                                    # 이름 매칭
 
 # 프론트엔드 테스트 (vitest, 순수 함수 대상 — jsdom 등 브라우저 환경 없음)
 cd frontend && npm test
+cd frontend && npx vitest run src/lib/reportMarkdown.test.ts   # 단건
+cd frontend && npm run lint     # oxlint
+cd frontend && npm run build    # tsc -b + vite build — 타입 오류는 여기서만 잡힌다
 
 # 마이그레이션 추가
 docker compose exec api alembic revision --autogenerate -m "설명"
 ```
 
 테스트는 반드시 `backend/.venv`를 쓴다 — 시스템 파이썬에는 의존성이 안 깔려 있다.
+백엔드 린터는 없다(ruff 등 미설치). 프론트만 oxlint를 쓴다.
+
+**백엔드 테스트는 인메모리 sqlite로 돈다** — `test_api.py`가 `StaticPool`로 엔진을 만들고
+`app.dependency_overrides[get_db]`를 갈아끼운다. DB에 접근하는 **미들웨어·의존성을 새로 추가하면
+`SessionLocal`을 직접 부르지 말고 `request.app.dependency_overrides`를 먼저 확인**해야 한다
+(`main.py::track_visitor`가 그 패턴). 안 그러면 실제 `DATABASE_URL`(테스트에 없는 postgres)로
+붙으려다 공개 API 테스트가 전부 깨진다.
 
 ## 포트 (NN=03)
 
 `api` 8003 · `web` 8103 · `db` 5403. 레지스트리는 `../PORTS.md`.
 NN=00은 backend가 8000이 되어 nst-wiki와 충돌하므로 03을 배정했다.
+
+## 프론트엔드 (React 19 + Vite + Tailwind + react-router)
+
+라우트는 `src/App.tsx` 한 곳에 모여 있다. 공개 화면은 분야 목록(`/`) · 분야 상세
+(`/fields/:id`) · 분야 보고서 전용 페이지(`/fields/:id/report/:year`, `/roadmap-check/:year`) ·
+세부기술 보고서(`/analyses/:id`, `/subfields/:id/:year`)이고, 관리자는 `/admin` 하나다.
+
+- **관리자 인증**: `useAdminKey.ts`가 `sessionStorage`에 키 하나를 보관한다(계정 체계 없음,
+  탭을 닫으면 사라짐). `api.ts`의 `ApiError`가 `status`를 들고 다니는 이유가 이것 —
+  401이면 저장된 키를 지우고 인증 화면으로 되돌린다. 새 admin 호출부도 같은 판별을 써야 한다.
+- **`npm run dev`(5173)는 API가 안 붙는다.** `vite.config.ts`에 proxy 설정이 없고 `api.ts`의
+  `BASE`가 `/api`라 5173에서는 프론트만 뜬다. 붙이려면
+  `VITE_API_BASE=http://localhost:8003 npm run dev`로 띄우고 `.env`의 `CORS_ORIGINS`에
+  `http://localhost:5173`을 추가한다(`allow_origins`가 8103으로 좁혀져 있다).
+  그럴 이유가 없으면 그냥 docker의 8103을 쓴다.
+- **버전**: `frontend/package.json`의 `version`이 단일 출처다 — `vite.config.ts`가 빌드 타임에
+  `__APP_VERSION__`으로 주입해 푸터에 표시한다. 프론트를 고치면 변경 성격에 맞춰(기능 추가 minor,
+  수정 patch) 이 값을 함께 올린다.
 
 ## 파이프라인 (6단계)
 
