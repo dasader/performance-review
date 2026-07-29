@@ -54,14 +54,14 @@ export default function RoadmapEditor({
 
   return (
     <section className="mt-6 border border-border bg-surface p-5">
-      <h2 className="mb-3 font-display text-lg font-semibold text-accent">전략기술로드맵</h2>
+      <h2 className="mb-3 text-lg font-semibold text-accent">전략기술로드맵</h2>
 
       <label className="block max-w-md text-sm">
         <span className="text-muted">분야</span>
         <select
           value={fieldId}
           onChange={(e) => setFieldId(Number(e.target.value))}
-          className="mt-1 w-full border border-border bg-paper px-3 py-2 text-sm text-ink"
+          className="input mt-1"
         >
           {fields.map((f) => (
             <option key={f.id} value={f.id}>
@@ -83,7 +83,7 @@ export default function RoadmapEditor({
         {/* 비공개 판본 여부는 관리자만 판단할 수 있다 — 어디로 나가는지 명시한다.
             임베딩을 로컬화해도 이 문제는 해결되지 않는다(최종 생성이 외부 모델이면
             원문은 프롬프트로 나간다). */}
-        <p className="border border-warning/40 bg-warning/5 p-3 text-xs text-ink-light">
+        <p className="banner banner-warn text-xs">
           ⚠ 여기 저장한 원문은 점검 보고서를 생성할 때 <strong>Gemini API로 전송</strong>됩니다.
           외부로 내보낼 수 없는 판본인지 확인한 뒤 입력하세요.
         </p>
@@ -94,7 +94,7 @@ export default function RoadmapEditor({
             value={version}
             onChange={(e) => setVersion(e.target.value)}
             placeholder="2026 제1호 개정"
-            className="mt-1 w-full border border-border bg-paper px-3 py-2 text-sm text-ink"
+            className="input mt-1"
           />
         </label>
 
@@ -107,7 +107,7 @@ export default function RoadmapEditor({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={18}
-            className="mt-1 w-full border border-border bg-paper px-3 py-2 font-mono text-xs text-ink"
+            className="mt-1 textarea font-mono text-xs"
           />
         </label>
 

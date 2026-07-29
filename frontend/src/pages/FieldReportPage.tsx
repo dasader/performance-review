@@ -13,7 +13,7 @@ import {
 } from "../api";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
-import { PROSE_CLASSES } from "../lib/prose";
+import { MARKDOWN_COMPONENTS, PROSE_CLASSES } from "../lib/prose";
 import { formatGeneratedAt } from "../lib/format";
 import { stripLeadingH1 } from "../lib/reportMarkdown";
 
@@ -79,7 +79,7 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
   return (
     <div className="min-h-screen">
       <TopBar />
-      <main className="mx-auto max-w-4xl px-6 py-14">
+      <main className="mx-auto max-w-4xl px-6 pb-10 pt-6">
         {/* 이동·출력 동작은 한 줄에 모은다 — 제목 왼쪽과 오른쪽으로 흩어져 있으면
             시선이 두 번 튄다. 인쇄물에서는 둘 다 의미가 없어 통째로 숨긴다. */}
         <div className="mb-8 flex items-center justify-between gap-3 print:hidden">
@@ -106,10 +106,10 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
         {data && (
           <>
             <header>
-              <p className="font-mono text-xs uppercase tracking-widest text-accent">
+              <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">
                 {kind === "report" ? "분야 종합 보고서" : "로드맵 이행 점검"}
               </p>
-              <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-ink">
+              <h1 className="mt-1 text-3xl font-bold tracking-tight text-ink">
                 {pageTitle(kind, fieldName)} <span className="text-faint">{data.year}</span>
               </h1>
 
@@ -123,13 +123,13 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
               {/* 전수 점검이 깨진 채 저장된 보고서는 "빠짐없이 봤다"로 읽히면 안 된다.
                   인쇄물에도 남겨야 한다 — 종이로 넘어가면 이 단서가 사라진다. */}
               {check?.incomplete && (
-                <p className="mt-3 border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">
+                <p className="mt-3 banner banner-risk">
                   로드맵 목표 {check.goal_count}개 중 {check.checked_count}개만 점검되었습니다.
                   일부 목표가 누락된 보고서입니다.
                 </p>
               )}
               {data.stale && (
-                <p className="mt-3 border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning">
+                <p className="mt-3 banner banner-warn">
                   생성 이후 원본이 변경되었습니다. 최신 상태가 아닐 수 있습니다.
                 </p>
               )}
@@ -146,7 +146,7 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
             <hr className="my-10 border-t border-border" />
 
             <div className={`report-prose ${PROSE_CLASSES}`}>
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]}>
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]} components={MARKDOWN_COMPONENTS}>
                 {stripLeadingH1(data.report_md)}
               </ReactMarkdown>
             </div>
@@ -158,8 +158,8 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
                 새 페이지에서 시작한다. 각 본문은 자체 H1을 걷어낸다(stripLeadingH1). */}
             {withSub && subReports && subReports.length > 0 && (
               <section className="mt-16 break-before-page">
-                <p className="font-mono text-xs uppercase tracking-widest text-accent">부록</p>
-                <h2 className="mt-1 font-display text-2xl font-bold tracking-tight text-ink">
+                <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">부록</p>
+                <h2 className="mt-1 text-2xl font-bold tracking-tight text-ink">
                   세부기술별 상세 보고서
                 </h2>
                 <p className="mt-1 text-sm text-muted">
@@ -172,15 +172,15 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
                         배경색이 아니라 테두리·넘버로 강조한다: 인쇄 시 배경색은 기본으로
                         빠지지만(브라우저 "배경 그래픽" 옵션) 테두리·텍스트는 항상 나온다. */}
                     <div className="mt-12 flex items-baseline gap-3 border-t-4 border-double border-ink pt-5">
-                      <span className="font-display text-2xl font-bold text-accent tabular-nums">
+                      <span className="text-2xl font-bold text-accent tabular-nums">
                         {String(i + 1).padStart(2, "0")}
                       </span>
-                      <h3 className="font-display text-2xl font-bold tracking-tight text-ink">
+                      <h3 className="text-2xl font-bold tracking-tight text-ink">
                         {s.name}
                       </h3>
                     </div>
                     <div className={`report-prose mt-5 ${PROSE_CLASSES}`}>
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]} components={MARKDOWN_COMPONENTS}>
                         {stripLeadingH1(s.report_md)}
                       </ReactMarkdown>
                     </div>

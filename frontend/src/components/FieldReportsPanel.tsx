@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, get, post } from "../api";
 import { formatGeneratedAt } from "../lib/format";
+import StatusBadge from "./StatusBadge";
 
 // 관리자 "분야 보고서" 탭 — 당해연도 전체를 일괄 큐잉하고, 분야별 종합/점검 상태를
 // 한눈에 본다. 실제 생성은 잡 루프가 한 틱에 하나씩 하므로, 이 화면은 큐잉만 걸고
@@ -28,19 +29,13 @@ const STATUS_LABEL: Record<string, string> = {
 
 function StatusChip({ cell, eligible }: { cell: Cell | null; eligible: boolean }) {
   if (!cell) {
-    return <span className="text-xs text-faint">{eligible ? "미생성" : "대상 아님"}</span>;
+    return <span className="text-xs text-muted">{eligible ? "미생성" : "대상 아님"}</span>;
   }
-  const cls =
-    cell.status === "done"
-      ? "text-positive"
-      : cell.status === "failed"
-        ? "text-danger"
-        : "text-warning";
   return (
-    <span className={`text-xs font-medium ${cls}`}>
-      ● {STATUS_LABEL[cell.status] ?? cell.status}
+    <span className="inline-flex flex-wrap items-baseline gap-x-2">
+      <StatusBadge status={cell.status} label={STATUS_LABEL[cell.status] ?? cell.status} />
       {cell.status === "done" && cell.generated_at && (
-        <span className="ml-1 font-normal text-faint">{formatGeneratedAt(cell.generated_at)}</span>
+        <span className="text-xs text-muted">{formatGeneratedAt(cell.generated_at)}</span>
       )}
     </span>
   );
@@ -111,7 +106,7 @@ export default function FieldReportsPanel({
   return (
     <section className="mt-6 border border-border bg-surface p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-lg font-semibold text-accent">분야 보고서 일괄 생성</h2>
+        <h2 className="text-lg font-semibold text-accent">분야 보고서 일괄 생성</h2>
         <label className="text-sm text-muted">
           대상 연도{" "}
           <input
@@ -141,7 +136,7 @@ export default function FieldReportsPanel({
           type="button"
           onClick={() => runAll("roadmap-check")}
           disabled={busy}
-          className="btn btn-primary btn-sm"
+          className="btn btn-secondary btn-sm"
         >
           로드맵 점검 전체 생성
         </button>
@@ -153,13 +148,13 @@ export default function FieldReportsPanel({
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
       {rows && (
-        <div className="mt-6 overflow-x-auto border-t border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted">
-                <th className="py-2 pr-3 font-medium">분야</th>
-                <th className="py-2 pr-3 font-medium">종합보고서</th>
-                <th className="py-2 pr-3 font-medium">로드맵 점검</th>
+        <div className="mt-6 table-scroll border-t border-border">
+          <table className="w-full border-collapse text-sm">
+            <thead className="tbl-head">
+              <tr className="border-b border-border">
+                <th>분야</th>
+                <th>종합보고서</th>
+                <th>로드맵 점검</th>
               </tr>
             </thead>
             <tbody>

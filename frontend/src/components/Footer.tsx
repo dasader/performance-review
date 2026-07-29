@@ -22,11 +22,17 @@ export default function Footer() {
   }, []);
 
   return (
-    <footer className="mt-16 border-t border-border py-6 print:hidden">
-      <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 text-xs text-faint sm:flex-row sm:items-start sm:justify-between">
+    // 푸터는 면(--surface)으로 되올려 지면과 갈라 놓는다 — 출처·스냅샷 시점을 적는
+    // 자리이고, 데이터가 언제 것인지 모르는 화면은 신뢰할 수 없다.
+    <footer className="mt-10 border-t border-border bg-surface py-4 print:hidden">
+      <div className="mx-auto flex max-w-page flex-col gap-3 px-6 text-xs text-muted sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="font-mono">
-            전략기술 논문성과 분석 · {domain} · v{__APP_VERSION__}
+          {/* mono는 한글이 섞인 문자열에 쓰지 않는다 — 도메인·버전만 mono로 남긴다. */}
+          <p>
+            전략기술 논문성과 분석 ·{" "}
+            <span className="font-mono">
+              {domain} · v{__APP_VERSION__}
+            </span>
           </p>
           <p className="mt-1">
             논문 데이터 출처: OpenAlex, KCI. 인용수는 수집 시점 스냅샷 기준으로 이후 변동될 수
@@ -83,7 +89,7 @@ function VisitorPanel({
         aria-expanded={expanded}
         aria-controls="visitor-daily-panel"
         aria-label={`오늘 ${visitors.today}명, 이번 주 ${visitors.this_week}명 방문 — 일별 방문자 수 ${expanded ? "접기" : "펼치기"}`}
-        className="font-mono tabular-nums text-faint underline decoration-border underline-offset-2 hover:text-muted hover:decoration-accent"
+        className="tabular-nums text-muted underline decoration-border underline-offset-2 hover:text-ink hover:decoration-ink"
       >
         {/* 열림/닫힘을 색만으로 구분하지 않도록 화살표 방향도 함께 바꾼다. */}
         <span aria-hidden="true">{expanded ? "▾" : "▴"}</span> 오늘 {visitors.today.toLocaleString()} · 이번
@@ -94,7 +100,7 @@ function VisitorPanel({
         <ul
           id="visitor-daily-panel"
           aria-label="일별 방문자 수"
-          className="absolute bottom-full right-0 z-10 mb-2 max-h-64 w-56 max-w-[calc(100vw-3rem)] space-y-0.5 overflow-y-auto border border-border bg-surface p-3 text-left font-mono text-[11px] tabular-nums text-faint shadow-lg"
+          className="absolute bottom-full right-0 z-10 mb-2 max-h-64 w-56 max-w-[calc(100vw-3rem)] space-y-0.5 overflow-y-auto border border-border bg-surface p-3 text-left text-eyebrow tabular-nums text-muted"
         >
           {visitors.daily.map((d) => (
             <li key={d.date} className="flex justify-end gap-3">

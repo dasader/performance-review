@@ -50,6 +50,19 @@ NN=00은 backend가 8000이 되어 nst-wiki와 충돌하므로 03을 배정했�
 
 ## 프론트엔드 (React 19 + Vite + Tailwind + react-router)
 
+프론트엔드 디자인은 `/home/dev/code/web-design/DESIGN.md` 체계를 따른다.
+토큰(색·활자·간격·모서리)의 단일 출처는 `frontend/tailwind.config.js`이고,
+컴포넌트 계약(`.btn*` · `.input` · `.banner*` · `.switch` · `.tbl-head` · `.table-scroll`)은
+`frontend/src/index.css`의 `@layer components`에 모여 있다. **화면에서 로컬 클래스로
+비슷한 것을 다시 조립하지 말고 이 둘을 고친다** — 예전에 그렇게 버튼 클래스가 8종,
+입력 높이가 32/40px 두 종으로 갈렸다. 기계 점검은 `python3 /home/dev/code/web-design/check.py`.
+
+> Tailwind 프로젝트라 `check.py`의 11항 중 2항(**버튼 배경 채움**, **결측 `—`**)은
+> 소스만 봐서는 항상 FAIL로 나온다 — 전자는 `@apply`라 소스 CSS에 `background:`가 없고,
+> 후자는 `src/**/*.html`을 찾는데 `—`가 `.tsx`에 있기 때문이다. **빌드된 CSS와 렌더된
+> DOM으로 재면 둘 다 PASS**다(실측 확인). 소스 기준 9/11이 정상이니 이 둘을 쫓아
+> 코드를 바꾸지 말 것.
+
 라우트는 `src/App.tsx` 한 곳에 모여 있다. 공개 화면은 분야 목록(`/`) · 분야 상세
 (`/fields/:id`) · 분야 보고서 전용 페이지(`/fields/:id/report/:year`, `/roadmap-check/:year`) ·
 세부기술 보고서(`/analyses/:id`, `/subfields/:id/:year`)이고, 관리자는 `/admin` 하나다.
@@ -65,6 +78,14 @@ NN=00은 backend가 8000이 되어 nst-wiki와 충돌하므로 03을 배정했�
 - **버전**: `frontend/package.json`의 `version`이 단일 출처다 — `vite.config.ts`가 빌드 타임에
   `__APP_VERSION__`으로 주입해 푸터에 표시한다. 프론트를 고치면 변경 성격에 맞춰(기능 추가 minor,
   수정 patch) 이 값을 함께 올린다.
+- **넓은 표는 `.table-scroll`로 감싼다**(`overflow-x-auto` 단독 금지). 375px에서 관리자
+  세부기술 표가 스크롤 컨테이너 안에 있는데도 문서 전체가 859px까지 가로로 밀렸다 —
+  `body`·`main`·`section`은 전부 360px로 정상인데 `documentElement`만 표 폭을 따라갔고,
+  `html`/`body`에 `overflow-x: clip`·`hidden`을 걸어도 막히지 않았다. `.table-scroll`이
+  얹는 **`contain: paint`**가 그것을 막는다. LLM이 만드는 마크다운 표도 열 수를 우리가
+  정하지 못하므로 `lib/prose.tsx::MARKDOWN_COMPONENTS`가 같은 컨테이너로 감싼다
+  (`<table>`에 `display:block`을 주는 흔한 우회법은 쓰지 않는다 — `thead`의
+  `table-header-group`이 깨져 인쇄에서 머리행이 페이지마다 반복되지 않는다).
 
 ## 파이프라인 (6단계)
 

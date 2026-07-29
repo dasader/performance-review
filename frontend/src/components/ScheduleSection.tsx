@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import Switch from "./Switch";
 import {
   ApiError,
   get,
@@ -116,7 +117,7 @@ export default function ScheduleSection({
           아래 설정 편집·실행 이력은 이 상태에 종속된 세부 정보다. */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="font-display text-lg font-semibold text-accent">자동 분석 스케줄</h2>
+          <h2 className="text-lg font-semibold text-accent">자동 분석 스케줄</h2>
           <p className="mt-1 text-xs text-muted">
             매월 지정한 일·시각에 활성 세부기술 전체를 당해~직전 연도 범위로 자동 재분석합니다.
           </p>
@@ -126,11 +127,11 @@ export default function ScheduleSection({
             <p className="flex items-center justify-end gap-1.5 text-xs font-medium text-ink-light">
               <span
                 aria-hidden="true"
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${data.enabled ? "bg-positive" : "bg-faint"}`}
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${data.enabled ? "bg-positive-mark" : "bg-border-strong"}`}
               />
               자동 실행 {data.enabled ? "켜짐" : "꺼짐"}
             </p>
-            <p className="mt-1 text-right font-mono text-xs tabular-nums text-muted">
+            <p className="mt-1 text-right text-xs tabular-nums text-muted">
               다음 실행 {new Date(data.next_run_at).toLocaleString("ko-KR")} ({data.timezone})
             </p>
             {dirty && (
@@ -155,20 +156,17 @@ export default function ScheduleSection({
                 <span id="schedule-enabled-label" className="mb-1 block text-xs font-medium text-ink-light">
                   자동 실행
                 </span>
-                {/* min-w — 켜짐/꺼짐 글자 수가 달라도 토글 폭이 고정되어 눌렀을 때 옆 요소가 밀리지 않는다.
-                    px-3 py-2 — 옆 숫자 입력(px-3 py-2)과 높이를 맞춰 한 줄에서 크기가 들쭉날쭉해 보이지 않게 한다. */}
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={draft.enabled}
-                  aria-labelledby="schedule-enabled-label"
-                  onClick={() => setDraft((d) => d && { ...d, enabled: !d.enabled })}
-                  className={`min-w-[4.5rem] border px-3 py-2 text-center text-sm ${
-                    draft.enabled ? "border-positive/40 text-positive" : "border-border text-faint"
-                  }`}
-                >
-                  {draft.enabled ? "켜짐" : "꺼짐"}
-                </button>
+                {/* 이전에는 테두리만 있는 초록 버튼이었다 — ① 테두리만 있는 버튼은 지면 위에서
+                    눌리는 것으로 읽히지 않고 ② 켬/끔은 상태 4단이 아니라 상태색을 쓸 자리가 아니다.
+                    세부기술 표의 활성 토글과 같은 스위치를 써서 켬/끔 표현을 화면 전체에서 통일한다. */}
+                <div className="flex h-8 items-center">
+                  <Switch
+                    checked={draft.enabled}
+                    onChange={() => setDraft((d) => d && { ...d, enabled: !d.enabled })}
+                    label={draft.enabled ? "켜짐" : "꺼짐"}
+                    ariaLabel="자동 실행"
+                  />
+                </div>
               </div>
 
               <ScheduleNumberField
@@ -198,7 +196,7 @@ export default function ScheduleSection({
 
               <div>
                 <span className="mb-1 block text-xs font-medium text-ink-light">시간대(읽기 전용)</span>
-                <p className="border border-border-light bg-paper px-3 py-2 text-sm text-faint">
+                <p className="flex h-8 items-center rounded-control border border-border bg-sunken px-2.5 text-sm text-muted">
                   {data.timezone}
                 </p>
               </div>
@@ -220,7 +218,7 @@ export default function ScheduleSection({
                 type="button"
                 disabled={runningNow}
                 onClick={handleRunNow}
-                className="btn btn-warning"
+                className="btn btn-secondary"
               >
                 {runningNow ? "실행 요청 중…" : "지금 실행"}
               </button>
@@ -247,21 +245,21 @@ export default function ScheduleSection({
             )}
             {data.history.length > 0 && (
               <>
-                <div className="mt-2 overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border-light text-left text-xs text-muted">
-                        <th className="py-2 pr-3 font-medium">월</th>
-                        <th className="py-2 pr-3 font-medium">실행 시각</th>
-                        <th className="py-2 pr-3 font-medium">종류</th>
-                        <th className="py-2 pr-3 text-right font-medium">큐잉</th>
-                        <th className="py-2 font-medium">성공/실패 요약</th>
+                <div className="mt-2 table-scroll">
+                  <table className="w-full border-collapse text-sm">
+                    <thead className="tbl-head">
+                      <tr className="border-b border-border-light">
+                        <th>월</th>
+                        <th>실행 시각</th>
+                        <th>종류</th>
+                        <th className="n">큐잉</th>
+                        <th>성공/실패 요약</th>
                       </tr>
                     </thead>
                     <tbody>
                       {visibleHistory.map((h) => (
                         <tr key={h.run_month}>
-                          <td className="py-3 pr-3 font-mono text-xs tabular-nums text-ink-light">
+                          <td className="py-3 pr-3 text-xs tabular-nums text-ink-light">
                             {h.run_month.slice(0, 7)}
                           </td>
                           <td className="py-3 pr-3 text-xs text-faint">
@@ -270,7 +268,7 @@ export default function ScheduleSection({
                           <td className="py-3 pr-3 text-xs text-ink-light">
                             {TRIGGER_LABEL[h.trigger] ?? h.trigger}
                           </td>
-                          <td className="py-3 pr-3 text-right font-mono text-xs tabular-nums text-muted">
+                          <td className="py-3 pr-3 text-right text-xs tabular-nums text-muted">
                             {h.queued_count.toLocaleString()}
                           </td>
                           <td className="py-3 text-xs">
@@ -341,7 +339,7 @@ function ScheduleNumberField({
         max={max}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-16 border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent"
+        className="w-16 input"
       />
     </div>
   );

@@ -119,7 +119,7 @@ export default function RunDialog({
 
   return (
     <section className="mt-6 border border-border bg-surface p-5">
-      <h2 className="font-display text-lg font-semibold text-accent">분석 실행</h2>
+      <h2 className="text-lg font-semibold text-accent">분석 실행</h2>
       <p className="mt-1 text-xs text-muted">
         미리보기는 검색만 수행하며 <span className="font-medium text-ink-light">LLM은 호출하지 않지만, OpenAlex 검색 비용(약 $0.002)이 소량 발생합니다.</span>{" "}
         실행 전 반드시 미리보기로 건수와 예상 비용을 확인하세요.
@@ -137,7 +137,7 @@ export default function RunDialog({
               setSubfieldId(e.target.value ? Number(e.target.value) : "");
               invalidate();
             }}
-            className="border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent"
+            className="input"
           >
             <option value="">세부기술 선택</option>
             {rows.map((r) => (
@@ -161,7 +161,7 @@ export default function RunDialog({
               setYearFrom(Number(e.target.value));
               invalidate();
             }}
-            className="w-24 border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent"
+            className="w-24 input"
           />
         </div>
         <div>
@@ -178,7 +178,7 @@ export default function RunDialog({
               setYearTo(Number(e.target.value));
               invalidate();
             }}
-            className="w-24 border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent"
+            className="w-24 input"
           />
         </div>
         <label className="flex items-center gap-2 pb-2 text-sm text-ink-light">
@@ -196,7 +196,7 @@ export default function RunDialog({
           type="button"
           disabled={subfieldId === "" || previewing}
           onClick={handlePreview}
-          className="btn btn-primary disabled:opacity-40"
+          className="btn btn-secondary disabled:opacity-40"
         >
           {previewing ? "확인 중…" : "미리보기"}
         </button>
@@ -225,7 +225,7 @@ export default function RunDialog({
             />
           </div>
 
-          <div className="mt-3 border border-warning/50 bg-warning/5 px-3 py-2">
+          <div className="mt-3 banner banner-warn">
             <p className="text-xs text-ink-light">
               예상 총비용 <span className="font-medium">(추정치)</span>
             </p>
@@ -239,12 +239,12 @@ export default function RunDialog({
             </p>
           </div>
 
-          <p className="mt-3 font-mono text-xs tabular-nums text-muted">
+          <p className="mt-3 text-xs tabular-nums text-muted">
             OpenAlex 오늘 사용 ${preview.budget_spent.toFixed(4)} / ${preview.budget_limit.toFixed(2)}
           </p>
 
           {preview.over_limit && (
-            <p className="mt-3 border border-danger/40 bg-danger/5 px-3 py-2 text-sm text-danger">
+            <p className="mt-3 banner banner-risk">
               검색 결과가 처리 상한 {preview.max_papers.toLocaleString()}건을 초과합니다. 검색식을
               좁히거나 세부기술을 분할한 뒤 다시 미리보기하세요. 이 상태로는 실행할 수 없습니다.
             </p>
@@ -279,7 +279,7 @@ export default function RunDialog({
       {runError && <p className="mt-3 text-sm text-danger">{runError}</p>}
 
       {runResult && (
-        <div className="mt-4 border border-positive/40 bg-positive/5 p-4 text-sm">
+        <div className="mt-4 banner border-positive-mark bg-positive-bg text-positive">
           <p className="font-medium text-positive">
             대기열에 추가되었습니다 ({runResult.queued.length}건). 실행 상태 표에서 진행 상황을
             확인할 수 있습니다.
@@ -303,7 +303,7 @@ function PreviewTile({ label, value, caption }: { label: string; value: string; 
   return (
     <div className="border border-border-light bg-surface px-3 py-2">
       <p className="text-xs text-muted">{label}</p>
-      <p className="mt-0.5 font-mono text-lg tabular-nums text-ink">{value}</p>
+      <p className="mt-0.5 text-lg tabular-nums text-ink">{value}</p>
       {caption && <p className="mt-0.5 text-xs text-faint">{caption}</p>}
     </div>
   );

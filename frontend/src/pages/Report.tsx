@@ -11,7 +11,7 @@ import CoverageBar from "../components/CoverageBar";
 import StatsPanel from "../components/StatsPanel";
 import { firstCiteOffsets } from "../lib/citeAnchors";
 import { stripLeadingH1 } from "../lib/reportMarkdown";
-import { PROSE_CLASSES } from "../lib/prose";
+import { MARKDOWN_COMPONENTS, PROSE_CLASSES } from "../lib/prose";
 
 function SectionDivider() {
   return <hr className="my-10 border-t border-border" />;
@@ -28,6 +28,7 @@ function ReportMarkdown({ md }: { md: string }) {
   const components: Components = useMemo(() => {
     const first = firstCiteOffsets(md);
     return {
+      ...MARKDOWN_COMPONENTS,
       a({ href, children, node, ...props }) {
         const refN = href?.startsWith("#ref-") ? href.slice("#ref-".length) : null;
         if (refN && node?.position?.start.offset === first.get(refN)) {
@@ -74,7 +75,7 @@ export default function Report() {
   return (
     <div className="min-h-screen">
       <TopBar />
-      <article className="mx-auto max-w-4xl px-6 py-12">
+      <article className="mx-auto max-w-4xl px-6 pb-10 pt-6">
         {error && <p className="text-sm text-danger">{error}</p>}
         {!data && !error && <p className="text-sm text-muted">불러오는 중…</p>}
         {data && <ReportBody data={data} />}
@@ -94,15 +95,15 @@ function ReportBody({ data }: { data: Analysis }) {
       <header className="mb-8" style={{ animation: "fadeUp 0.3s ease-out both" }}>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-accent">
+            <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">
               {data.field_name}
             </p>
-            <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-ink">
-              {data.subfield_name} <span className="text-faint">{data.year}</span>
+            <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-ink">
+              {data.subfield_name} <span className="tabular-nums text-muted">{data.year}</span>
             </h1>
-            <p className="mt-1 font-mono text-xs uppercase tracking-widest text-muted">
-              분석 대상 기간 {data.year}년
-            </p>
+            {/* eyebrow는 한 덩어리에 하나만 쓴다 — 제목 위아래로 두 줄이 같은 대문자 라벨
+                모양이면 어느 쪽이 상위 분류인지 읽히지 않는다. 아래는 평범한 캡션으로 둔다. */}
+            <p className="mt-1 text-xs text-muted">분석 대상 기간 {data.year}년</p>
           </div>
 
           {data.status === "done" && (
@@ -122,28 +123,36 @@ function ReportBody({ data }: { data: Analysis }) {
 
         {/* 검색 모집단과 분석 모집단이 다르다는 점을 감추지 않는다. 0건도 정보이므로 항상 표시한다.
             서술을 읽기 전에 봐야 하는 전제이므로 섹션 순서와 무관하게 항상 최상단에 유지한다.
-            print:hidden — PDF에서는 이 박스가 PrintHeader와 중복된다. 검색/분석 건수 정보
+            print:hidden — PDF에서는 이 격자가 PrintHeader와 중복된다. 검색/분석 건수 정보
             자체는 PDF에서 완전히 사라지면 안 되므로, 그 역할은 아래 StatsPanel("기본 통계")의
-            검색 논문/분석 대상 타일(print:hidden 없음)이 대신한다. */}
-        <div className="avoid-break mt-4 max-w-sm border border-border bg-surface p-4 print:hidden">
-          <p className="text-sm text-ink-light">
-            검색 <span className="font-mono tabular-nums">{data.searched_count.toLocaleString()}</span>
-            건 / 분석 대상{" "}
-            <span className="font-mono tabular-nums">{data.analyzed_count.toLocaleString()}</span>건
-          </p>
-          <div className="mt-2">
-            <CoverageBar searched={data.searched_count} analyzed={data.analyzed_count} />
-          </div>
-          {excluded > 0 && (
-            <p className="mt-2 text-xs text-muted">abstract 미보유 등 사유로 {excluded.toLocaleString()}건 제외</p>
-          )}
+            검색 논문/분석 대상 타일(print:hidden 없음)이 대신한다.
+
+            문서 메타 격자 — 값이 헤드라인 수치가 아니라 참조 정보(모집단·제외·수집 시점)라
+            칸이 얕고 값이 작다. 통계 타일과 같은 뼈대(1px 괘선 틈)를 쓰고 크기만 다르다:
+            화면마다 비슷한 격자를 로컬 CSS로 다시 짜면 padding과 값 크기가 조용히 어긋난다.
+            제외 0건은 빈칸이 아니라 —로 쓴다 — 0과 "값 없음"은 다른 정보다. */}
+        <div className="avoid-break mt-4 grid grid-cols-2 gap-px border border-border bg-border sm:grid-cols-4 print:hidden">
+          <MetaCell label="검색 논문" value={`${data.searched_count.toLocaleString()}건`} />
+          <MetaCell label="분석 대상" value={`${data.analyzed_count.toLocaleString()}건`} />
+          <MetaCell
+            label="제외"
+            value={excluded > 0 ? `${excluded.toLocaleString()}건` : "—"}
+            note="abstract 미보유 등"
+          />
+          <MetaCell
+            label="수집 시점"
+            value={
+              data.snapshot_at ? new Date(data.snapshot_at).toLocaleDateString("ko-KR") : "—"
+            }
+            note="인용수 포함 · 이후 변동 가능"
+          />
         </div>
 
-        {data.snapshot_at && (
-          <p className="mt-3 text-xs text-faint">
-            수집 시점 {new Date(data.snapshot_at).toLocaleString("ko-KR")} 기준 (인용수 포함, 이후 변동 가능)
-          </p>
-        )}
+        {/* 분석 대상 비율은 스케일이 있는 값이라 칩이 아니라 게이지로 말한다.
+            확인 채널은 하나다 — 같은 것을 칩과 게이지로 두 번 말하지 않는다. */}
+        <div className="mt-3 max-w-sm print:hidden">
+          <CoverageBar searched={data.searched_count} analyzed={data.analyzed_count} />
+        </div>
       </header>
 
       {data.status !== "done" && <StatusPanel data={data} />}
@@ -172,14 +181,25 @@ function ReportBody({ data }: { data: Analysis }) {
   );
 }
 
+// 문서 메타 격자의 한 칸. 라벨은 eyebrow(11px), 값은 본문 크기 — 헤드라인 수치가 아니다.
+function MetaCell({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div className="bg-surface p-3">
+      <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">{label}</p>
+      <p className="mt-1 text-sm font-semibold tabular-nums text-ink">{value}</p>
+      {note && <p className="mt-0.5 text-eyebrow text-muted">{note}</p>}
+    </div>
+  );
+}
+
 // 인쇄(PDF 저장) 전용 문서 헤더 — 화면에서는 보이지 않고 @media print에서만 나타난다.
 // 매 페이지 반복 헤더(@page)는 브라우저 지원이 제한적이라, 첫 페이지 상단에 한 번
 // 나오는 블록으로 대신한다.
 function PrintHeader({ data }: { data: Analysis }) {
   return (
     <div className="mb-8 hidden border-b border-ink pb-4 print:block">
-      <p className="font-display text-sm font-bold tracking-tight text-ink">전략기술 논문성과 분석</p>
-      <p className="mt-0.5 break-all font-mono text-[11px] text-muted">{window.location.href}</p>
+      <p className="text-sm font-bold tracking-tight text-ink">전략기술 논문성과 분석</p>
+      <p className="mt-0.5 break-all font-mono text-eyebrow text-muted">{window.location.href}</p>
       {/* 검색/분석 건수 줄은 의도적으로 뺀다 — "기본 통계" 섹션의 검색 논문/분석 대상
           타일이 인쇄물에서 같은 정보를 이미 전달하므로, 여기서 중복 표시하지 않는다. */}
       <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-ink-light">
@@ -190,7 +210,7 @@ function PrintHeader({ data }: { data: Analysis }) {
           <span className="text-muted">분석 시점</span>{" "}
           {data.snapshot_at
             ? `${new Date(data.snapshot_at).toLocaleString("ko-KR")} 기준 (인용수 포함)`
-            : "-"}
+            : "—"}
         </p>
       </div>
     </div>
@@ -204,7 +224,7 @@ function References({ references }: { references: Reference[] }) {
     <>
       <SectionDivider />
       <section className="avoid-break">
-        <h2 className="font-display text-xl font-bold tracking-tight text-accent">참고문헌</h2>
+        <h2 className="text-xl font-bold tracking-tight text-accent">참고문헌</h2>
         <ol className="mt-4 space-y-2 text-sm text-ink-light">
           {references.map((r) => (
             <li key={r.n} id={`ref-${r.n}`} className={`flex gap-2 ${SCROLL_TARGET_CLASS}`}>
@@ -230,7 +250,7 @@ function References({ references }: { references: Reference[] }) {
                       href={`https://doi.org/${r.doi}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-accent underline decoration-border underline-offset-2 hover:decoration-accent"
+                      className="break-all text-ink underline decoration-border-strong underline-offset-2 hover:decoration-ink"
                     >
                       doi.org/{r.doi}
                     </a>
@@ -248,7 +268,7 @@ function References({ references }: { references: Reference[] }) {
 function StatusPanel({ data }: { data: Analysis }) {
   if (data.status === "failed") {
     return (
-      <div className="border border-danger/40 bg-danger/5 p-5">
+      <div className="banner banner-risk">
         <p className="text-sm font-medium text-danger">분석이 실패했습니다.</p>
         {data.error && <p className="mt-2 whitespace-pre-wrap text-xs text-ink-light">{data.error}</p>}
       </div>
@@ -257,7 +277,7 @@ function StatusPanel({ data }: { data: Analysis }) {
 
   if (data.status === "paused") {
     return (
-      <div className="border border-warning/40 bg-warning/5 p-5">
+      <div className="banner banner-warn">
         <p className="text-sm font-medium text-warning">예산 소진으로 일시중지되었습니다.</p>
         <p className="mt-2 text-xs text-ink-light">
           할당된 분석 예산을 모두 사용해 처리가 중단된 상태입니다. 예산이 보충되면 이어서 진행됩니다.
