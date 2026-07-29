@@ -100,7 +100,7 @@ function VisitorPanel({
         <ul
           id="visitor-daily-panel"
           aria-label="일별 방문자 수"
-          className="absolute bottom-full right-0 z-10 mb-2 max-h-64 w-56 max-w-[calc(100vw-3rem)] space-y-0.5 overflow-y-auto border border-border bg-surface p-3 text-left text-eyebrow tabular-nums text-muted"
+          className="absolute bottom-full right-0 z-10 mb-2 max-h-64 w-56 max-w-[calc(100vw-3rem)] space-y-1 overflow-y-auto border border-border bg-surface p-3 text-left text-eyebrow tabular-nums text-muted"
         >
           {visitors.daily.map((d) => (
             <li key={d.date} className="flex justify-end gap-3">

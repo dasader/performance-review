@@ -118,7 +118,7 @@ export default function RunDialog({
   };
 
   return (
-    <section className="mt-6 border border-border bg-surface p-5">
+    <section className="mt-6 border border-border bg-surface p-4">
       <h2 className="text-lg font-semibold text-accent">분석 실행</h2>
       <p className="mt-1 text-xs text-muted">
         미리보기는 검색만 수행하며 <span className="font-medium text-ink-light">LLM은 호출하지 않지만, OpenAlex 검색 비용(약 $0.002)이 소량 발생합니다.</span>{" "}
@@ -205,7 +205,7 @@ export default function RunDialog({
       {previewError && <p className="mt-3 text-sm text-danger">{previewError}</p>}
 
       {preview && (
-        <div className="mt-5 border border-border-light bg-paper p-4">
+        <div className="mt-4 border border-border-light bg-paper p-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <PreviewTile label="OpenAlex 전체 건수" value={preview.openalex_count.toLocaleString()} />
             <PreviewTile
@@ -229,10 +229,10 @@ export default function RunDialog({
             <p className="text-xs text-ink-light">
               예상 총비용 <span className="font-medium">(추정치)</span>
             </p>
-            <p className="mt-0.5 font-mono text-2xl font-semibold tabular-nums text-ink">
+            <p className="mt-1 font-mono text-2xl font-semibold tabular-nums text-ink">
               ${preview.estimated_total_cost_usd.toFixed(4)}
             </p>
-            <p className="mt-0.5 text-xs text-faint">
+            <p className="mt-1 text-xs text-faint">
               OpenAlex ${preview.estimated_cost_usd.toFixed(4)} (실측 단가) + LLM(map) $
               {preview.estimated_llm_cost_usd.toFixed(4)} (논문당 평균 토큰 근사치 기반 추정 — 실제와
               다를 수 있음)
@@ -303,8 +303,8 @@ function PreviewTile({ label, value, caption }: { label: string; value: string; 
   return (
     <div className="border border-border-light bg-surface px-3 py-2">
       <p className="text-xs text-muted">{label}</p>
-      <p className="mt-0.5 text-lg tabular-nums text-ink">{value}</p>
-      {caption && <p className="mt-0.5 text-xs text-faint">{caption}</p>}
+      <p className="mt-1 text-lg tabular-nums text-ink">{value}</p>
+      {caption && <p className="mt-1 text-xs text-faint">{caption}</p>}
     </div>
   );
 }

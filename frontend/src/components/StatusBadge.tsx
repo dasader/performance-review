@@ -16,7 +16,7 @@ const DOT_CLASS: Record<string, string> = {
 
 export default function StatusBadge({ status, label }: { status: string; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-light">
+    <span className="inline-flex items-center gap-2 text-xs font-medium text-ink-light">
       <span
         aria-hidden="true"
         className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT_CLASS[status] ?? "bg-border-strong"}`}

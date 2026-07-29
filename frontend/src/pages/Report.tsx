@@ -92,7 +92,7 @@ function ReportBody({ data }: { data: Analysis }) {
     <>
       <PrintHeader data={data} />
 
-      <header className="mb-8" style={{ animation: "fadeUp 0.3s ease-out both" }}>
+      <header className="mb-6" style={{ animation: "fadeUp 0.3s ease-out both" }}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">
@@ -187,7 +187,7 @@ function MetaCell({ label, value, note }: { label: string; value: string; note?:
     <div className="bg-surface p-3">
       <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">{label}</p>
       <p className="mt-1 text-sm font-semibold tabular-nums text-ink">{value}</p>
-      {note && <p className="mt-0.5 text-eyebrow text-muted">{note}</p>}
+      {note && <p className="mt-1 text-eyebrow text-muted">{note}</p>}
     </div>
   );
 }
@@ -197,9 +197,9 @@ function MetaCell({ label, value, note }: { label: string; value: string; note?:
 // 나오는 블록으로 대신한다.
 function PrintHeader({ data }: { data: Analysis }) {
   return (
-    <div className="mb-8 hidden border-b border-ink pb-4 print:block">
+    <div className="mb-6 hidden border-b border-ink pb-4 print:block">
       <p className="text-sm font-bold tracking-tight text-ink">전략기술 논문성과 분석</p>
-      <p className="mt-0.5 break-all font-mono text-eyebrow text-muted">{window.location.href}</p>
+      <p className="mt-1 break-all font-mono text-eyebrow text-muted">{window.location.href}</p>
       {/* 검색/분석 건수 줄은 의도적으로 뺀다 — "기본 통계" 섹션의 검색 논문/분석 대상
           타일이 인쇄물에서 같은 정보를 이미 전달하므로, 여기서 중복 표시하지 않는다. */}
       <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-ink-light">
@@ -288,7 +288,7 @@ function StatusPanel({ data }: { data: Analysis }) {
 
   if (ACTIVE_STATUSES.has(data.status)) {
     return (
-      <div className="border border-border bg-surface p-5">
+      <div className="border border-border bg-surface p-4">
         <p className="text-sm font-medium text-ink">보고서를 준비하는 중입니다 — {data.status_label}</p>
         <progress className="mt-3" aria-label="분석 진행 중" />
         <p className="mt-3 text-xs text-muted">

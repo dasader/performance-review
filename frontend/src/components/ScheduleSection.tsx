@@ -112,7 +112,7 @@ export default function ScheduleSection({
     : [];
 
   return (
-    <section className="mt-6 border border-border bg-surface p-5">
+    <section className="mt-6 border border-border bg-surface p-4">
       {/* 헤더 — 제목과 함께 "지금 이 순간의 상태"(활성 여부 + 다음 실행 시각)를 먼저 보여준다.
           아래 설정 편집·실행 이력은 이 상태에 종속된 세부 정보다. */}
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -123,8 +123,8 @@ export default function ScheduleSection({
           </p>
         </div>
         {data && (
-          <div className="shrink-0 border border-border-light bg-paper px-4 py-2.5">
-            <p className="flex items-center justify-end gap-1.5 text-xs font-medium text-ink-light">
+          <div className="shrink-0 border border-border-light bg-paper px-4 py-2">
+            <p className="flex items-center justify-end gap-2 text-xs font-medium text-ink-light">
               <span
                 aria-hidden="true"
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${data.enabled ? "bg-positive-mark" : "bg-border-strong"}`}
@@ -149,7 +149,7 @@ export default function ScheduleSection({
       {data && draft && (
         <>
           {/* 설정 편집 */}
-          <div className="mt-5">
+          <div className="mt-4">
             <h3 className="text-sm font-medium text-ink-light">설정 편집</h3>
             <div className="mt-3 flex flex-wrap items-end gap-4">
               <div>
@@ -196,7 +196,10 @@ export default function ScheduleSection({
 
               <div>
                 <span className="mb-1 block text-xs font-medium text-ink-light">시간대(읽기 전용)</span>
-                <p className="flex h-8 items-center rounded-control border border-border bg-sunken px-2.5 text-sm text-muted">
+                {/* 읽기 전용이지만 옆의 숫자 입력들과 한 줄에 서므로 .input 계약을 그대로
+                    쓴다 — 높이·모서리·좌우 여백을 손으로 다시 조립하면 조용히 어긋난다.
+                    바탕만 눌린 면으로 내려 "누를 수 없는 칸"임을 밝힌다. */}
+                <p className="input flex w-auto items-center bg-sunken text-muted">
                   {data.timezone}
                 </p>
               </div>
@@ -205,7 +208,7 @@ export default function ScheduleSection({
             {/* 두 버튼을 한 줄에 세로 정렬한다. 성격이 다르므로(값 저장 vs 되돌릴 수 없는
                 실행) 좌우로 갈라 놓고, 즉시 실행 쪽에만 경고색 테두리를 줘 구분한다.
                 박스로 감싸면 카드 안에 카드가 생겨 오히려 산만해진다. */}
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
                 disabled={saving || !dirty}
@@ -238,7 +241,7 @@ export default function ScheduleSection({
           </div>
 
           {/* 실행 이력 */}
-          <div className="mt-5 border-t border-border pt-4">
+          <div className="mt-4 border-t border-border pt-4">
             <h3 className="text-sm font-medium text-ink-light">최근 실행 이력</h3>
             {data.history.length === 0 && (
               <p className="mt-2 text-sm text-muted">아직 자동 실행 기록이 없습니다.</p>

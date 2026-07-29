@@ -124,7 +124,7 @@ export default function Admin() {
     return (
       <div className="min-h-screen">
         <TopBar />
-        <main className="mx-auto max-w-sm px-6 py-24">
+        <main className="mx-auto max-w-sm px-6 py-10">
           <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">관리자</p>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-ink">관리자 인증</h1>
           <p className="mt-2 text-sm text-ink-light">
@@ -179,7 +179,7 @@ export default function Admin() {
     <div className="min-h-screen">
       <TopBar />
       <main className="mx-auto max-w-page px-6 pb-10 pt-6">
-        <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">관리자</p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-ink">분석 운영</h1>
@@ -265,7 +265,7 @@ className="btn btn-toggle btn-sm"
 
         {/* 세부기술·검색식 / 분석 실행 섹션과 같은 카드로 묶어 시각적 단위를 맞춘다. */}
         {tab === "run" && (
-        <section className="mt-6 border border-border bg-surface p-5">
+        <section className="mt-6 border border-border bg-surface p-4">
         <h2 className="mb-3 text-lg font-semibold text-accent">실행 상태</h2>
 
         {!data && !error && <p className="text-sm text-muted">불러오는 중…</p>}

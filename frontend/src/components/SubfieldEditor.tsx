@@ -225,7 +225,7 @@ export default function SubfieldEditor({
   );
 
   return (
-    <section className="border border-border bg-surface p-5">
+    <section className="border border-border bg-surface p-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-accent">세부기술 · 검색식</h2>
@@ -393,7 +393,7 @@ export default function SubfieldEditor({
             </div>
 
             <div>
-              <div className="mb-1 flex items-center gap-1.5">
+              <div className="mb-1 flex items-center gap-2">
                 <label htmlFor="modal-query" className="block text-xs font-medium text-ink-light">
                   검색식 (OpenAlex)
                 </label>
@@ -418,7 +418,7 @@ export default function SubfieldEditor({
             </div>
 
             <div>
-              <div className="mb-1 flex items-center gap-1.5">
+              <div className="mb-1 flex items-center gap-2">
                 <label htmlFor="modal-query-kci" className="block text-xs font-medium text-ink-light">
                   KCI 검색식 (비우면 공통값 사용)
                 </label>
@@ -493,7 +493,7 @@ function QueryLintFeedback({ result, valueTrimmed }: { result: LintResult; value
     );
   }
   return (
-    <ul className="mt-1 space-y-0.5 text-xs">
+    <ul className="mt-1 space-y-1 text-xs">
       {result.errors.map((issue) => (
         <li key={issue.code} className="text-danger">
           <span className="font-medium">[오류]</span> {issue.message}
@@ -565,7 +565,7 @@ function Modal({
         aria-labelledby={titleId}
         className="flex max-h-[85vh] w-full max-w-lg flex-col border border-border bg-surface"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <h2 id={titleId} className="text-base font-semibold text-ink">
             {title}
           </h2>
@@ -579,7 +579,7 @@ function Modal({
             ×
           </button>
         </div>
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
+        <div className="overflow-y-auto px-4 py-4">{children}</div>
       </div>
     </div>
   );
@@ -636,7 +636,7 @@ function QueryHelpPanel({ source, panelId }: { source: "openalex" | "kci"; panel
           <li>한국 소속 저자 필터와 연도 필터는 자동으로 적용되므로 검색식에 넣지 마세요.</li>
         </ul>
         <p className="mt-3 font-medium text-ink">예시 (2025년 한국 논문 기준 실측)</p>
-        <ul className="mt-1 space-y-0.5">
+        <ul className="mt-1 space-y-1">
           <li>
             <code className="font-mono text-ink">semiconductor AND memory</code>{" "}
             <span className="text-muted">→ 206건</span>
@@ -660,7 +660,7 @@ function QueryHelpPanel({ source, panelId }: { source: "openalex" | "kci"; panel
           괄호 안에 <code className="font-mono text-ink">AND</code>/<code className="font-mono text-ink">OR</code>를
           중첩할 수 있고, 그룹끼리 조합하거나 <code className="font-mono text-ink">NOT</code>과 섞어도 됩니다.
         </p>
-        <ul className="mt-1 space-y-0.5">
+        <ul className="mt-1 space-y-1">
           <li>
             <code className="font-mono text-ink">(memory OR flash) AND (semiconductor OR device)</code>{" "}
             <span className="text-muted">→ 1,055건 (그룹 2개)</span>
@@ -678,7 +678,7 @@ function QueryHelpPanel({ source, panelId }: { source: "openalex" | "kci"; panel
         {/* 괄호가 무시되지 않고 실제로 그룹으로 해석된다는 근거 — 같은 단어라도 묶는 위치에 따라
             결과가 19배 차이난다. 검색식을 짤 때 가장 실수하기 쉬운 지점이라 대비 예시로 보여준다. */}
         <p className="mt-3 font-medium text-warning">괄호 위치가 결과를 크게 바꿉니다</p>
-        <ul className="mt-1 space-y-0.5">
+        <ul className="mt-1 space-y-1">
           <li>
             <code className="font-mono text-ink">(memory OR flash) AND semiconductor</code>{" "}
             <span className="text-muted">→ 208건</span>

@@ -75,7 +75,7 @@ export default function FieldDetail() {
       </div>
     );
   }
-  if (!field) return <p className="p-8 text-sm text-muted">불러오는 중…</p>;
+  if (!field) return <p className="p-6 text-sm text-muted">불러오는 중…</p>;
 
   return (
     <div className="min-h-screen">
@@ -87,7 +87,7 @@ export default function FieldDetail() {
         <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-ink">{field.name}</h1>
 
         {years.length === 0 ? (
-          <p className="mt-8 text-sm text-muted">아직 분석된 결과가 없습니다.</p>
+          <p className="mt-6 text-sm text-muted">아직 분석된 결과가 없습니다.</p>
         ) : (
           <>
             {/* role="tab"을 제대로 쓰려면 aria-controls·tabpanel·화살표 키 이동까지 필요한데,
@@ -103,7 +103,7 @@ export default function FieldDetail() {
                   className="btn btn-toggle btn-sm tabular-nums"
                 >
                   {y.year}
-                  <span className="ml-1.5 opacity-70">
+                  <span className="ml-2 opacity-70">
                     ({y.done_count}/{y.subfield_count})
                   </span>
                 </button>
@@ -190,7 +190,7 @@ export default function FieldDetail() {
                     <tbody>
                       {summary.subfields.map((s) => (
                         <tr key={s.subfield_id} className="border-b border-border-light">
-                          <td className="px-3 py-2.5 font-medium text-ink">
+                          <td className="px-3 py-2 font-medium text-ink">
                             {s.analysis_id ? (
                               <Link
                                 to={`/subfields/${s.subfield_id}/${year}`}
@@ -202,10 +202,10 @@ export default function FieldDetail() {
                               s.subfield_name
                             )}
                           </td>
-                          <td className="px-3 py-2.5">
+                          <td className="px-3 py-2">
                             <StatusBadge status={s.status} label={s.status_label} />
                           </td>
-                          <td className="hidden w-40 px-3 py-2.5 sm:table-cell">
+                          <td className="hidden w-40 px-3 py-2 sm:table-cell">
                             {/* 0건은 "아직 검색을 안 돌렸다"는 뜻이라 막대가 아니라 결측 기호로
                                 쓴다 — 빈칸으로 두면 0과 "값 없음"이 구별되지 않는다. */}
                             {s.searched_count > 0 ? (
@@ -214,7 +214,7 @@ export default function FieldDetail() {
                               <span className="text-muted">—</span>
                             )}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-2.5 text-right text-xs tabular-nums text-muted">
+                          <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-muted">
                             {s.searched_count.toLocaleString()} / {s.analyzed_count.toLocaleString()}
                           </td>
                         </tr>

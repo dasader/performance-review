@@ -104,7 +104,7 @@ export default function FieldReportsPanel({
   };
 
   return (
-    <section className="mt-6 border border-border bg-surface p-5">
+    <section className="mt-6 border border-border bg-surface p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-accent">분야 보고서 일괄 생성</h2>
         <label className="text-sm text-muted">

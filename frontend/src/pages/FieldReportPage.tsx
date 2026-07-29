@@ -82,7 +82,7 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
       <main className="mx-auto max-w-4xl px-6 pb-10 pt-6">
         {/* 이동·출력 동작은 한 줄에 모은다 — 제목 왼쪽과 오른쪽으로 흩어져 있으면
             시선이 두 번 튄다. 인쇄물에서는 둘 다 의미가 없어 통째로 숨긴다. */}
-        <div className="mb-8 flex items-center justify-between gap-3 print:hidden">
+        <div className="mb-6 flex items-center justify-between gap-3 print:hidden">
           <Link to={`/fields/${fieldId}`} className="btn btn-neutral btn-sm">
             ← {fieldName || "분야"} 화면으로
           </Link>
@@ -157,7 +157,7 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
                 둘 다 break를 걸면 배너만 있는 빈 페이지가 생긴다. 둘째 세부기술부터만
                 새 페이지에서 시작한다. 각 본문은 자체 H1을 걷어낸다(stripLeadingH1). */}
             {withSub && subReports && subReports.length > 0 && (
-              <section className="mt-16 break-before-page">
+              <section className="mt-10 break-before-page">
                 <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">부록</p>
                 <h2 className="mt-1 text-2xl font-bold tracking-tight text-ink">
                   세부기술별 상세 보고서
@@ -171,7 +171,7 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
                         구분돼야 한다 — 큰 넘버 + 굵은 상단 이중선 + 검정 큰 글씨.
                         배경색이 아니라 테두리·넘버로 강조한다: 인쇄 시 배경색은 기본으로
                         빠지지만(브라우저 "배경 그래픽" 옵션) 테두리·텍스트는 항상 나온다. */}
-                    <div className="mt-12 flex items-baseline gap-3 border-t-4 border-double border-ink pt-5">
+                    <div className="mt-10 flex items-baseline gap-3 border-t-4 border-double border-ink pt-4">
                       <span className="text-2xl font-bold text-accent tabular-nums">
                         {String(i + 1).padStart(2, "0")}
                       </span>
@@ -179,7 +179,7 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
                         {s.name}
                       </h3>
                     </div>
-                    <div className={`report-prose mt-5 ${PROSE_CLASSES}`}>
+                    <div className={`report-prose mt-4 ${PROSE_CLASSES}`}>
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]} components={MARKDOWN_COMPONENTS}>
                         {stripLeadingH1(s.report_md)}
                       </ReactMarkdown>
@@ -207,7 +207,7 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
               </section>
             )}
             {withSub && subReports?.length === 0 && (
-              <p className="mt-8 text-sm text-muted">첨부할 완성된 세부기술 보고서가 없습니다.</p>
+              <p className="mt-6 text-sm text-muted">첨부할 완성된 세부기술 보고서가 없습니다.</p>
             )}
           </>
         )}

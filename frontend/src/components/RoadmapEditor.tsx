@@ -53,7 +53,7 @@ export default function RoadmapEditor({
   const registered = (roadmap?.goal_count ?? 0) > 0;
 
   return (
-    <section className="mt-6 border border-border bg-surface p-5">
+    <section className="mt-6 border border-border bg-surface p-4">
       <h2 className="mb-3 text-lg font-semibold text-accent">전략기술로드맵</h2>
 
       <label className="block max-w-md text-sm">

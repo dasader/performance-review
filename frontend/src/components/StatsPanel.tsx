@@ -124,7 +124,7 @@ export default function StatsPanel({ stats }: { stats: Stats | Record<string, ne
         </figure>
       )}
 
-      <div className="grid gap-8 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2">
         <RankBars title="성과 유형별 분포" rows={objectToRows(stats.by_achievement_type)} />
         <RankBars
           title="데이터 출처"
@@ -132,7 +132,7 @@ export default function StatsPanel({ stats }: { stats: Stats | Record<string, ne
         />
       </div>
 
-      <div className="grid gap-8 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2">
         <RankTable title="상위 기관" rows={stats.top_institutions} />
         <RankTable title="상위 저널" rows={stats.top_journals} />
         <RankTable title="상위 저자" rows={stats.top_authors} />
@@ -207,7 +207,7 @@ function RankBars({ title, rows }: { title: string; rows: [string, number][] }) 
   return (
     <div className="avoid-break">
       <h3 className="mb-2 text-sm font-bold text-ink">{title}</h3>
-      <ul className="space-y-1.5">
+      <ul className="space-y-2">
         {rows.slice(0, 8).map(([name, count]) => (
           <li key={name} className="flex items-center gap-2 text-sm">
             <span className="w-28 shrink-0 truncate text-ink-light" title={name}>
@@ -238,8 +238,8 @@ function RankTable({ title, rows }: { title: string; rows: [string, number][] })
         <tbody>
           {rows.slice(0, 10).map(([name, count]) => (
             <tr key={name} className="border-b border-border-light">
-              <td className="py-1.5 pr-3 text-ink-light">{name}</td>
-              <td className="py-1.5 text-right text-xs tabular-nums text-muted">
+              <td className="py-2 pr-3 text-ink-light">{name}</td>
+              <td className="py-2 text-right text-xs tabular-nums text-muted">
                 {count.toLocaleString()}
               </td>
             </tr>
