@@ -11,7 +11,6 @@ import {
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import StatusBadge from "../components/StatusBadge";
-import CoverageBar from "../components/CoverageBar";
 import GeneratedReportSection from "../components/GeneratedReportSection";
 import { formatGeneratedAt } from "../lib/format";
 import { useAdminKey } from "../useAdminKey";
@@ -167,12 +166,10 @@ export default function FieldDetail() {
                     <span className="tabular-nums">{summary.total_analyzed.toLocaleString()}</span>건
                   </p>
                 </div>
-                {/* 두 수가 다른 이유를 여기서 밝힌다 — 표의 "모집단" 열이 같은 관계를
-                    막대로 보여주는데, 그 막대가 무엇의 비율인지 설명이 없었다. */}
+                {/* 두 수가 다른 이유를 여기서 밝힌다 — 표는 두 건수를 나란히 놓기만 한다. */}
                 <p className="mt-1 text-xs text-muted">
                   <strong className="font-medium text-ink-light">분석 대상</strong>은 검색된 논문에서
                   초록 미보유 등의 사유로 제외하고 남아 실제 성과 추출에 사용된 논문 수입니다.
-                  아래 ‘모집단’ 막대가 그 비율입니다.
                 </p>
 
                 {/* 좁아지면 셀을 눌러 담지 않고 가로로 스크롤한다 — 셀이 세로로 쪼개지면
@@ -183,7 +180,6 @@ export default function FieldDetail() {
                       <tr className="border-b border-border">
                         <th>세부기술</th>
                         <th>상태</th>
-                        <th className="hidden sm:table-cell">모집단</th>
                         <th className="n">검색 / 분석</th>
                       </tr>
                     </thead>
@@ -205,17 +201,12 @@ export default function FieldDetail() {
                           <td className="px-3 py-2">
                             <StatusBadge status={s.status} label={s.status_label} />
                           </td>
-                          <td className="hidden w-40 px-3 py-2 sm:table-cell">
-                            {/* 0건은 "아직 검색을 안 돌렸다"는 뜻이라 막대가 아니라 결측 기호로
-                                쓴다 — 빈칸으로 두면 0과 "값 없음"이 구별되지 않는다. */}
-                            {s.searched_count > 0 ? (
-                              <CoverageBar searched={s.searched_count} analyzed={s.analyzed_count} size="sm" />
-                            ) : (
-                              <span className="text-muted">—</span>
-                            )}
-                          </td>
+                          {/* 0건은 "아직 검색을 안 돌렸다"는 뜻이라 결측 기호로 쓴다 —
+                              0을 그대로 쓰면 "검색했는데 없었다"와 구별되지 않는다. */}
                           <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-muted">
-                            {s.searched_count.toLocaleString()} / {s.analyzed_count.toLocaleString()}
+                            {s.searched_count > 0
+                              ? `${s.searched_count.toLocaleString()} / ${s.analyzed_count.toLocaleString()}`
+                              : "—"}
                           </td>
                         </tr>
                       ))}

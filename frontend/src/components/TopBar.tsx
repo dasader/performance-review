@@ -25,7 +25,7 @@ export default function TopBar() {
         </Link>
         <div className="flex shrink-0 items-center gap-4">
           <span className="hidden text-xs text-chrome-ink-2 sm:inline">
-            12대 국가전략기술 · OpenAlex · KCI
+            10대 국가전략기술 · OpenAlex · KCI
           </span>
           {!isAdmin && (
             <Link
