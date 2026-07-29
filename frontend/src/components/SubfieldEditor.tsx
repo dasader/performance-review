@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ApiError, del, get, post, put, type AdminSubfield, type Field } from "../api";
 import { lintQuery, type LintResult } from "../lib/queryLint";
+import Switch from "./Switch";
 
 interface SubfieldBody {
   field_id: number;
@@ -224,10 +225,10 @@ export default function SubfieldEditor({
   );
 
   return (
-    <section className="border border-border bg-surface p-5">
+    <section className="border border-border bg-surface p-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="font-display text-lg font-semibold text-accent">세부기술 · 검색식</h2>
+          <h2 className="text-lg font-semibold text-accent">세부기술 · 검색식</h2>
           <p className="mt-1 text-xs text-muted">
             검색식을 바꾸면 이미 수집된 연도는 다음 실행 상태 표에서 "갱신 필요"로 표시됩니다.
           </p>
@@ -242,7 +243,7 @@ export default function SubfieldEditor({
       </div>
 
       {deleteConflict && (
-        <div className="mt-4 border border-warning/40 bg-warning/5 p-4 text-sm">
+        <div className="mt-4 banner banner-warn">
           <p className="text-warning">{deleteConflict.message}</p>
           <div className="mt-2 flex gap-2">
             <button
@@ -270,16 +271,19 @@ export default function SubfieldEditor({
       {!items && !listError && <p className="mt-4 text-sm text-muted">불러오는 중…</p>}
 
       {items && items.length > 0 && (
-        <div className="mt-4 overflow-x-auto border-t border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted">
-                <th className="py-2 pr-3 font-medium">분야</th>
-                <th className="py-2 pr-3 font-medium">세부기술</th>
-                <th className="min-w-[14rem] py-2 pr-3 font-medium">검색식</th>
-                <th className="min-w-[12rem] py-2 pr-3 font-medium">KCI 검색식</th>
-                <th className="py-2 pr-3 font-medium">활성</th>
-                <th className="py-2 font-medium">
+        // 좁아지면 셀을 눌러 담지 않고 가로로 스크롤한다. 최소 폭은 표 전체에 한 번만
+        // 건다 — 열마다 min-w를 흩어 두면 표의 최소 폭이 어디서 결정되는지 읽히지 않고,
+        // 좁은 화면에서 스크롤 컨테이너 밖으로 새어 문서 자체가 가로로 밀린다.
+        <div className="mt-4 table-scroll border-t border-border">
+          <table className="w-full min-w-[56rem] border-collapse text-sm">
+            <thead className="tbl-head">
+              <tr className="border-b border-border">
+                <th>분야</th>
+                <th>세부기술</th>
+                <th>검색식</th>
+                <th>KCI 검색식</th>
+                <th>활성</th>
+                <th>
                   <span className="sr-only">동작</span>
                 </th>
               </tr>
@@ -306,20 +310,13 @@ export default function SubfieldEditor({
                       )}
                     </td>
                     <td className="py-3 pr-3">
-                      {/* min-w — 활성/비활성 라벨 글자 수가 달라도(2자/3자) 버튼 폭이 고정되어
-                          토글할 때마다 오른쪽 열(동작 버튼들)이 좌우로 밀리지 않는다. */}
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={item.active}
+                      <Switch
+                        checked={item.active}
                         disabled={isBusy}
-                        onClick={() => toggleActive(item)}
-                        className={`btn btn-sm min-w-[4.5rem] ${
-                          item.active ? "btn-positive" : "btn-neutral"
-                        }`}
-                      >
-                        {item.active ? "활성" : "비활성"}
-                      </button>
+                        onChange={() => toggleActive(item)}
+                        label={item.active ? "활성" : "비활성"}
+                        ariaLabel={`${item.name} 활성 여부`}
+                      />
                     </td>
                     <td className="py-3 whitespace-nowrap">
                       <div className="flex justify-end gap-2">
@@ -334,7 +331,7 @@ export default function SubfieldEditor({
                         type="button"
                         disabled={isBusy}
                         onClick={() => handleDelete(item)}
-                        className="btn btn-danger btn-sm"
+                        className="btn btn-danger-quiet btn-sm"
                       >
                         삭제
                       </button>
@@ -372,7 +369,7 @@ export default function SubfieldEditor({
                 onChange={(e) =>
                   setModal((m) => m && { ...m, fieldId: e.target.value ? Number(e.target.value) : "" })
                 }
-                className="w-full border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent"
+                className="input"
               >
                 <option value="">분야 선택</option>
                 {fields.map((f) => (
@@ -391,12 +388,12 @@ export default function SubfieldEditor({
                 id="modal-name"
                 value={modal.name}
                 onChange={(e) => setModal((m) => m && { ...m, name: e.target.value })}
-                className="w-full border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent"
+                className="input"
               />
             </div>
 
             <div>
-              <div className="mb-1 flex items-center gap-1.5">
+              <div className="mb-1 flex items-center gap-2">
                 <label htmlFor="modal-query" className="block text-xs font-medium text-ink-light">
                   검색식 (OpenAlex)
                 </label>
@@ -415,13 +412,13 @@ export default function SubfieldEditor({
                 rows={3}
                 value={modal.query}
                 onChange={(e) => setModal((m) => m && { ...m, query: e.target.value })}
-                className="mt-1 w-full resize-y border border-border bg-surface px-3 py-2 font-mono text-sm text-ink focus:border-accent"
+                className="mt-1 textarea font-mono"
               />
               <QueryLintFeedback result={openalexLint} valueTrimmed={modal.query.trim()} />
             </div>
 
             <div>
-              <div className="mb-1 flex items-center gap-1.5">
+              <div className="mb-1 flex items-center gap-2">
                 <label htmlFor="modal-query-kci" className="block text-xs font-medium text-ink-light">
                   KCI 검색식 (비우면 공통값 사용)
                 </label>
@@ -440,7 +437,7 @@ export default function SubfieldEditor({
                 rows={3}
                 value={modal.queryKci}
                 onChange={(e) => setModal((m) => m && { ...m, queryKci: e.target.value })}
-                className="mt-1 w-full resize-y border border-border bg-surface px-3 py-2 font-mono text-sm text-ink focus:border-accent"
+                className="mt-1 textarea font-mono"
               />
               <QueryLintFeedback result={kciLint} valueTrimmed={modal.queryKci.trim()} />
             </div>
@@ -449,18 +446,12 @@ export default function SubfieldEditor({
               <span id="modal-active-label" className="mb-1 block text-xs font-medium text-ink-light">
                 활성 여부
               </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={modal.active}
-                aria-labelledby="modal-active-label"
-                onClick={() => setModal((m) => m && { ...m, active: !m.active })}
-                className={`btn btn-sm min-w-[4.5rem] ${
-                  modal.active ? "btn-positive" : "btn-neutral"
-                }`}
-              >
-                {modal.active ? "활성" : "비활성"}
-              </button>
+              <Switch
+                checked={modal.active}
+                onChange={() => setModal((m) => m && { ...m, active: !m.active })}
+                label={modal.active ? "활성" : "비활성"}
+                ariaLabel="활성 여부"
+              />
             </div>
 
             {modalError && <p className="text-sm text-danger">{modalError}</p>}
@@ -502,7 +493,7 @@ function QueryLintFeedback({ result, valueTrimmed }: { result: LintResult; value
     );
   }
   return (
-    <ul className="mt-1 space-y-0.5 text-xs">
+    <ul className="mt-1 space-y-1 text-xs">
       {result.errors.map((issue) => (
         <li key={issue.code} className="text-danger">
           <span className="font-medium">[오류]</span> {issue.message}
@@ -572,10 +563,10 @@ function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="flex max-h-[85vh] w-full max-w-lg flex-col border border-border bg-surface shadow-xl"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col border border-border bg-surface"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3">
-          <h2 id={titleId} className="font-display text-base font-semibold text-ink">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+          <h2 id={titleId} className="text-base font-semibold text-ink">
             {title}
           </h2>
           <button
@@ -588,7 +579,7 @@ function Modal({
             ×
           </button>
         </div>
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
+        <div className="overflow-y-auto px-4 py-4">{children}</div>
       </div>
     </div>
   );
@@ -613,7 +604,7 @@ function QueryHelpToggle({
       aria-expanded={open}
       aria-controls={panelId}
       aria-label={label}
-      className="inline-flex h-4 w-4 shrink-0 items-center justify-center border border-border font-mono text-[10px] leading-none text-muted hover:border-accent hover:text-accent"
+      className="inline-flex h-4 w-4 shrink-0 items-center justify-center border border-border font-mono text-eyebrow leading-none text-muted hover:border-accent hover:text-accent"
     >
       i
     </button>
@@ -645,7 +636,7 @@ function QueryHelpPanel({ source, panelId }: { source: "openalex" | "kci"; panel
           <li>한국 소속 저자 필터와 연도 필터는 자동으로 적용되므로 검색식에 넣지 마세요.</li>
         </ul>
         <p className="mt-3 font-medium text-ink">예시 (2025년 한국 논문 기준 실측)</p>
-        <ul className="mt-1 space-y-0.5">
+        <ul className="mt-1 space-y-1">
           <li>
             <code className="font-mono text-ink">semiconductor AND memory</code>{" "}
             <span className="text-muted">→ 206건</span>
@@ -669,7 +660,7 @@ function QueryHelpPanel({ source, panelId }: { source: "openalex" | "kci"; panel
           괄호 안에 <code className="font-mono text-ink">AND</code>/<code className="font-mono text-ink">OR</code>를
           중첩할 수 있고, 그룹끼리 조합하거나 <code className="font-mono text-ink">NOT</code>과 섞어도 됩니다.
         </p>
-        <ul className="mt-1 space-y-0.5">
+        <ul className="mt-1 space-y-1">
           <li>
             <code className="font-mono text-ink">(memory OR flash) AND (semiconductor OR device)</code>{" "}
             <span className="text-muted">→ 1,055건 (그룹 2개)</span>
@@ -687,7 +678,7 @@ function QueryHelpPanel({ source, panelId }: { source: "openalex" | "kci"; panel
         {/* 괄호가 무시되지 않고 실제로 그룹으로 해석된다는 근거 — 같은 단어라도 묶는 위치에 따라
             결과가 19배 차이난다. 검색식을 짤 때 가장 실수하기 쉬운 지점이라 대비 예시로 보여준다. */}
         <p className="mt-3 font-medium text-warning">괄호 위치가 결과를 크게 바꿉니다</p>
-        <ul className="mt-1 space-y-0.5">
+        <ul className="mt-1 space-y-1">
           <li>
             <code className="font-mono text-ink">(memory OR flash) AND semiconductor</code>{" "}
             <span className="text-muted">→ 208건</span>

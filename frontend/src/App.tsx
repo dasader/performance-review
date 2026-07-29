@@ -11,7 +11,7 @@ const FieldReportPage = lazy(() => import("./pages/FieldReportPage"));
 export default function App() {
   return (
     <BrowserRouter>
-      <Suspense fallback={<p className="p-8 text-sm text-muted">불러오는 중…</p>}>
+      <Suspense fallback={<p className="p-6 text-sm text-muted">불러오는 중…</p>}>
         <Routes>
           <Route path="/" element={<FieldList />} />
           <Route path="/fields/:fieldId" element={<FieldDetail />} />

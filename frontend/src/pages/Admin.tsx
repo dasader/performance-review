@@ -124,9 +124,9 @@ export default function Admin() {
     return (
       <div className="min-h-screen">
         <TopBar />
-        <main className="mx-auto max-w-sm px-6 py-24">
-          <p className="font-mono text-xs uppercase tracking-widest text-accent">관리자</p>
-          <h1 className="mt-2 font-display text-2xl font-bold tracking-tight text-ink">관리자 인증</h1>
+        <main className="mx-auto max-w-sm px-6 py-10">
+          <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">관리자</p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-ink">관리자 인증</h1>
           <p className="mt-2 text-sm text-ink-light">
             분석 실행·검색식 편집은 관리자 키가 있어야 접근할 수 있습니다.
           </p>
@@ -157,7 +157,7 @@ export default function Admin() {
               autoComplete="off"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              className="mt-2 w-full border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent"
+              className="mt-2 input"
               required
             />
             <button
@@ -178,15 +178,15 @@ export default function Admin() {
   return (
     <div className="min-h-screen">
       <TopBar />
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+      <main className="mx-auto max-w-page px-6 pb-10 pt-6">
+        <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-accent">관리자</p>
-            <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-ink">분석 운영</h1>
+            <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">관리자</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-ink">분석 운영</h1>
           </div>
           <div className="flex items-center gap-4">
             {data && (
-              <p className="font-mono text-xs tabular-nums text-muted">
+              <p className="text-xs tabular-nums text-muted">
                 OpenAlex 오늘 사용 ${data.budget_spent.toFixed(4)} / ${data.budget_limit.toFixed(2)}
               </p>
             )}
@@ -216,11 +216,11 @@ className="btn btn-toggle btn-sm"
           ))}
         </div>
 
-        {error && <p className="mb-6 border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</p>}
+        {error && <p className="mb-6 banner banner-risk">{error}</p>}
 
         {fields === null && !fieldsError && <p className="text-sm text-muted">분야 목록을 불러오는 중…</p>}
         {fieldsError && (
-          <p className="mb-6 border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">
+          <p className="mb-6 banner banner-risk">
             {fieldsError}{" "}
             <button type="button" onClick={loadFields} className="ml-1 underline hover:text-danger/80">
               다시 시도
@@ -265,8 +265,8 @@ className="btn btn-toggle btn-sm"
 
         {/* 세부기술·검색식 / 분석 실행 섹션과 같은 카드로 묶어 시각적 단위를 맞춘다. */}
         {tab === "run" && (
-        <section className="mt-6 border border-border bg-surface p-5">
-        <h2 className="mb-3 font-display text-lg font-semibold text-accent">실행 상태</h2>
+        <section className="mt-6 border border-border bg-surface p-4">
+        <h2 className="mb-3 text-lg font-semibold text-accent">실행 상태</h2>
 
         {!data && !error && <p className="text-sm text-muted">불러오는 중…</p>}
 
@@ -275,17 +275,17 @@ className="btn btn-toggle btn-sm"
         )}
 
         {data && data.rows.length > 0 && (
-          <div className="overflow-x-auto border-t border-border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-muted">
-                  <th className="py-2 pr-3 font-medium">세부기술</th>
-                  <th className="py-2 pr-3 font-medium">연도</th>
-                  <th className="py-2 pr-3 font-medium">상태</th>
-                  <th className="py-2 pr-3 text-right font-medium">검색/분석</th>
-                  <th className="py-2 pr-3 font-medium">최종수집</th>
-                  <th className="py-2 font-medium">
-                    <span className="sr-only">동작</span>
+          <div className="table-scroll border-t border-border">
+            <table className="w-full border-collapse text-sm">
+              <thead className="tbl-head">
+                <tr className="border-b border-border">
+                  <th>세부기술</th>
+                  <th>연도</th>
+                  <th>상태</th>
+                  <th className="n">검색/분석</th>
+                  <th>최종수집</th>
+                  <th>
+                    <span>동작</span>
                   </th>
                 </tr>
               </thead>
@@ -294,7 +294,7 @@ className="btn btn-toggle btn-sm"
                   row.years.map((cell) => (
                     <tr key={cell.analysis_id} className="border-b border-border-light">
                       <td className="py-3 pr-3 font-medium text-ink">{row.subfield_name}</td>
-                      <td className="py-3 pr-3 font-mono tabular-nums text-ink-light">{cell.year}</td>
+                      <td className="py-3 pr-3 tabular-nums text-ink-light">{cell.year}</td>
                       <td className="py-3 pr-3">
                         <StatusBadge status={cell.status} label={cell.status_label} />
                         {cell.stale && (
@@ -304,7 +304,7 @@ className="btn btn-toggle btn-sm"
                         )}
                         {cell.error && <p className="mt-1 max-w-xs text-xs text-danger">{cell.error}</p>}
                       </td>
-                      <td className="py-3 pr-3 text-right font-mono text-xs tabular-nums text-muted">
+                      <td className="py-3 pr-3 text-right text-xs tabular-nums text-muted">
                         {cell.searched_count.toLocaleString()} / {cell.analyzed_count.toLocaleString()}
                       </td>
                       <td className="py-3 pr-3 text-xs text-faint">
@@ -339,7 +339,7 @@ className="btn btn-toggle btn-sm"
                             type="button"
                             disabled={deletingId === cell.analysis_id}
                             onClick={() => handleDeleteAnalysis(row, cell)}
-                            className="btn btn-danger btn-sm"
+                            className="btn btn-danger-quiet btn-sm"
                           >
                             {deletingId === cell.analysis_id ? "삭제 중…" : "삭제"}
                           </button>

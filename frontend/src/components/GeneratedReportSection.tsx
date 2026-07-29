@@ -130,9 +130,9 @@ export default function GeneratedReportSection<T extends GeneratedReport>({
         : "생성";
 
   return (
-    <section className="mt-8 border border-border bg-surface p-5">
+    <section className="mt-6 border border-border bg-surface p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-xl font-bold tracking-tight text-ink">{title}</h2>
+        <h2 className="text-xl font-bold tracking-tight text-ink">{title}</h2>
         <div className="flex shrink-0 items-center gap-2">
           {adminKey && (
             <button

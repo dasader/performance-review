@@ -16,13 +16,13 @@ export default function CoverageBar({
   return (
     <div className="flex items-center gap-3">
       <div
-        className={`min-w-0 flex-1 ${height} border border-border bg-border-light`}
+        className={`min-w-0 flex-1 ${height} bg-border-light`}
         role="img"
         aria-label={`분석 대상 비율 ${pct}%`}
       >
-        <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
+        <div className="h-full bg-ink" style={{ width: `${pct}%` }} />
       </div>
-      <span className="shrink-0 whitespace-nowrap font-mono text-xs tabular-nums text-muted">
+      <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted">
         {pct}%
       </span>
     </div>

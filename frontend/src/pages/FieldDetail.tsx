@@ -65,7 +65,7 @@ export default function FieldDetail() {
     return (
       <div className="min-h-screen">
         <TopBar />
-        <main className="mx-auto max-w-5xl px-6 py-14">
+        <main className="mx-auto max-w-page px-6 pb-10 pt-6">
           <p className="text-sm text-danger">{error}</p>
           <Link to="/" className="mt-4 inline-block text-sm text-muted hover:text-ink">
             ← 분야 목록으로 돌아가기
@@ -75,37 +75,35 @@ export default function FieldDetail() {
       </div>
     );
   }
-  if (!field) return <p className="p-8 text-sm text-muted">불러오는 중…</p>;
+  if (!field) return <p className="p-6 text-sm text-muted">불러오는 중…</p>;
 
   return (
     <div className="min-h-screen">
       <TopBar />
-      <main className="mx-auto max-w-5xl px-6 py-14">
+      <main className="mx-auto max-w-page px-6 pb-10 pt-6">
         <Link to="/" className="text-sm text-muted hover:text-ink">
           ← 분야 목록
         </Link>
-        <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-ink">
-          {field.name}
-        </h1>
+        <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-ink">{field.name}</h1>
 
         {years.length === 0 ? (
-          <p className="mt-8 text-sm text-muted">아직 분석된 결과가 없습니다.</p>
+          <p className="mt-6 text-sm text-muted">아직 분석된 결과가 없습니다.</p>
         ) : (
           <>
             {/* role="tab"을 제대로 쓰려면 aria-controls·tabpanel·화살표 키 이동까지 필요한데,
                 여기 실제로 필요한 건 "연도 필터 토글"이다 — 반쪽짜리 tablist보다 aria-pressed가
                 동작과 맞고 추가로 구현할 것도 없다. */}
-            <div className="mt-8 flex flex-wrap gap-2" aria-label="연도 선택">
+            <div className="mt-4 flex flex-wrap gap-2" aria-label="연도 선택">
               {years.map((y) => (
                 <button
                   key={y.year}
                   type="button"
                   aria-pressed={y.year === year}
                   onClick={() => setYear(y.year)}
-className="btn btn-toggle btn-sm font-mono"
+                  className="btn btn-toggle btn-sm tabular-nums"
                 >
                   {y.year}
-                  <span className="ml-1.5 opacity-70">
+                  <span className="ml-2 opacity-70">
                     ({y.done_count}/{y.subfield_count})
                   </span>
                 </button>
@@ -160,20 +158,13 @@ className="btn btn-toggle btn-sm font-mono"
               <>
                 {/* 이 숫자는 아래 표의 합계다. 보고서 카드와 표 사이에 홀로 떠 있으면
                     무엇의 합계인지 드러나지 않아, 표의 머리말로 붙여 소유자를 만든다. */}
-                <div className="mt-10 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                  <h2 className="font-display text-xl font-bold tracking-tight text-ink">
-                    세부기술별 분석 현황
-                  </h2>
+                <div className="mt-10 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-2">
+                  <h2 className="text-xl font-bold tracking-tight text-ink">세부기술별 분석 현황</h2>
                   <p className="text-sm text-ink-light">
                     {summary.year}년 합계 · 검색{" "}
-                    <span className="font-mono tabular-nums">
-                      {summary.total_searched.toLocaleString()}
-                    </span>
-                    건 / 분석 대상{" "}
-                    <span className="font-mono tabular-nums">
-                      {summary.total_analyzed.toLocaleString()}
-                    </span>
-                    건
+                    <span className="tabular-nums">{summary.total_searched.toLocaleString()}</span>건
+                    / 분석 대상{" "}
+                    <span className="tabular-nums">{summary.total_analyzed.toLocaleString()}</span>건
                   </p>
                 </div>
                 {/* 두 수가 다른 이유를 여기서 밝힌다 — 표의 "모집단" 열이 같은 관계를
@@ -184,24 +175,26 @@ className="btn btn-toggle btn-sm font-mono"
                   아래 ‘모집단’ 막대가 그 비율입니다.
                 </p>
 
-                <div className="mt-4 overflow-x-auto border-t border-border">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-left text-xs text-muted">
-                        <th className="py-2 font-medium">세부기술</th>
-                        <th className="py-2 font-medium">상태</th>
-                        <th className="hidden py-2 font-medium sm:table-cell">모집단</th>
-                        <th className="py-2 pr-2 text-right font-medium">검색/분석</th>
+                {/* 좁아지면 셀을 눌러 담지 않고 가로로 스크롤한다 — 셀이 세로로 쪼개지면
+                    열 정렬이 무너져 숫자 비교가 불가능해진다. */}
+                <div className="mt-4 table-scroll">
+                  <table className="w-full min-w-[560px] border-collapse text-sm">
+                    <thead className="tbl-head">
+                      <tr className="border-b border-border">
+                        <th>세부기술</th>
+                        <th>상태</th>
+                        <th className="hidden sm:table-cell">모집단</th>
+                        <th className="n">검색 / 분석</th>
                       </tr>
                     </thead>
                     <tbody>
                       {summary.subfields.map((s) => (
                         <tr key={s.subfield_id} className="border-b border-border-light">
-                          <td className="py-3 pr-3 font-medium text-ink">
+                          <td className="px-3 py-2 font-medium text-ink">
                             {s.analysis_id ? (
                               <Link
                                 to={`/subfields/${s.subfield_id}/${year}`}
-                                className="hover:text-accent hover:underline"
+                                className="hover:underline"
                               >
                                 {s.subfield_name}
                               </Link>
@@ -209,15 +202,19 @@ className="btn btn-toggle btn-sm font-mono"
                               s.subfield_name
                             )}
                           </td>
-                          <td className="py-3 pr-3">
+                          <td className="px-3 py-2">
                             <StatusBadge status={s.status} label={s.status_label} />
                           </td>
-                          <td className="hidden w-40 py-3 pr-3 sm:table-cell">
-                            {s.searched_count > 0 && (
+                          <td className="hidden w-40 px-3 py-2 sm:table-cell">
+                            {/* 0건은 "아직 검색을 안 돌렸다"는 뜻이라 막대가 아니라 결측 기호로
+                                쓴다 — 빈칸으로 두면 0과 "값 없음"이 구별되지 않는다. */}
+                            {s.searched_count > 0 ? (
                               <CoverageBar searched={s.searched_count} analyzed={s.analyzed_count} size="sm" />
+                            ) : (
+                              <span className="text-muted">—</span>
                             )}
                           </td>
-                          <td className="py-3 pl-2 text-right font-mono text-xs tabular-nums text-muted">
+                          <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-muted">
                             {s.searched_count.toLocaleString()} / {s.analyzed_count.toLocaleString()}
                           </td>
                         </tr>
