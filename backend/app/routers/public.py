@@ -128,10 +128,23 @@ def _serialize(db: Session, analysis: Analysis) -> dict:
 
     report_md, references = _footnoted_report(db, analysis)
 
+    # 보고서 화면의 이동(목록으로 · 이전/다음 연도)에 필요한 최소 정보. 연도 목록은
+    # 이 세부기술에 analyses 행이 있는 연도 전부다 — 미완료 연도로 가면 그 화면이
+    # 진행 상태를 보여주므로 status로 거르지 않는다.
+    years = [
+        y for (y,) in db.query(Analysis.year)
+        .filter(Analysis.subfield_id == subfield.id)
+        .order_by(Analysis.year)
+        .all()
+    ]
+
     return {
         "id": analysis.id,
+        "field_id": field.id,
         "field_name": field.name,
+        "subfield_id": subfield.id,
         "subfield_name": subfield.name,
+        "years": years,
         "year": analysis.year,
         "status": analysis.status,
         "status_label": STEP_LABELS.get(analysis.status, analysis.status),

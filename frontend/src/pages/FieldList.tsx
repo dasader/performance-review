@@ -23,7 +23,7 @@ export default function FieldList() {
           국가전략기술 논문성과
         </p>
         <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-ink">
-          12대 전략기술 분야 성과 보고서
+          10대 전략기술 분야 성과 보고서
         </h1>
         <p className="mt-3 text-sm text-ink-light">
           분야를 선택하면 연도·세부기술별로 검색된 한국 논문과 실제 분석에 사용된 논문 수를
@@ -35,9 +35,9 @@ export default function FieldList() {
         {!fields && !error && <p className="mt-6 text-sm text-muted">불러오는 중…</p>}
 
         {fields && (
-          // 12개 분야는 "병렬 비교되는 동급 덩어리"라 면(--surface)을 쓴다. 다만 카드를
+          // 10개 분야는 "병렬 비교되는 동급 덩어리"라 면(--surface)을 쓴다. 다만 카드를
           // gap으로 흩어 놓지 않고 1px 괘선 틈으로 붙여 하나의 격자로 만든다 —
-          // 흩어 놓으면 카드 12장이 각자 떠 있고, 붙이면 한 표로 읽힌다.
+          // 흩어 놓으면 카드 10장이 각자 떠 있고, 붙이면 한 표로 읽힌다.
           <ul className="mt-6 grid gap-px border border-border bg-border sm:grid-cols-2">
             {fields.map((f, i) => {
               const activeCount = f.subfields.filter((s) => s.active).length;

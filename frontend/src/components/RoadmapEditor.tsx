@@ -99,15 +99,20 @@ export default function RoadmapEditor({
         </label>
 
         <label className="block text-sm">
+          {/* mono는 한글이 섞인 문자열에 쓰지 않는다 — 그 체인(JetBrains Mono 등)은
+              한글을 덮지 않아 글자마다 폰트가 갈린다. <code>는 브라우저·preflight 기본이
+              mono라 여기서 명시적으로 sans로 되돌리고, 리터럴이라는 표시는 눌린 면으로만
+              남긴다. 아래 원문(로드맵 표)도 대부분 한글이라 같은 이유로 sans다. */}
           <span className="text-muted">
-            원문 (마크다운) — 단계별 목표는 <code>| 단계 | 시기 | 기술적 목표 |</code> 형식의
-            표로 작성해야 전수 점검이 강제됩니다. 표가 없으면 저장이 거부됩니다.
+            원문 (마크다운) — 단계별 목표는{" "}
+            <code className="bg-sunken px-1 font-sans text-ink">| 단계 | 시기 | 기술적 목표 |</code>{" "}
+            형식의 표로 작성해야 전수 점검이 강제됩니다. 표가 없으면 저장이 거부됩니다.
           </span>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={18}
-            className="mt-1 textarea font-mono text-xs"
+            className="mt-1 textarea text-xs"
           />
         </label>
 

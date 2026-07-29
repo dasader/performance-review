@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkCjkFriendly from "remark-cjk-friendly";
@@ -7,7 +7,6 @@ import { ACTIVE_STATUSES, get, type Analysis, type Reference } from "../api";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import StatusBadge from "../components/StatusBadge";
-import CoverageBar from "../components/CoverageBar";
 import StatsPanel from "../components/StatsPanel";
 import { firstCiteOffsets } from "../lib/citeAnchors";
 import { stripLeadingH1 } from "../lib/reportMarkdown";
@@ -87,35 +86,59 @@ export default function Report() {
 
 function ReportBody({ data }: { data: Analysis }) {
   const excluded = data.searched_count - data.analyzed_count;
+  // 이웃 연도는 실제로 분석 행이 있는 연도 중에서만 고른다 — year±1로 링크하면
+  // 건너뛴 연도에서 404 화면이 뜬다.
+  const prevYear = data.years.filter((y) => y < data.year).pop() ?? null;
+  const nextYear = data.years.find((y) => y > data.year) ?? null;
 
   return (
     <>
       <PrintHeader data={data} />
 
-      <header className="mb-6" style={{ animation: "fadeUp 0.3s ease-out both" }}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">
-              {data.field_name}
-            </p>
-            <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-ink">
-              {data.subfield_name} <span className="tabular-nums text-muted">{data.year}</span>
-            </h1>
-            {/* eyebrow는 한 덩어리에 하나만 쓴다 — 제목 위아래로 두 줄이 같은 대문자 라벨
-                모양이면 어느 쪽이 상위 분류인지 읽히지 않는다. 아래는 평범한 캡션으로 둔다. */}
-            <p className="mt-1 text-xs text-muted">분석 대상 기간 {data.year}년</p>
-          </div>
-
-          {data.status === "done" && (
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="shrink-0 btn btn-primary print:hidden"
+      {/* 이동·출력 동작은 한 줄에 모은다 — 제목 왼쪽과 오른쪽으로 흩어져 있으면 시선이
+          두 번 튄다(분야 보고서 화면과 같은 계약). 인쇄물에서는 통째로 숨긴다. */}
+      <div className="mb-6 flex items-center justify-between gap-3 print:hidden">
+        <Link to={`/fields/${data.field_id}`} className="btn btn-neutral btn-sm">
+          ← {data.field_name} 화면으로
+        </Link>
+        <div className="flex items-center gap-2">
+          {/* 연도 이동은 화살표만으로 두지 않고 갈 연도를 숫자로 밝힌다 — 연도가 띄엄띄엄
+              있을 수 있어(2024 → 2026) "이전"이 몇 년인지 눌러 봐야 아는 상태가 된다.
+              없는 방향은 비활성 버튼 대신 아예 그리지 않는다. */}
+          {prevYear && (
+            <Link
+              to={`/subfields/${data.subfield_id}/${prevYear}`}
+              className="btn btn-neutral btn-sm tabular-nums"
             >
+              ← {prevYear}
+            </Link>
+          )}
+          {nextYear && (
+            <Link
+              to={`/subfields/${data.subfield_id}/${nextYear}`}
+              className="btn btn-neutral btn-sm tabular-nums"
+            >
+              {nextYear} →
+            </Link>
+          )}
+          {data.status === "done" && (
+            <button type="button" onClick={() => window.print()} className="btn btn-primary btn-sm">
               PDF로 저장
             </button>
           )}
         </div>
+      </div>
+
+      <header className="mb-6" style={{ animation: "fadeUp 0.3s ease-out both" }}>
+        <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">
+          {data.field_name}
+        </p>
+        <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-ink">
+          {data.subfield_name} <span className="tabular-nums text-muted">{data.year}</span>
+        </h1>
+        {/* eyebrow는 한 덩어리에 하나만 쓴다 — 제목 위아래로 두 줄이 같은 대문자 라벨
+            모양이면 어느 쪽이 상위 분류인지 읽히지 않는다. 아래는 평범한 캡션으로 둔다. */}
+        <p className="mt-1 text-xs text-muted">분석 대상 기간 {data.year}년</p>
 
         <div className="mt-3">
           <StatusBadge status={data.status} label={data.status_label} />
@@ -148,11 +171,6 @@ function ReportBody({ data }: { data: Analysis }) {
           />
         </div>
 
-        {/* 분석 대상 비율은 스케일이 있는 값이라 칩이 아니라 게이지로 말한다.
-            확인 채널은 하나다 — 같은 것을 칩과 게이지로 두 번 말하지 않는다. */}
-        <div className="mt-3 max-w-sm print:hidden">
-          <CoverageBar searched={data.searched_count} analyzed={data.analyzed_count} />
-        </div>
       </header>
 
       {data.status !== "done" && <StatusPanel data={data} />}

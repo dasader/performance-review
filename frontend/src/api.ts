@@ -214,9 +214,14 @@ export interface Reference {
 
 export interface Analysis {
   id: number;
+  field_id: number;
   field_name: string;
+  subfield_id: number;
   subfield_name: string;
   year: number;
+  // 이 세부기술에 분석 행이 있는 연도 전부(오름차순). 보고서 화면의 이전/다음 연도
+  // 이동에 쓴다 — 없는 연도로 보내면 404 화면이 뜨므로 목록에 있는 연도만 링크한다.
+  years: number[];
   status: string;
   status_label: string;
   report_md: string | null;

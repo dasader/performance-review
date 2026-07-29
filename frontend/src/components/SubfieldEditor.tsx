@@ -302,7 +302,10 @@ export default function SubfieldEditor({
                     </td>
                     <td className="py-3 pr-3">
                       {item.query_kci ? (
-                        <p className="whitespace-pre-wrap break-words font-mono text-xs text-faint">
+                        // KCI 검색식은 한글 키워드다(영문식은 국내지에 거의 안 걸린다) —
+                        // mono 체인이 한글을 안 덮어 글자마다 폰트가 갈리므로 sans로 둔다.
+                        // 바로 왼쪽 OpenAlex 열은 영문 불리언식이라 mono가 맞다.
+                        <p className="whitespace-pre-wrap break-words text-xs text-faint">
                           {item.query_kci}
                         </p>
                       ) : (
@@ -430,6 +433,7 @@ export default function SubfieldEditor({
                 />
               </div>
               {modalHelp.kci && <QueryHelpPanel source="kci" panelId="query-help-kci-modal" />}
+              {/* 한글 키워드를 넣는 칸이라 mono를 쓰지 않는다(위 목록 KCI 열과 같은 이유). */}
               <textarea
                 id="modal-query-kci"
                 ref={autoGrow}
@@ -437,7 +441,7 @@ export default function SubfieldEditor({
                 rows={3}
                 value={modal.queryKci}
                 onChange={(e) => setModal((m) => m && { ...m, queryKci: e.target.value })}
-                className="mt-1 textarea font-mono"
+                className="mt-1 textarea"
               />
               <QueryLintFeedback result={kciLint} valueTrimmed={modal.queryKci.trim()} />
             </div>
@@ -619,8 +623,8 @@ function QueryHelpPanel({ source, panelId }: { source: "openalex" | "kci"; panel
         <ul className="mt-2 list-disc space-y-1 pl-4">
           <li>
             <code className="font-mono text-ink">AND</code> · <code className="font-mono text-ink">OR</code> ·{" "}
-            <code className="font-mono text-ink">NOT</code> · 괄호 ·{" "}
-            <code className="font-mono text-ink">"구문 검색"</code>을 지원합니다.
+            <code className="font-mono text-ink">NOT</code> · 괄호 · 구문 검색(
+            <code className="font-mono text-ink">"…"</code>)을 지원합니다.
           </li>
           <li>
             공백은 암묵적 <code className="font-mono text-ink">AND</code>로 처리됩니다.
