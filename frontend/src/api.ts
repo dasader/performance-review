@@ -184,6 +184,15 @@ export interface TopCited {
   doi: string | null;
 }
 
+export interface MetricStat {
+  name: string;
+  unit: string;
+  count: number;
+  median: number;
+  p90: number;
+  max: number;
+}
+
 export interface Stats {
   searched_count: number;
   analyzed_count: number;
@@ -201,6 +210,12 @@ export interface Stats {
   citations: CitationStats;
   top_cited: TopCited[];
   by_achievement_type: Record<string, number>;
+  // 과거 분석의 stats_json에는 없다 — 반드시 선택 필드로 둔다.
+  metrics_total?: number;
+  metrics_parsed?: number;
+  metrics_papers?: number;
+  metrics_unique?: number;
+  top_metrics?: MetricStat[];
   snapshot_at: string;
 }
 

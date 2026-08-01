@@ -141,3 +141,115 @@ def test_missing_year_and_journal_counted():
     s = stats.compute(papers, [], snapshot_at=datetime(2026, 7, 18))
     assert s["no_year_count"] == 1
     assert s["no_journal_count"] == 1
+
+
+def _e(key, metrics, subfield_id=1):
+    return PaperExtraction(paper_key=key, subfield_id=subfield_id, tech_summary="x",
+                           model_ver="m", metrics_json=metrics)
+
+
+def test_metric_groups_merge_on_parenthetical_difference():
+    """괄호 안 약어만 다른 같은 지표는 한 그룹으로 묶인다."""
+    ext = [
+        _e("a", [{"name": "전력 변환 효율 (PCE)", "value": "18.4", "unit": "%"}]),
+        _e("b", [{"name": "전력 변환 효율", "value": "20.0", "unit": "%"}]),
+        _e("c", [{"name": "전력  변환/효율", "value": "22.0", "unit": "%"}]),
+    ]
+    agg = stats.aggregate_metrics(ext)
+    assert len(agg["top_metrics"]) == 1
+    row = agg["top_metrics"][0]
+    assert row["count"] == 3
+    assert row["unit"] == "%"
+    assert row["median"] == 20.0
+    assert row["max"] == 22.0
+
+
+def test_metric_groups_do_not_merge_across_units():
+    """단위가 다르면 환산하지 않고 별도 그룹으로 둔다 — 잘못 합치면 1000배 오차가 난다."""
+    ext = [
+        _e("a", [{"name": "개방전압", "value": "1.2", "unit": "V"},
+                 {"name": "개방전압", "value": "1.3", "unit": "V"}]),
+        _e("b", [{"name": "개방전압", "value": "800", "unit": "mV"},
+                 {"name": "개방전압", "value": "820", "unit": "mV"}]),
+    ]
+    agg = stats.aggregate_metrics(ext)
+    units = {r["unit"] for r in agg["top_metrics"]}
+    assert units == {"V", "mV"}
+
+
+def test_metric_value_parsing_and_unparsed_are_counted_not_hidden():
+    """숫자를 못 뽑은 값은 집계에서 빼되 metrics_total에는 남겨 분모를 속이지 않는다."""
+    ext = [_e("a", [
+        {"name": "효율", "value": "~14", "unit": "%"},
+        {"name": "효율", "value": "1,200", "unit": "%"},
+        {"name": "효율", "value": "측정 불가", "unit": "%"},
+    ])]
+    agg = stats.aggregate_metrics(ext)
+    assert agg["metrics_total"] == 3
+    assert agg["metrics_parsed"] == 2
+    assert agg["top_metrics"][0]["count"] == 2
+    assert agg["top_metrics"][0]["max"] == 1200.0
+
+
+def test_single_occurrence_metrics_are_excluded_but_counted():
+    """1회성 지표는 평균 낼 상대가 없어 표에서 빼되, 몇 종인지는 드러낸다."""
+    ext = [_e("a", [
+        {"name": "MED 프로세스 LCOW 증가율", "value": "17", "unit": "%"},
+        {"name": "효율", "value": "10", "unit": "%"},
+        {"name": "효율", "value": "20", "unit": "%"},
+    ])]
+    agg = stats.aggregate_metrics(ext)
+    assert [r["name"] for r in agg["top_metrics"]] == ["효율"]
+    assert agg["metrics_unique"] == 1
+
+
+def test_metric_display_name_is_most_common_original():
+    """표시 이름은 그룹에서 가장 많이 쓰인 원본 표기를 쓴다(소문자 키가 아니라)."""
+    ext = [_e("a", [
+        {"name": "전력변환효율(PCE)", "value": "1", "unit": "%"},
+        {"name": "전력변환효율(PCE)", "value": "2", "unit": "%"},
+        {"name": "Power Conversion Efficiency", "value": "3", "unit": "%"},
+    ])]
+    agg = stats.aggregate_metrics(ext)
+    names = {r["name"] for r in agg["top_metrics"]}
+    assert "전력변환효율(PCE)" in names
+
+
+def test_metrics_papers_counts_papers_not_metrics():
+    ext = [
+        _e("a", [{"name": "효율", "value": "1", "unit": "%"},
+                 {"name": "효율", "value": "2", "unit": "%"}]),
+        _e("b", []),
+    ]
+    agg = stats.aggregate_metrics(ext)
+    assert agg["metrics_papers"] == 1
+    assert agg["metrics_total"] == 2
+
+
+def test_aggregate_metrics_tolerates_malformed_rows():
+    """LLM 출력이 스키마를 벗어나도 예외를 던지지 않는다."""
+    ext = [_e("a", ["문자열", {"value": "1"}, {"name": "", "value": "2"}, None])]
+    agg = stats.aggregate_metrics(ext)
+    assert agg["top_metrics"] == []
+
+
+def test_compute_includes_metric_aggregate():
+    papers = [_p("a"), _p("b")]
+    ext = [
+        PaperExtraction(paper_key="a", subfield_id=1, tech_summary="x", model_ver="m",
+                        metrics_json=[{"name": "효율", "value": "10", "unit": "%"}]),
+        PaperExtraction(paper_key="b", subfield_id=1, tech_summary="y", model_ver="m",
+                        metrics_json=[{"name": "효율", "value": "30", "unit": "%"}]),
+    ]
+    s = stats.compute(papers, ext, snapshot_at=datetime(2026, 8, 1))
+    assert s["metrics_total"] == 2
+    assert s["metrics_papers"] == 2
+    assert s["top_metrics"][0]["name"] == "효율"
+    assert s["top_metrics"][0]["median"] == 20.0
+
+
+def test_compute_with_no_metrics_still_returns_metric_keys():
+    """지표가 하나도 없어도 키는 항상 존재해야 화면이 분기하지 않는다."""
+    s = stats.compute([_p("a")], [], snapshot_at=datetime(2026, 8, 1))
+    assert s["metrics_total"] == 0
+    assert s["top_metrics"] == []

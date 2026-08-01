@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # MAP_SCHEMA(prompts.py)에 필드를 추가/변경할 때마다 이 값을 올릴 것 — model_ver에
 # 섞여 들어가 기존 추출 결과를 자동으로 재추출 대상(superseded)으로 만든다. 기존
 # 행은 지우지 않는다(pending_papers가 새 model_ver로만 조회하므로 자연히 무시된다).
-EXTRACTION_SCHEMA_VERSION = 2
+EXTRACTION_SCHEMA_VERSION = 3
 
 
 def model_ver() -> str:
