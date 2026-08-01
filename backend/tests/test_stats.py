@@ -231,3 +231,25 @@ def test_aggregate_metrics_tolerates_malformed_rows():
     ext = [_e("a", ["문자열", {"value": "1"}, {"name": "", "value": "2"}, None])]
     agg = stats.aggregate_metrics(ext)
     assert agg["top_metrics"] == []
+
+
+def test_compute_includes_metric_aggregate():
+    papers = [_p("a"), _p("b")]
+    ext = [
+        PaperExtraction(paper_key="a", subfield_id=1, tech_summary="x", model_ver="m",
+                        metrics_json=[{"name": "효율", "value": "10", "unit": "%"}]),
+        PaperExtraction(paper_key="b", subfield_id=1, tech_summary="y", model_ver="m",
+                        metrics_json=[{"name": "효율", "value": "30", "unit": "%"}]),
+    ]
+    s = stats.compute(papers, ext, snapshot_at=datetime(2026, 8, 1))
+    assert s["metrics_total"] == 2
+    assert s["metrics_papers"] == 2
+    assert s["top_metrics"][0]["name"] == "효율"
+    assert s["top_metrics"][0]["median"] == 20.0
+
+
+def test_compute_with_no_metrics_still_returns_metric_keys():
+    """지표가 하나도 없어도 키는 항상 존재해야 화면이 분기하지 않는다."""
+    s = stats.compute([_p("a")], [], snapshot_at=datetime(2026, 8, 1))
+    assert s["metrics_total"] == 0
+    assert s["top_metrics"] == []

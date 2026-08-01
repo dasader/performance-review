@@ -165,5 +165,6 @@ def compute(
         "by_achievement_type": dict(
             Counter(e.achievement_type for e in extractions if e.achievement_type)
         ),
+        **aggregate_metrics(extractions),
         "snapshot_at": snapshot_at.isoformat(),
     }
