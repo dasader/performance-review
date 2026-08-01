@@ -252,6 +252,14 @@ H1 제목(`# {이름} {연도}년 성과 분석 보고서`)을 고정하게 한�
 자동으로 `pending`으로 되돌려 재실행 대상에 넣고, `is_stale()`이 이를 판정한다.
 `analyses.snapshot_at`이 최종 수집 시점, `analyses.query_hash`가 갱신 필요 여부의 근거다.
 
+**`force=True`여도 진행 중인 batch는 건드리지 않는다**(C5). `enqueue`의 force 분기는
+`batch_job_id`를 비우는데, 그러면 Gemini에서 이미 돌고 있는(=과금되는) 잡의 핸들을 잃고
+같은 논문을 통째로 재제출한다 — 청크당 최대 `batch_max_requests_per_file`건이라 한 번
+밟을 때마다 그만큼을 두 번 지불하고 한 번만 쓴다. 관리자가 "지금 실행"을 누르는 시점을
+통제할 수 없으므로 `batch_job_id`가 있고 상태가 `ACTIVE_STATES`인 행은 force를 무시하고
+`_do_extract`의 폴링을 이어가게 둔다. **`failed` 행은 예외** — batch가 실제로 죽은
+잡이므로 핸들을 비우고 재시작하는 것이 맞다(`ACTIVE_STATES` 밖이라 자연히 그렇게 된다).
+
 ## 월간 자동 분석 스케줄러
 
 새 컨테이너/라이브러리 없이 `runner.loop()`(30초 주기) 안에서 매 틱마다

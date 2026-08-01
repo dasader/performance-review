@@ -668,3 +668,64 @@ async def test_permanent_rate_limit_pauses_instead_of_blocking_the_loop(ctx, mon
     # 소진은 이 잡의 잘못이 아니므로 실패 카운터를 올리지 않는다 — 올리면 예산이
     # 회복돼 재개된 뒤에도 상한에 걸려 failed로 떨어진다.
     assert a.search_attempts == 0
+
+
+async def test_force_requeue_preserves_inflight_batch_job(ctx):
+    """C5: batch 진행 중인 분석은 force 재실행이 건드리지 않는다.
+
+    batch_job_id를 비우면 Gemini에서 이미 돌고 있는(=과금되는) 잡의 핸들을 잃고
+    같은 논문을 통째로 재제출한다 — 청크당 최대 1,000건이라 손실이 크다.
+    관리자가 "지금 실행"을 누르는 시점을 통제할 수 없으므로 코드로 막는다.
+    """
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="extracting",
+                 query_hash=search.query_hash(sf, 2025, 2025),
+                 batch_job_id="batches/inflight", extract_attempts=2,
+                 extracted_this_run=17)
+    db.add(a)
+    db.commit()
+
+    runner.enqueue(db, sf, 2025, 2025, force=True, trigger="manual")
+    db.refresh(a)
+
+    assert a.batch_job_id == "batches/inflight"
+    assert a.status == "extracting"
+    # 카운터도 그대로여야 한다 — 리셋하면 이번 실행의 추출 집계가 어긋난다.
+    assert a.extract_attempts == 2
+    assert a.extracted_this_run == 17
+
+
+async def test_force_requeue_clears_batch_job_when_batch_failed(ctx):
+    """batch가 실패해 failed로 떨어진 행은 죽은 잡이므로 핸들을 비우고 재시작한다.
+    ACTIVE_STATES 밖이라 위 보호 분기에 걸리지 않아야 한다."""
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="failed",
+                 query_hash=search.query_hash(sf, 2025, 2025),
+                 batch_job_id="batches/dead", error="Gemini batch 작업 실패")
+    db.add(a)
+    db.commit()
+
+    runner.enqueue(db, sf, 2025, 2025, force=True, trigger="manual")
+    db.refresh(a)
+
+    assert a.batch_job_id is None
+    assert a.status == "pending"
+    assert a.error is None
+
+
+async def test_force_requeue_still_resets_when_no_batch_inflight(ctx):
+    """batch가 없으면 기존 force 동작(pending으로 되돌리기)이 그대로 유지된다."""
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="paused",
+                 query_hash=search.query_hash(sf, 2025, 2025),
+                 error="OpenAlex 일일 크레딧 소진 — 내일 자동 재개됩니다.",
+                 search_attempts=1)
+    db.add(a)
+    db.commit()
+
+    runner.enqueue(db, sf, 2025, 2025, force=True, trigger="manual")
+    db.refresh(a)
+
+    assert a.status == "pending"
+    assert a.search_attempts == 0
+    assert a.error is None
