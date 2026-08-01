@@ -39,11 +39,28 @@ async def get_with_retry(
             raise RuntimeError(f"{service_name} 네트워크 오류: {context}") from e
 
         if response.status_code == 429:
-            remaining = response.headers.get("X-RateLimit-Remaining")
-            if remaining is not None and _as_float(remaining) <= 0:
-                raise RateLimited(f"{service_name} 일일 크레딧 소진", permanent=True)
+            # 잔여 요청 수와 잔여 예산 중 **하나라도** 바닥이면 소진이다. 요청 수만 보면
+            # 놓친다 — 실측(2026-08-01)에서 X-RateLimit-Remaining=4인데
+            # X-RateLimit-Remaining-USD=0.0004라 이 판정을 그대로 통과해 버렸다.
+            for header in ("X-RateLimit-Remaining", "X-RateLimit-Remaining-USD"):
+                value = response.headers.get(header)
+                if value is not None and _as_float(value) <= 0:
+                    raise RateLimited(f"{service_name} 일일 크레딧 소진", permanent=True)
+
             retry_after = _as_float(response.headers.get("Retry-After"))
             delay = retry_after if retry_after else 2 ** attempt
+            # Retry-After가 상한을 넘으면 그만큼 자는 대신 permanent로 올린다.
+            # runner.loop()는 활성 분석을 순차로 await하므로, 여기서 오래 자면 그 분석
+            # 하나가 아니라 **잡 루프 전체**(나머지 분석 · batch 폴링 · resume_paused)가
+            # 함께 멈춘다 — 실측으로 OpenAlex가 Retry-After 43,579초(약 12시간)를
+            # 반환해 재추출 110건이 통째로 정지했다. permanent로 올리면 호출부가
+            # analysis를 paused로 내리고 resume_paused가 자정에 재개한다(설계된 경로).
+            if delay > settings.http_max_retry_after_seconds:
+                raise RateLimited(
+                    f"{service_name} 429 — 재시도까지 {delay:.0f}초 대기를 요구해 "
+                    f"소진으로 처리합니다(상한 {settings.http_max_retry_after_seconds}초)",
+                    permanent=True,
+                )
             logger.warning("%s 429 (%d/%d), %.1fs 후 재시도", service_name, attempt + 1, max_attempts, delay)
             await asyncio.sleep(delay)
             continue

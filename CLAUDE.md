@@ -336,7 +336,26 @@ $0.0040까지 떨어진다.
 전부 $0.001**로 감싸도 동일하다. `.env`의 `OPENALEX_SEARCH_COST_USD`는 사전 게이트 판단용 참고값이고,
 **실제 과금은 매 응답의 `meta.cost_usd`를 읽어 `app/services/budget.py::record_usage`로 누적한다**
 (`app/clients/openalex.py`). 키를 다른 서비스와 공유하므로 잔여 예산을 추정하지 않고
-`X-RateLimit-Remaining` 헤더 실측값을 그대로 신뢰한다.
+`X-RateLimit-Remaining` / `X-RateLimit-Remaining-USD` 헤더 실측값을 그대로 신뢰한다.
+
+### 429는 절대 오래 기다리지 않는다 — 잡 루프 전체가 멈춘다
+
+`runner.loop()`는 활성 분석을 `for ... await advance()`로 **순차** 처리한다. 따라서
+`_http.get_with_retry`가 한 요청에서 오래 자면 그 분석 하나가 아니라 **나머지 분석 전부와
+batch 폴링·`resume_paused`까지** 함께 멈춘다. 실측(2026-08-01): OpenAlex가 `Retry-After`로
+43,579초(약 12시간)를 반환했고, 재추출 110건이 통째로 정지했다.
+
+그래서 `get_with_retry`는 429에서 둘 다 검사한다.
+
+- **잔여 요청 수와 잔여 예산 중 하나라도 0 이하**면 `RateLimited(permanent=True)`.
+  요청 수만 보면 놓친다 — 실측에서 `X-RateLimit-Remaining=4`인데
+  `X-RateLimit-Remaining-USD=0.0004`라 옛 판정을 그대로 통과했다.
+- **`Retry-After`가 `HTTP_MAX_RETRY_AFTER_SECONDS`(기본 300초)를 넘으면** 기다리지 않고
+  `permanent=True`로 올린다.
+
+`permanent`면 호출부(`advance`)가 분석을 `paused`로 내리고 `search_attempts`는 **올리지 않는다**
+(소진은 그 잡의 잘못이 아니므로 — 올리면 재개 후에도 상한에 걸려 `failed`가 된다).
+`resume_paused`가 UTC 자정에 자동 재개한다.
 
 ## 분석 삭제 정책 — `DELETE /api/admin/analyses/{id}`
 
