@@ -13,13 +13,31 @@ MAP_INSTRUCTION = """당신은 한국 연구성과를 분석하는 과학기술 
   1문장. 초록에 비교·개선 내용이 없으면 지어내지 말고 빈 문자열("")로 두세요.
 - approach와 improvement는 필수 필드지만 빈 문자열("")도 유효한 값입니다. 초록에
   근거가 없는데 채워 넣는 것이 가장 나쁩니다.
-- 한국어로 작성하세요."""
+- 한국어로 작성하세요.
+
+metrics의 name·unit 작성 규칙 (코드가 통계로 집계하므로 반드시 지킬 것):
+- name에는 **물리량 이름만** 씁니다. 측정 대상 물질·소자 구조·측정 조건을 name에
+  넣지 마세요. 넣으면 같은 지표가 논문마다 다른 이름이 되어 집계가 불가능해집니다.
+  나쁜 예: "Single-junction PSC PCE", "AlGaAs 밴드갭 에너지", "댐프히트 시험 후 효율 유지율"
+  좋은 예: "전력변환효율(PCE)", "밴드갭", "효율 유지율"
+- 널리 쓰이는 약어가 있으면 `한글명(약어)` 형태로 통일합니다.
+  예: 전력변환효율(PCE), 개방전압(Voc), 단락전류밀도(Jsc), 충전율(FF), 에너지밀도
+- 측정 대상·조건은 target 필드에 따로 씁니다. 없으면 빈 문자열("")로 두세요.
+- unit은 ASCII로만 씁니다. 위첨자·유니코드 기호를 쓰지 말고 `/`와 숫자로 표기하세요.
+  예: mA cm⁻², mA cm-2, mA/cm^2 → 전부 "mA/cm2" / Wh kg−1 → "Wh/kg"
+- unit에 조건을 넣지 마세요. 나쁜 예: "% at 2 A cm-2", "% (1000시간 후)" → 그냥 "%"."""
 
 MAP_SCHEMA = {
     "type": "object",
     "properties": {
         "tech_summary": {"type": "string"},
-        "achievement_type": {"type": "string"},
+        "achievement_type": {
+            "type": "string",
+            # 이 값은 reducer.group_for_reduce의 그룹 분할 키다. 자유 문자열로 두었더니
+            # 9종 지정에 17종이 저장됐다(회로설계/회로 설계, 데이터셋/데이터셋 구축 등).
+            "enum": ["신소자", "신소재", "공정", "알고리즘", "아키텍처",
+                     "성능향상", "시스템구현", "이론/해석", "기타"],
+        },
         "metrics": {
             "type": "array",
             "items": {
@@ -28,8 +46,12 @@ MAP_SCHEMA = {
                     "name": {"type": "string"},
                     "value": {"type": "string"},
                     "unit": {"type": "string"},
+                    # 측정 대상·조건. name을 순수 물리량으로 유지하기 위한 배출구다 —
+                    # 이 필드가 없으면 모델이 대상을 name에 도로 붙인다.
+                    # 새 DB 컬럼이 아니다: metrics_json(JSON)에 그대로 실린다.
+                    "target": {"type": "string"},
                 },
-                "required": ["name", "value"],
+                "required": ["name", "value", "target"],
             },
         },
         "approach": {"type": "string"},

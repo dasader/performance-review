@@ -206,3 +206,37 @@ def test_estimate_llm_cost_usd_scales_with_paper_count_and_is_positive():
     cost_100 = mapper.estimate_llm_cost_usd(100)
     assert cost_10 > 0
     assert cost_100 > cost_10
+
+
+ACHIEVEMENT_TYPES = ["신소자", "신소재", "공정", "알고리즘", "아키텍처",
+                     "성능향상", "시스템구현", "이론/해석", "기타"]
+
+
+def test_map_schema_separates_metric_target_from_name():
+    """측정 대상·조건이 지표명에 섞이면 같은 지표가 쪼개져 집계가 성립하지 않는다
+    (실측: 재생에너지 2025에서 PCE가 7조각). target 필드로 분리한다."""
+    item = MAP_SCHEMA["properties"]["metrics"]["items"]
+    assert "target" in item["properties"]
+    assert "target" in item["required"]
+
+
+def test_map_schema_constrains_achievement_type_to_enum():
+    """9종 지정인데 실제로는 17종이 저장돼 있었다(회로설계/회로 설계 등).
+    이 값은 3단 reduce의 그룹 분할 키라 오염되면 그룹이 불필요하게 늘어난다."""
+    assert MAP_SCHEMA["properties"]["achievement_type"]["enum"] == ACHIEVEMENT_TYPES
+
+
+def test_map_instruction_states_metric_naming_rules():
+    for phrase in ["물리량 이름만", "target", "ASCII"]:
+        assert phrase in MAP_INSTRUCTION
+
+
+def test_extraction_schema_version_is_pinned():
+    """이 값을 올리면 기존 추출이 전량 무효화되어 재추출된다(22,059건 기준 약 $6).
+    비용이 큰 되돌릴 수 없는 동작이므로 승인 없이 조용히 오르지 않게 못박는다.
+
+    v3(2026-08-01): metrics에 target 필드 추가 + 지표명·단위 작성 규칙 도입.
+    옛 지표명은 물질·조건이 섞여 있어(Single-junction PSC PCE) 집계가 성립하지
+    않았다 — 정리하려면 전량 재추출이 필요해 사용자 승인을 받아 올렸다."""
+    from app.services.mapper import EXTRACTION_SCHEMA_VERSION
+    assert EXTRACTION_SCHEMA_VERSION == 3

@@ -226,9 +226,24 @@ H1 제목(`# {이름} {연도}년 성과 분석 보고서`)을 고정하게 한�
 | ② 추출 | `papers.paper_key` + `model_ver` | `app/services/mapper.py::model_ver`, `PaperExtraction` |
 | ③ 보고서 | `analyses(subfield_id, year)` | `Analysis` 행 자체가 캐시 |
 
-**`model_ver`**(`f"{gemini_model}/{thinking_map}"`)이 바뀌면 이전 추출 캐시는 자동으로 무효화된다 —
-`paper_extractions` 조회가 항상 `model_ver == mapper.model_ver()`로 필터링하기 때문에, 모델이나
-thinking 레벨을 바꾸면 같은 논문이라도 재추출된다(신규 행으로 쌓이지 덮어쓰지 않음).
+**`model_ver`**(`f"{gemini_model}/{thinking_map}/v{EXTRACTION_SCHEMA_VERSION}"`)이 바뀌면 이전 추출
+캐시는 자동으로 무효화된다 — `paper_extractions` 조회가 항상 `model_ver == mapper.model_ver()`로
+필터링하기 때문에, 모델·thinking 레벨·추출 스키마 버전 중 하나만 바뀌어도 같은 논문이 재추출된다
+(신규 행으로 쌓이지 덮어쓰지 않는다).
+
+**`EXTRACTION_SCHEMA_VERSION`을 올리는 것은 되돌릴 수 없고 비싸다** — 전체 추출이 무효화되어
+다음 실행부터 전량 재추출된다(22,059건 기준 map 약 $6 + 보고서 전량 재생성 약 $1.5).
+`test_mapper.py::test_extraction_schema_version_is_pinned`가 현재 값을 고정하므로 실수로 오르지
+않는다. 올릴 때는 그 테스트도 함께 고치고 이유를 docstring에 남긴다.
+
+| 버전 | 도입 | 내용 |
+|---|---|---|
+| v2 | 2026-07 | `approach` / `improvement` 필드 추가 |
+| v3 | 2026-08-01 | `metrics[].target` 추가 + 지표명·단위 작성 규칙. 옛 지표명은 물질·조건이 섞여 있어(`Single-junction PSC PCE`) `stats.aggregate_metrics` 집계가 성립하지 않았다 |
+
+**버전을 올려도 그 자체로는 아무 일도 일어나지 않는다.** 해당 `Analysis`가 다시 실행돼야
+재추출된다 — 관리자 "지금 실행"(`POST /api/admin/schedule/run-now`)이나 월간 스케줄러가
+`force=True`로 큐잉할 때 비로소 시작된다.
 
 ## 프리즈 없는 증분 갱신
 
