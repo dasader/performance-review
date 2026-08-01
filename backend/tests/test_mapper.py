@@ -231,8 +231,12 @@ def test_map_instruction_states_metric_naming_rules():
         assert phrase in MAP_INSTRUCTION
 
 
-def test_extraction_schema_version_not_bumped_without_approval():
-    """이 값을 올리면 기존 22,059건이 전량 재추출된다(약 $6).
-    재추출은 사용자의 별도 승인 사항이므로 여기서 조용히 오르지 않게 못박는다."""
+def test_extraction_schema_version_is_pinned():
+    """이 값을 올리면 기존 추출이 전량 무효화되어 재추출된다(22,059건 기준 약 $6).
+    비용이 큰 되돌릴 수 없는 동작이므로 승인 없이 조용히 오르지 않게 못박는다.
+
+    v3(2026-08-01): metrics에 target 필드 추가 + 지표명·단위 작성 규칙 도입.
+    옛 지표명은 물질·조건이 섞여 있어(Single-junction PSC PCE) 집계가 성립하지
+    않았다 — 정리하려면 전량 재추출이 필요해 사용자 승인을 받아 올렸다."""
     from app.services.mapper import EXTRACTION_SCHEMA_VERSION
-    assert EXTRACTION_SCHEMA_VERSION == 2
+    assert EXTRACTION_SCHEMA_VERSION == 3
