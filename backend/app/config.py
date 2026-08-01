@@ -57,6 +57,12 @@ class Settings(BaseSettings):
 
     http_max_attempts: int = 5
     http_timeout_seconds: float = 60.0
+    # 429의 Retry-After가 이 값을 넘으면 대기하지 않고 크레딧 소진(permanent)으로
+    # 처리한다. runner.loop()가 활성 분석을 순차로 await하므로 한 요청의 긴 대기가
+    # 잡 루프 전체를 멈춘다 — 실측으로 OpenAlex가 43,579초(약 12시간)를 요구해
+    # 재추출 110건이 통째로 정지했다. 5분을 넘겨 기다릴 이유가 없다: permanent로
+    # 올리면 analysis가 paused로 내려가고 resume_paused가 자정에 자동 재개한다.
+    http_max_retry_after_seconds: float = 300.0
 
     # M16: 관리자 인증이 정적 헤더 하나뿐이라 CORS를 "*"로 열면 방어선이 사실상 없다.
     # 쉼표 구분 오리진 목록. 기본값은 web(nginx) 컨테이너가 서비스되는 오리진으로 좁힌다.

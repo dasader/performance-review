@@ -642,3 +642,29 @@ async def test_do_reduce_records_analysis_run(ctx, monkeypatch):
     assert runs[0].new_papers == 1
     assert runs[0].searched_count == 3
     assert runs[0].analyzed_count == 1
+
+
+async def test_permanent_rate_limit_pauses_instead_of_blocking_the_loop(ctx, monkeypatch):
+    """영구 429는 잡을 paused로 내려 루프가 계속 돌게 한다.
+
+    loop()가 활성 분석을 순차로 await하므로, 한 분석이 대기하면 나머지 분석과
+    batch 폴링·resume_paused까지 함께 멈춘다. 실측(2026-08-01): OpenAlex가
+    Retry-After 43,579초를 반환해 재추출 110건이 통째로 정지했다.
+    """
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="searching", query_hash="h",
+                 search_attempts=0)
+    db.add(a)
+    db.commit()
+
+    async def fake_collect(*args, **kwargs):
+        raise RateLimited("OpenAlex 일일 크레딧 소진", permanent=True)
+
+    monkeypatch.setattr(runner.search, "collect", fake_collect)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert a.status == "paused"
+    # 소진은 이 잡의 잘못이 아니므로 실패 카운터를 올리지 않는다 — 올리면 예산이
+    # 회복돼 재개된 뒤에도 상한에 걸려 failed로 떨어진다.
+    assert a.search_attempts == 0
