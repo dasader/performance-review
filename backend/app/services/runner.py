@@ -63,6 +63,20 @@ def enqueue(
                            query_hash=current_hash, trigger=trigger, extracted_this_run=0)
             db.add(row)
             queued.append(row)
+        elif row.batch_job_id and row.status in ACTIVE_STATES:
+            # C5: 진행 중인 batch가 있으면 force여도 건드리지 않는다. batch_job_id를
+            # 비우면 Gemini에서 이미 돌고 있는(=과금되는) 잡의 핸들을 잃고 같은 논문을
+            # 통째로 재제출하게 된다 — 청크당 최대 batch_max_requests_per_file건이라
+            # 한 번 밟을 때마다 그만큼을 두 번 지불하고 한 번만 쓴다.
+            # 그대로 두면 _do_extract가 다음 틱에 폴링을 이어받아 정상적으로 끝낸다.
+            #
+            # status가 failed인 행은 여기 걸리지 않는다(ACTIVE_STATES 밖) — batch가
+            # 실제로 실패해 죽은 잡이므로 아래 분기에서 핸들을 비우고 재시작하는 게 맞다.
+            logger.info(
+                "[잡 %d] batch 진행 중(%s) — 재실행 요청을 무시하고 폴링을 이어간다",
+                row.id, row.batch_job_id,
+            )
+            queued.append(row)
         elif force or row.status in ("failed", "paused") or row.query_hash != current_hash:
             query_changed = row.query_hash != current_hash
             row.status = "pending"
