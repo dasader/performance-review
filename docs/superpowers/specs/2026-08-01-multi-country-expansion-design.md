@@ -504,6 +504,7 @@ Phase 1에서 최소 2개국 × 같은 세부기술·연도가 `done`이 된 뒤
 **독립 작업 — Elsevier ScienceDirect 초록 폴백** (§4-3)
 다국가 확장과 무관하게 현재 KR 분석에도 적용되므로 Phase와 병렬로 진행할 수 있다.
 무료 키로 88% 회수 실측 완료. 유일한 선행 조건은 API 이용약관상 외부 LLM 전송 가부 확인.
+→ 별도 설계: `2026-08-01-elsevier-abstract-fallback-design.md`
 
 **Phase 3 (필요해지면)**
 - 분야 단위 비교 rollup. 세부기술 비교가 실제로 쓸 만한지 확인되기 전에는 만들지 않는다.
