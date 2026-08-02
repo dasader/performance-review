@@ -9,6 +9,7 @@ import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import StatusBadge from "../components/StatusBadge";
 import StatsPanel from "../components/StatsPanel";
+import MetricTable from "../components/MetricTable";
 import { firstCiteOffsets } from "../lib/citeAnchors";
 import { stripLeadingH1 } from "../lib/reportMarkdown";
 import { MARKDOWN_COMPONENTS, PROSE_CLASSES } from "../lib/prose";
@@ -230,6 +231,19 @@ function ReportBody({ data }: { data: Analysis }) {
           <div className={`report-prose ${PROSE_CLASSES}`}>
             <ReportMarkdown md={stripLeadingH1(data.report_md ?? "")} />
           </div>
+
+          {/* 정량 지표 분포는 논문 간 통계(기관·저널·인용수)가 아니라 연구 내용 자체의
+              결과값이다 — 서술을 읽은 직후 "그래서 어느 수준인가"를 잇는 자리가 맞아
+              StatsPanel("기본 통계")이 아니라 본문 쪽에 둔다. */}
+          {"top_metrics" in data.stats && (
+            <>
+              <SectionDivider />
+              <MetricTable
+                rows={data.stats.top_metrics ?? []}
+                unique={data.stats.metrics_unique ?? 0}
+              />
+            </>
+          )}
 
           {/* 참고문헌은 그것을 인용한 본문 바로 다음이 자연스럽다 — 통계(기본 통계) 앞으로 옮긴다.
               References가 빈 배열이면 자신의 구분선 없이 null을 반환하므로, 그 경우에도
