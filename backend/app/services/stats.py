@@ -119,9 +119,12 @@ def compute(
     extractions: list[PaperExtraction],
     *,
     snapshot_at: datetime,
+    country: str = "KR",
+    population_total: int | None = None,
 ) -> dict:
     citations = [p.citations or 0 for p in papers]
     partner_counter: Counter = Counter()
+    attribution: Counter = Counter()
     intl = 0
     with_country = 0
     for p in papers:
@@ -129,10 +132,23 @@ def compute(
         if not countries:
             continue
         with_country += 1
-        others = [c for c in countries if c != "KR"]
+        others = [c for c in countries if c != country]
         if others:
             intl += 1
             partner_counter.update(others)
+
+        # 참여 기준으로 수집하되 주도 여부를 병기한다. 둘을 구분하지 않으면 국가별
+        # 숫자를 같은 의미로 오독한다 — 실측으로 일본 논문의 47%가 자국이 주도하지
+        # 않은 국제공동연구이고 중국은 7.5%뿐이다.
+        leads = p.lead_countries_json or []
+        if not others:
+            attribution["단독"] += 1
+        elif not leads:
+            attribution["주도 미상"] += 1   # is_corresponding 미보유 6~9%
+        elif country in leads:
+            attribution["주도"] += 1
+        else:
+            attribution["참여"] += 1
 
     top_cited = sorted(
         papers, key=lambda p: (-(p.citations or 0), p.title or "")
@@ -171,6 +187,11 @@ def compute(
         "by_achievement_type": dict(
             Counter(e.achievement_type for e in extractions if e.achievement_type)
         ),
+        "attribution": dict(attribution),
+        # 상한에 걸려 잘렸는지. 표본과 전수를 나란히 놓으면 인용수가 구조적으로
+        # 부풀려지므로 반드시 드러낸다(국가 비교 보고서가 이 값을 읽어 경고한다).
+        "population_total": population_total if population_total is not None else len(papers),
+        "sampled": bool(population_total is not None and population_total > len(papers)),
         **aggregate_metrics(extractions),
         "snapshot_at": snapshot_at.isoformat(),
     }
