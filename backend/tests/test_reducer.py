@@ -96,7 +96,7 @@ async def test_reduce_subfield_skips_llm_when_body_empty_single_group(monkeypatc
     monkeypatch.setattr(reducer.gemini_sync, "generate", fake)
     ext = [_ext("missing", "공정")]
 
-    result = await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, ext, {})
+    result, _ = await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, ext, {})
 
     assert fake.calls == []
     assert result == "분석 대상 논문이 없어 성과를 정리할 수 없습니다."
@@ -109,7 +109,7 @@ async def test_reduce_subfield_skips_llm_when_all_groups_empty_three_tier(monkey
     monkeypatch.setattr(reducer.gemini_sync, "generate", fake)
     ext = [_ext("m1", "공정"), _ext("m2", "알고리즘")]
 
-    result = await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, ext, {})
+    result, _ = await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, ext, {})
 
     assert fake.calls == []
     assert result == "분석 대상 논문이 없어 성과를 정리할 수 없습니다."
@@ -123,7 +123,7 @@ async def test_reduce_subfield_calls_llm_for_normal_input(monkeypatch):
                           abstract="A", source="openalex", citations=0)}
     ext = [_ext("k1", "공정")]
 
-    result = await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, ext, papers)
+    result, _ = await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, ext, papers)
 
     assert len(fake.calls) == 1
     assert result == "report"
@@ -157,3 +157,72 @@ async def test_rollup_field_skips_llm_for_empty_input(monkeypatch):
 
     assert fake.calls == []
     assert result == "분석된 세부기술이 없습니다."
+
+
+async def test_reduce_subfield_returns_partials_for_three_tier(monkeypatch):
+    """3단 reduce의 그룹별 중간 보고서를 버리지 않고 함께 돌려준다."""
+    monkeypatch.setattr(settings, "reduce_group_threshold", 2)
+
+    async def fake(system, user, *, thinking, **kwargs):
+        return "부분보고서" if user.startswith("[성과유형:") else "최종 통합 보고서"
+
+    monkeypatch.setattr(reducer.gemini_sync, "generate", fake)
+    ext = [_ext(f"a{i}", "공정") for i in range(3)] + [_ext(f"b{i}", "알고리즘") for i in range(2)]
+    papers = {e.paper_key: Paper(paper_key=e.paper_key, title=f"논문 {e.paper_key}",
+                                 year=2026, journal="J", abstract="A",
+                                 source="openalex", citations=1) for e in ext}
+
+    report, sections = await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, ext, papers)
+
+    assert report == "최종 통합 보고서"
+    assert len(sections) >= 2
+    assert all(set(s) == {"name", "body"} for s in sections)
+    assert all(s["body"] == "부분보고서" for s in sections)
+    # 그룹명이 보존돼야 화면이 유형별 제목을 붙일 수 있다.
+    assert "알고리즘" in [s["name"] for s in sections]
+
+
+async def test_reduce_subfield_returns_empty_sections_for_single_call(monkeypatch):
+    """단일 reduce는 그룹이 하나뿐이라 세부 보고서가 없다."""
+    fake = _FakeGenerate("단일 보고서")
+    monkeypatch.setattr(reducer.gemini_sync, "generate", fake)
+    ext = [_ext("k1", "공정")]
+    papers = {"k1": Paper(paper_key="k1", title="논문", year=2026, journal="J",
+                          abstract="A", source="openalex", citations=1)}
+
+    report, sections = await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, ext, papers)
+
+    assert report == "단일 보고서"
+    assert sections == []
+
+
+async def test_reduce_subfield_no_data_returns_empty_sections():
+    """추출 0건이면 LLM을 부르지 않고 안내문과 빈 세부 보고서를 돌려준다."""
+    report, sections = await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, [], {})
+
+    assert "분석 대상 논문이 없어" in report
+    assert sections == []
+
+
+def test_reduce_instruction_forbids_unreachable_quotas():
+    """지켜지지 않는 정량 목표는 남아 있는 것이 해롭다 — 모델이 다른 지시도
+    같은 강도로 따르지 않게 된다(실측: 25% 인용 목표가 200건 이상에서 전부 미달)."""
+    from app.prompts import REDUCE_INSTRUCTION
+
+    assert "25% 이상" not in REDUCE_INSTRUCTION
+    assert "8,000자" not in REDUCE_INSTRUCTION
+
+
+def test_reduce_instruction_pins_citation_format_and_position():
+    """백틱 인용(각주 미인식)과 불릿 나열(번호만 남는 항목)을 실제로 겪었다."""
+    from app.prompts import REDUCE_INSTRUCTION
+
+    assert "백틱" in REDUCE_INSTRUCTION
+    assert "문장 안" in REDUCE_INSTRUCTION
+
+
+def test_reduce_instruction_delegates_metric_table_to_code():
+    """정량 표는 stats.aggregate_metrics가 코드로 만든다 — LLM이 또 만들면 중복이다."""
+    from app.prompts import REDUCE_INSTRUCTION
+
+    assert "## 정량 성과 정리" not in REDUCE_INSTRUCTION

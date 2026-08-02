@@ -17,11 +17,6 @@ from app.services.runner import STEP_LABELS
 
 router = APIRouter(prefix="/api", tags=["public"])
 
-# 한 단계 중첩까지 허용한다: 인용문 안에 "TrioN (3N0C)"처럼 논문 제목 자체가 괄호를
-# 품는 경우, 바깥 인용 괄호 전체를 잡아야지 안쪽 괄호만 잡으면 안 된다(그러면 바깥 인용
-# 전체가 미치환으로 남는다). `(?:[^()]|\([^()]*\))*` — 괄호가 아닌 문자이거나, 괄호가 없는
-# 내용의 중첩 괄호 한 겹. 두 단계 이상 중첩은 다루지 않는다 — 실제 인용 데이터는 한 겹이면
-# 충분하고, 그 이상을 지원하려면 재귀적 괄호 파서가 필요해 복잡도만 커진다.
 # 인용 형식 두 가지를 함께 잡는다.
 #
 # ① 괄호 — 한 단계 중첩까지 허용한다: 인용문 안에 "TrioN (3N0C)"처럼 논문 제목 자체가
@@ -135,8 +130,20 @@ def _apply_footnotes(report_md: str | None, papers: Sequence[Any]) -> tuple[str 
     return _FOOTNOTE_ONLY_BULLETS_RE.sub(collapse, substituted), references
 
 
-def _footnoted_report(db: Session, analysis: Analysis) -> tuple[str | None, list[dict]]:
-    """analysis의 report_md에 각주 치환을 적용하고 (치환된 md, references)를 돌려준다.
+# 종합 보고서와 세부 보고서를 한 번에 치환하려고 이어 붙일 때 쓰는 구분자.
+# 본문에 나타날 수 없어야 해서 널 문자를 쓴다 — 치환 후 다시 이 문자열로 쪼갠다.
+_SECTION_SEP = "\x00SECTION\x00"
+
+
+def _footnoted_report(
+    db: Session, analysis: Analysis
+) -> tuple[str | None, list[dict], list[dict]]:
+    """analysis의 report_md와 세부 보고서에 각주 치환을 적용한다.
+
+    반환은 (치환된 종합 보고서, references, 세부 보고서 목록).
+
+    종합 보고서와 세부 보고서를 **한 번에** 치환해 번호 체계를 공유한다 — 따로 매기면
+    세부 보고서를 펼쳤을 때 [12]가 종합 보고서의 [12]와 다른 논문을 가리킨다.
 
     report_md 원문은 "(논문 제목)" 형태로 저장돼 있고, 각주 [n] 치환은 조회 시점에
     한다 — 세부기술 보고서 화면과 분야 종합보고서 부록(세부기술 첨부)이 이걸 공유한다.
@@ -148,14 +155,35 @@ def _footnoted_report(db: Session, analysis: Analysis) -> tuple[str | None, list
     ).join(AnalysisPaper, AnalysisPaper.paper_id == Paper.id).filter(
         AnalysisPaper.analysis_id == analysis.id
     ).all()
-    return _apply_footnotes(analysis.report_md, papers)
+
+    sections = analysis.sections_json or []
+    if not sections:
+        report_md, references = _apply_footnotes(analysis.report_md, papers)
+        return report_md, references, []
+
+    # 구분자 앞뒤에 빈 줄을 둬 마크다운 블록이 서로 섞이지 않게 한다. 다시 쪼갤 때는
+    # 개행을 뺀 구분자만 쓴다 — _apply_footnotes의 불릿 접기가 줄 끝 개행을 소비할 수
+    # 있어 앞뒤 개행 수가 그대로 남는다고 가정하면 안 된다.
+    combined = f"\n\n{_SECTION_SEP}\n\n".join(
+        [analysis.report_md or ""] + [s.get("body") or "" for s in sections]
+    )
+    substituted, references = _apply_footnotes(combined, papers)
+    parts = (substituted or "").split(_SECTION_SEP)
+    return (
+        parts[0].strip() if analysis.report_md is not None else None,
+        references,
+        [
+            {"name": s.get("name") or "", "body_md": body.strip()}
+            for s, body in zip(sections, parts[1:])
+        ],
+    )
 
 
 def _serialize(db: Session, analysis: Analysis) -> dict:
     subfield = db.get(Subfield, analysis.subfield_id)
     field = db.get(Field, subfield.field_id)
 
-    report_md, references = _footnoted_report(db, analysis)
+    report_md, references, sections = _footnoted_report(db, analysis)
 
     # 보고서 화면의 이동(목록으로 · 이전/다음 연도)에 필요한 최소 정보. 연도 목록은
     # 이 세부기술에 analyses 행이 있는 연도 전부다 — 미완료 연도로 가면 그 화면이
@@ -179,6 +207,7 @@ def _serialize(db: Session, analysis: Analysis) -> dict:
         "status_label": STEP_LABELS.get(analysis.status, analysis.status),
         "report_md": report_md,
         "references": references,
+        "sections": sections,
         "stats": analysis.stats_json,
         "searched_count": analysis.searched_count,
         "analyzed_count": analysis.analyzed_count,
@@ -413,7 +442,9 @@ def subfield_reports(field_id: int, year: int, db: Session = Depends(get_db)):
         )
         if analysis is None or not analysis.report_md:
             continue
-        md, references = _footnoted_report(db, analysis)
+        # 부록은 세부 보고서를 붙이지 않는다 — 이미 세부기술 보고서 본문을
+        # 싣고 있어 유형별 상세까지 넣으면 과하다.
+        md, references, _ = _footnoted_report(db, analysis)
         reports.append({"name": sf.name, "report_md": md, "references": references})
     return {"field_id": field_id, "year": year, "reports": reports}
 

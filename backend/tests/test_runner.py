@@ -9,7 +9,7 @@ from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import Field, Subfield
 from app.models.paper import Paper, PaperExtraction
 from app.models.schedule import AnalysisRun
-from app.services import budget, runner, search
+from app.services import budget, mapper, runner, search
 
 
 @pytest.fixture
@@ -537,7 +537,7 @@ async def test_do_reduce_skips_llm_when_no_new_extractions(ctx, monkeypatch):
 
     async def fake_reduce(*args, **kwargs):
         called["n"] += 1
-        return "새 보고서"
+        return "새 보고서", []
 
     monkeypatch.setattr(runner.reducer, "reduce_subfield", fake_reduce)
 
@@ -562,7 +562,7 @@ async def test_do_reduce_calls_llm_when_extractions_increased(ctx, monkeypatch):
 
     async def fake_reduce(*args, **kwargs):
         called["n"] += 1
-        return "새 보고서"
+        return "새 보고서", []
 
     monkeypatch.setattr(runner.reducer, "reduce_subfield", fake_reduce)
 
@@ -580,7 +580,7 @@ async def test_do_reduce_generates_when_report_md_missing_even_if_no_new(ctx, mo
 
     async def fake_reduce(*args, **kwargs):
         called["n"] += 1
-        return "최초 보고서"
+        return "최초 보고서", []
 
     monkeypatch.setattr(runner.reducer, "reduce_subfield", fake_reduce)
 
@@ -604,7 +604,7 @@ async def test_do_reduce_regenerates_when_model_ver_changed_even_if_count_same(c
 
     async def fake_reduce(*args, **kwargs):
         called["n"] += 1
-        return "재생성된 보고서"
+        return "재생성된 보고서", []
 
     monkeypatch.setattr(runner.reducer, "reduce_subfield", fake_reduce)
 
@@ -630,7 +630,7 @@ async def test_do_reduce_records_analysis_run(ctx, monkeypatch):
     _link_extracted_paper(db, a, sf, "k1")
 
     async def fake_reduce(*args, **kwargs):
-        return "보고서"
+        return "보고서", []
 
     monkeypatch.setattr(runner.reducer, "reduce_subfield", fake_reduce)
 
@@ -729,3 +729,27 @@ async def test_force_requeue_still_resets_when_no_batch_inflight(ctx):
     assert a.status == "pending"
     assert a.search_attempts == 0
     assert a.error is None
+
+
+async def test_do_reduce_preserves_sections_when_skipping_regeneration(ctx, monkeypatch):
+    """신규 추출이 없어 보고서 재생성을 건너뛸 때 기존 세부 보고서를 지우면 안 된다.
+
+    지우면 "재생성을 생략했는데 화면 내용이 줄어드는" 결과가 된다.
+    """
+    db, sf = ctx
+    kept = [{"name": "알고리즘", "body": "이전 부분보고서"}]
+    a = Analysis(subfield_id=sf.id, year=2025, status="reducing", query_hash="h",
+                 report_md="기존 보고서", analyzed_count=0,
+                 report_model_ver=mapper.model_ver(), sections_json=kept)
+    db.add(a)
+    db.commit()
+
+    async def fail(*args, **kwargs):
+        raise AssertionError("재생성을 건너뛰어야 한다")
+
+    monkeypatch.setattr(runner.reducer, "reduce_subfield", fail)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert a.sections_json == kept
+    assert a.report_md == "기존 보고서"

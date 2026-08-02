@@ -105,3 +105,27 @@ def test_uq_analysis_paper_rejects_duplicate():
     with pytest.raises(IntegrityError):
         db.commit()
     db.rollback()
+
+
+def test_analysis_sections_json_defaults_to_empty_list():
+    """단일 reduce는 그룹이 하나뿐이라 세부 보고서가 없다 — 기본값이 빈 리스트여야
+    화면이 '없음'을 판정할 수 있다."""
+    db = _session()
+    a = Analysis(subfield_id=1, year=2025, status="pending", query_hash="h")
+    db.add(a)
+    db.commit()
+    db.refresh(a)
+    assert a.sections_json == []
+
+
+def test_analysis_sections_json_roundtrips_group_order():
+    """그룹 순서가 보고서 구성 순서다 — 저장·조회에서 순서가 보존돼야 한다."""
+    db = _session()
+    sections = [{"name": "알고리즘", "body": "## 개괄\n본문"},
+                {"name": "신소재", "body": "## 개괄\n다른 본문"}]
+    a = Analysis(subfield_id=1, year=2026, status="done", query_hash="h",
+                 sections_json=sections)
+    db.add(a)
+    db.commit()
+    db.refresh(a)
+    assert [x["name"] for x in a.sections_json] == ["알고리즘", "신소재"]

@@ -106,7 +106,7 @@ NN=00은 backend가 8000이 되어 nst-wiki와 충돌하므로 03을 배정했�
 | 2 | filter | `app/services/mapper.py::pending_papers` | abstract 없는 레코드 제외·추출 캐시 히트 제외. **한국 판정은 여기 없다** — OpenAlex 서버측 `country_code:KR` 필터가 이미 걸러 온다 |
 | 3 | map | `app/services/mapper.py::build_requests` + `app/clients/gemini_batch.py` | Batch JSONL 제출 → 폴링 → 결과 저장, thinking=low |
 | 4 | stats | `app/services/stats.py::compute` | 코드로만 집계, LLM 미사용 |
-| 5 | reduce | `app/services/reducer.py::reduce_subfield` | 세부기술별 보고서, thinking=high. 건수가 `REDUCE_GROUP_THRESHOLD`(500) 넘으면 3단 reduce |
+| 5 | reduce | `app/services/reducer.py::reduce_subfield` | 세부기술별 보고서, thinking=high. 건수가 `REDUCE_GROUP_THRESHOLD`(500) 넘으면 3단 reduce — 그룹별 중간 보고서는 버리지 않고 `analyses.sections_json`에 남긴다(아래) |
 | 6 | rollup | `app/services/reducer.py::rollup_field` | 대분류 보고서 합성. 잡 루프가 아니라 관리자가 직접 호출한다(`build_field_report`) |
 
 ### 분야 단위 보고서 두 종류 — 잡 루프로 큐잉 처리
@@ -192,6 +192,20 @@ NN=00은 backend가 8000이 되어 nst-wiki와 충돌하므로 03을 배정했�
 RAG/임베딩은 쓰지 않는다. 전수 대조는 "목표가 몇 개인지 알고 그 개수를 채우는" 작업이라
 top-k 검색과 애초에 맞지 않고, 로드맵 전문(13KB) + 세부기술 보고서 6건이 합쳐도 57KB라
 컨텍스트에 여유롭게 들어간다.
+
+### 3단 reduce의 중간 보고서를 버리지 않는다
+
+최종 통합 1콜이 partial을 **다시 압축**하는 이중 압축이 500건 이상에서 인용률을 무너뜨린다
+(실측: 단일 reduce 350~499구간 9.7% → 3단 500~799구간 5.6%). `reduce_subfield`는
+`(최종 보고서, [{"name": 그룹명, "body": partial}, ...])`을 돌려주고 `_do_reduce`가
+`analyses.sections_json`에 저장한다. 화면은 종합만 보여주고 `?withSections=1` 토글로
+펼친다(분야 보고서의 `withSub`과 같은 패턴).
+
+**재생성 생략(`skip_reduce`) 시에는 `sections_json`을 건드리지 않는다** — 지우면
+"재생성을 건너뛰었는데 화면 내용이 줄어드는" 결과가 된다.
+
+각주는 종합·세부를 **한 번에** 치환해 번호 체계를 공유한다(`_footnoted_report`) —
+따로 매기면 세부를 펼쳤을 때 `[12]`가 종합의 `[12]`와 다른 논문을 가리킨다.
 
 ### reduce 입력의 `[세부기술: 이름 / 연도]` 헤더
 

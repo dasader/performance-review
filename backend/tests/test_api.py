@@ -1101,3 +1101,37 @@ def test_analysis_report_keeps_bullets_that_have_text(client):
 
     out = client.get(f"/api/analyses/{a.id}").json()["report_md"]
     assert out.startswith("- 양자화 기법이 발전했다 ")
+
+
+def test_analysis_exposes_sections_with_shared_footnotes(client):
+    """세부 보고서도 각주 치환을 받고, 번호는 종합 보고서와 같은 체계를 쓴다 —
+    펼쳤을 때 [n]이 다른 논문을 가리키면 읽는 사람이 혼란스럽다."""
+    db = app.dependency_overrides[get_db]()
+    papers = [
+        Paper(paper_key="s1", title="Solid Electrolyte Interface Engineering Study",
+              journal="J1", year=2026, doi=None, source="openalex"),
+        Paper(paper_key="s2", title="Anode Free Lithium Metal Battery Design",
+              journal="J2", year=2026, doi=None, source="openalex"),
+    ]
+    a = _done_analysis_with_papers(
+        db, "종합 서술입니다 (Solid Electrolyte Interface Engineering Study).", papers,
+    )
+    a.sections_json = [
+        {"name": "신소재", "body": "부분 서술입니다 (Anode Free Lithium Metal Battery Design)."}
+    ]
+    db.commit()
+
+    body = client.get(f"/api/analyses/{a.id}").json()
+    assert "[\\[1\\]](#ref-1)" in body["report_md"]
+    assert body["sections"][0]["name"] == "신소재"
+    assert "[\\[2\\]](#ref-2)" in body["sections"][0]["body_md"]
+    assert len(body["references"]) == 2
+
+
+def test_analysis_sections_empty_when_not_three_tier(client):
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(paper_key="s3", title="Some Paper Title For This Test Case",
+                  journal="J", year=2026, doi=None, source="openalex")
+    a = _done_analysis_with_papers(db, "본문", [paper])
+
+    assert client.get(f"/api/analyses/{a.id}").json()["sections"] == []

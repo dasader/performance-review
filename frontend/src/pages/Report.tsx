@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkCjkFriendly from "remark-cjk-friendly";
 import { ACTIVE_STATUSES, get, type Analysis, type Reference } from "../api";
+import Switch from "../components/Switch";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import StatusBadge from "../components/StatusBadge";
@@ -83,6 +84,51 @@ export default function Report() {
     </div>
   );
 }
+
+// 3단 reduce의 성과유형별 상세. 종합 보고서는 대표 성과 중심이라 개별 연구가 생략될 수
+// 있어(실측: 논문 수와 무관하게 약 40편에서 포화), 유형별 중간 보고서를 함께 보관한다.
+// 토글 상태를 URL 쿼리(?withSections=1)에 실어 공유·북마크가 되게 한다 —
+// FieldReportPage의 withSub과 같은 패턴.
+function SectionSummaries({ sections }: { sections?: { name: string; body_md: string }[] }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const open = searchParams.get("withSections") === "1";
+
+  if (!sections?.length) return null;
+
+  const toggle = () => {
+    const next = new URLSearchParams(searchParams);
+    if (open) next.delete("withSections");
+    else next.set("withSections", "1");
+    setSearchParams(next);
+  };
+
+  return (
+    <>
+      <SectionDivider />
+      <section>
+        <div className="mb-2 flex flex-wrap items-center gap-4">
+          <h2 className="text-xl font-bold tracking-tight text-accent">세부 보고서</h2>
+          <Switch checked={open} onChange={toggle} label="성과유형별 상세 포함" />
+        </div>
+        <p className="mb-4 text-sm text-muted">
+          논문이 많아 성과유형별로 나눠 정리한 뒤 종합한 분석입니다. 종합 보고서는 대표
+          성과 중심이라 개별 연구가 생략될 수 있어 유형별 상세를 함께 보관합니다. 각주
+          번호는 위 본문과 같은 체계입니다.
+        </p>
+        {open &&
+          sections.map((s) => (
+            <article key={s.name} className="mt-6 break-before-page">
+              <h3 className="mb-2 text-lg font-bold text-ink">{s.name}</h3>
+              <div className={`report-prose ${PROSE_CLASSES}`}>
+                <ReportMarkdown md={stripLeadingH1(s.body_md)} />
+              </div>
+            </article>
+          ))}
+      </section>
+    </>
+  );
+}
+
 
 function ReportBody({ data }: { data: Analysis }) {
   const excluded = data.searched_count - data.analyzed_count;
@@ -189,6 +235,8 @@ function ReportBody({ data }: { data: Analysis }) {
               References가 빈 배열이면 자신의 구분선 없이 null을 반환하므로, 그 경우에도
               아래 구분선 하나만 report_md와 StatsPanel 사이에 남는다. */}
           <References references={data.references} />
+
+          <SectionSummaries sections={data.sections} />
 
           <SectionDivider />
 
