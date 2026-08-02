@@ -12,7 +12,7 @@ class _FakeDb:
         return Subfield(id=pk, field_id=1, name="테스트 세부기술", query="q")
 
 
-_ANALYSIS = Analysis(subfield_id=1, year=2026, query_hash="h")
+_ANALYSIS = Analysis(subfield_id=1, year=2026, query_hash="h", country="KR")
 
 
 class _FakeGenerate:
@@ -127,7 +127,7 @@ async def test_reduce_subfield_calls_llm_for_normal_input(monkeypatch):
 
     assert len(fake.calls) == 1
     assert result == "report"
-    assert "[세부기술: 테스트 세부기술 / 2026]" in fake.calls[0][1]
+    assert "[세부기술: 테스트 세부기술 / 2026 / 한국]" in fake.calls[0][1]
 
 
 async def test_three_tier_final_call_still_names_the_subfield(monkeypatch):
@@ -146,7 +146,7 @@ async def test_three_tier_final_call_still_names_the_subfield(monkeypatch):
     await reducer.reduce_subfield(_FakeDb(), _ANALYSIS, ext, papers)
 
     assert len(fake.calls) == 3  # 그룹 2개 + 최종 통합 1개
-    assert "[세부기술: 테스트 세부기술 / 2026]" in fake.calls[-1][1]
+    assert "[세부기술: 테스트 세부기술 / 2026 / 한국]" in fake.calls[-1][1]
 
 
 async def test_rollup_field_skips_llm_for_empty_input(monkeypatch):
@@ -226,3 +226,32 @@ def test_reduce_instruction_delegates_metric_table_to_code():
     from app.prompts import REDUCE_INSTRUCTION
 
     assert "## 정량 성과 정리" not in REDUCE_INSTRUCTION
+
+
+def test_country_name_lookup_covers_target_countries():
+    from app.prompts import country_name
+    for code, name in {"KR": "한국", "US": "미국", "CN": "중국",
+                       "JP": "일본", "DE": "독일"}.items():
+        assert country_name(code) == name
+    assert country_name("XX") == "XX"   # 모르는 코드는 그대로 — 지어내지 않는다
+
+
+async def test_reduce_header_names_the_country(monkeypatch):
+    """국가가 빠지면 KR 보고서와 CN 보고서의 H1 제목이 같아져 구분이 불가능해진다."""
+    fake = _FakeGenerate()
+    monkeypatch.setattr(reducer.gemini_sync, "generate", fake)
+    ext = [_ext("k1", "공정")]
+    papers = {"k1": Paper(paper_key="k1", title="논문", year=2026, journal="J",
+                          abstract="A", source="openalex", citations=1)}
+    analysis = Analysis(subfield_id=1, year=2026, query_hash="h", country="CN")
+
+    await reducer.reduce_subfield(_FakeDb(), analysis, ext, papers)
+
+    assert "[세부기술: 테스트 세부기술 / 2026 / 중국]" in fake.calls[0][1]
+
+
+def test_map_instruction_is_country_neutral():
+    """논문 한 편에서 기술적 성과를 뽑는 작업에 저자 국적은 무관하다.
+    ("한국어로 작성하세요"는 출력 언어 지시라 그대로 둔다.)"""
+    from app.prompts import MAP_INSTRUCTION
+    assert "한국 연구성과" not in MAP_INSTRUCTION
