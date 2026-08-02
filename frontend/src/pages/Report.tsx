@@ -117,9 +117,19 @@ function SectionSummaries({ sections }: { sections?: { name: string; body_md: st
           번호는 위 본문과 같은 체계입니다.
         </p>
         {open &&
-          sections.map((s) => (
-            <article key={s.name} className="mt-6 break-before-page">
-              <h3 className="mb-2 text-lg font-bold text-ink">{s.name}</h3>
+          sections.map((s, i) => (
+            <article key={s.name} className="mt-10 break-before-page">
+              {/* 그룹 이름표는 본문 제목과 **다른 종류의 물건**으로 보여야 한다. 이전에는
+                  text-lg 제목이라 바로 아래 오는 prose-h2("분야 개괄", text-xl + 밑줄)보다
+                  오히려 작아 위계가 뒤집혔고, 읽는 사람이 이게 기술명인지 절 제목인지
+                  구분하지 못했다(사용자 신고). 눌린 면 + 왼쪽 굵은 띠로 "구획 표지"임을
+                  드러내고, 눈썹 라벨이 그것이 성과유형임과 전체 중 몇 번째인지를 말한다. */}
+              <div className="mb-4 border-l-4 border-accent bg-sunken px-4 py-3">
+                <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">
+                  성과유형 {i + 1} / {sections.length}
+                </p>
+                <h3 className="text-xl font-bold text-ink">{s.name}</h3>
+              </div>
               <div className={`report-prose ${PROSE_CLASSES}`}>
                 <ReportMarkdown md={stripLeadingH1(s.body_md)} />
               </div>
