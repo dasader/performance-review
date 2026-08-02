@@ -14,6 +14,12 @@ import { firstCiteOffsets } from "../lib/citeAnchors";
 import { stripLeadingH1 } from "../lib/reportMarkdown";
 import { MARKDOWN_COMPONENTS, PROSE_CLASSES } from "../lib/prose";
 
+// 연도 이동 링크가 국가를 잃으면 KR로 되돌아간다 — 다른 국가를 보다가 연도를 옮기면
+// 조용히 다른 나라 보고서로 넘어간다.
+function countryQuery(country: string): string {
+  return country && country !== "KR" ? `?country=${encodeURIComponent(country)}` : "";
+}
+
 function SectionDivider() {
   return <hr className="my-10 border-t border-border" />;
 }
@@ -61,17 +67,24 @@ function ReportMarkdown({ md }: { md: string }) {
 
 export default function Report() {
   const { analysisId, subfieldId, year } = useParams();
+  const [searchParams] = useSearchParams();
+  // 같은 세부기술·연도라도 국가가 다르면 다른 분석이다. 쿼리로 실어 공유·북마크가
+  // 되게 한다(기본 KR — 백엔드도 같은 기본값이라 붙이지 않아도 동작이 같다).
+  // analysisId로 여는 경로는 행을 직접 가리키므로 국가가 필요 없다.
+  const country = searchParams.get("country") ?? "KR";
   const [data, setData] = useState<Analysis | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setData(null);
     setError(null);
-    const path = analysisId ? `/analyses/${analysisId}` : `/subfields/${subfieldId}/analyses/${year}`;
+    const path = analysisId
+      ? `/analyses/${analysisId}`
+      : `/subfields/${subfieldId}/analyses/${year}?country=${encodeURIComponent(country)}`;
     get<Analysis>(path)
       .then(setData)
       .catch((e) => setError(e.message));
-  }, [analysisId, subfieldId, year]);
+  }, [analysisId, subfieldId, year, country]);
 
   return (
     <div className="min-h-screen">
@@ -164,7 +177,7 @@ function ReportBody({ data }: { data: Analysis }) {
               없는 방향은 비활성 버튼 대신 아예 그리지 않는다. */}
           {prevYear && (
             <Link
-              to={`/subfields/${data.subfield_id}/${prevYear}`}
+              to={`/subfields/${data.subfield_id}/${prevYear}${countryQuery(data.country)}`}
               className="btn btn-neutral btn-sm tabular-nums"
             >
               ← {prevYear}
@@ -172,7 +185,7 @@ function ReportBody({ data }: { data: Analysis }) {
           )}
           {nextYear && (
             <Link
-              to={`/subfields/${data.subfield_id}/${nextYear}`}
+              to={`/subfields/${data.subfield_id}/${nextYear}${countryQuery(data.country)}`}
               className="btn btn-neutral btn-sm tabular-nums"
             >
               {nextYear} →
@@ -195,7 +208,9 @@ function ReportBody({ data }: { data: Analysis }) {
         </h1>
         {/* eyebrow는 한 덩어리에 하나만 쓴다 — 제목 위아래로 두 줄이 같은 대문자 라벨
             모양이면 어느 쪽이 상위 분류인지 읽히지 않는다. 아래는 평범한 캡션으로 둔다. */}
-        <p className="mt-1 text-xs text-muted">분석 대상 기간 {data.year}년</p>
+        <p className="mt-1 text-xs text-muted">
+          분석 대상 기간 {data.year}년 · 대상 국가 {data.country_name}
+        </p>
 
         <div className="mt-3">
           <StatusBadge status={data.status} label={data.status_label} />

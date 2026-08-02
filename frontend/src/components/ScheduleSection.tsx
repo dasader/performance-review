@@ -46,6 +46,7 @@ export default function ScheduleSection({
         day: info.day,
         hour: info.hour,
         years_back: info.years_back,
+        countries: info.countries,
       });
       setLoadError(null);
     } catch (e) {
@@ -103,7 +104,8 @@ export default function ScheduleSection({
     (draft.enabled !== data.enabled ||
       draft.day !== data.day ||
       draft.hour !== data.hour ||
-      draft.years_back !== data.years_back);
+      draft.years_back !== data.years_back ||
+      draft.countries !== data.countries);
 
   const visibleHistory = data
     ? historyExpanded
@@ -193,6 +195,27 @@ export default function ScheduleSection({
                 value={draft.years_back}
                 onChange={(v) => setDraft((d) => d && { ...d, years_back: v })}
               />
+
+              <div>
+                <label
+                  htmlFor="schedule-countries"
+                  className="mb-1 block text-xs font-medium text-ink-light"
+                >
+                  대상 국가(콤마 구분)
+                </label>
+                <input
+                  id="schedule-countries"
+                  className="input"
+                  value={draft.countries}
+                  onChange={(e) =>
+                    setDraft((d) => d && { ...d, countries: e.target.value })
+                  }
+                  placeholder="KR,US,CN"
+                />
+                <p className="mt-1 text-xs text-muted">
+                  국가마다 검색·추출이 따로 돌아 비용이 곱해집니다. 기본은 KR입니다.
+                </p>
+              </div>
 
               <div>
                 <span className="mb-1 block text-xs font-medium text-ink-light">시간대(읽기 전용)</span>

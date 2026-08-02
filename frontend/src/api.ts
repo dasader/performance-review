@@ -253,6 +253,10 @@ export interface Analysis {
   // 3단 reduce의 성과유형별 상세. 각주 번호는 report_md와 같은 체계를 쓴다.
   // 단일 reduce 분석과 재생성 전 기존 분석은 빈 배열이다.
   sections?: ReportSection[];
+  // 분석 대상 국가(ISO 3166-1 alpha-2)와 그 한글 이름. 같은 세부기술·연도라도
+  // 국가가 다르면 다른 분석이다.
+  country: string;
+  country_name: string;
   // 미완료 상태에서는 null이 아니라 백엔드 stats_json 컬럼의 default인 빈 객체({})가 온다.
   stats: Stats | Record<string, never>;
   searched_count: number;
@@ -319,6 +323,8 @@ export interface ScheduleInfo {
   day: number;
   hour: number;
   years_back: number;
+  // 스케줄러가 돌 국가. 콤마 구분("KR,US,CN"). 국가마다 검색·추출이 따로 돌아 비용이 곱해진다.
+  countries: string;
   timezone: string; // 읽기 전용 — .env 전용 값
   next_run_at: string; // 스케줄 타임존(기본 KST) wall-clock, tzinfo 없음
   history: ScheduleHistoryEntry[];
@@ -329,6 +335,7 @@ export interface ScheduleUpdateIn {
   day: number;
   hour: number;
   years_back: number;
+  countries: string;
 }
 
 export interface RunNowResponse {
