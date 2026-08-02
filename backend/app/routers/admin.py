@@ -3,7 +3,13 @@ from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field as PydanticField, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    Field as PydanticField,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 from sqlalchemy.orm import Session
 
 from app.clients import kci, openalex
@@ -53,6 +59,8 @@ class PreviewIn(_YearRangeMixin):
 class RunIn(_YearRangeMixin):
     subfield_ids: list[int] = PydanticField(min_length=1)
     force: bool = False
+    # ISO 3166-1 alpha-2. 기본 KR이라 화면을 고치기 전에도 기존 동작이 그대로다.
+    country: str = "KR"
 
 
 class ScheduleIn(BaseModel):
@@ -60,6 +68,21 @@ class ScheduleIn(BaseModel):
     day: int
     hour: int
     years_back: int
+    # 콤마 구분 국가 목록("KR,US,CN"). 국가마다 검색·추출이 따로 돌아 비용이 곱해진다.
+    countries: str = "KR"
+
+    @field_validator("countries")
+    @classmethod
+    def _check_countries(cls, v: str) -> str:
+        """형식이 어긋난 코드를 막는다 — 잘못 저장되면 스케줄러가 조용히 존재하지 않는
+        국가로 검색을 돌려 0건을 받는다(오류도 안 난다)."""
+        codes = [c.strip().upper() for c in (v or "").split(",") if c.strip()]
+        if not codes:
+            raise ValueError("국가를 최소 하나 지정해야 합니다.")
+        bad = [c for c in codes if len(c) != 2 or not c.isalpha()]
+        if bad:
+            raise ValueError(f"국가 코드는 두 글자 알파벳이어야 합니다: {', '.join(bad)}")
+        return ",".join(codes)
 
     @model_validator(mode="after")
     def _check_ranges(self):
@@ -198,10 +221,10 @@ async def preview(payload: PreviewIn, db: Session = Depends(get_db)):
 def run(payload: RunIn, db: Session = Depends(get_db)):
     # C1: 여기서 검색 건수(over_limit)를 다시 확인하지 않는다 — 확인하려면 검색을
     # 한 번 더 돌려야 해 이 요청 자체가 이중과금이 된다. 프론트의 버튼 비활성화가
-    # 유일한 사전 방어이고 curl로는 우회 가능하지만, 실제 하드 가드는 runner._do_search가
-    # OpenAlex total_count로 판단해 AnalysisTooLarge를 던지는 지점에 있다(잡이 failed로
-    # 전환되고 analysis.error에 사유가 남아 대시보드에서 바로 보인다) — 이중과금 없이
-    # 사후에라도 반드시 차단되는 쪽을 택했다.
+    # 유일한 사전 방어이고 curl로는 우회 가능하다. 상한 초과는 이제 차단이 아니라
+    # 표본 수집으로 처리된다 — runner._do_search가 인용 상위 N건만 받고 그 사실을
+    # stats의 population_total·sampled로 남긴다(거부하면 CN 11개·US 3개 세부기술이
+    # 그냥 실패한다는 실측 때문에 바꿨다).
     if budget.spent_today(db) >= settings.openalex_daily_budget_usd:
         raise HTTPException(
             status_code=429,
@@ -218,7 +241,8 @@ def run(payload: RunIn, db: Session = Depends(get_db)):
             blocked.append({"subfield_id": subfield_id, "reason": "세부기술 없음"})
             continue
         for analysis in runner.enqueue(
-            db, subfield, payload.year_from, payload.year_to, force=payload.force
+            db, subfield, payload.year_from, payload.year_to,
+            force=payload.force, country=payload.country,
         ):
             queued.append(analysis.id)
     return {"queued": queued, "blocked": blocked}
@@ -281,6 +305,7 @@ def get_schedule(db: Session = Depends(get_db)):
         "day": cfg.day,
         "hour": cfg.hour,
         "years_back": cfg.years_back,
+        "countries": cfg.countries,
         "timezone": settings.schedule_timezone,  # 읽기 전용 — .env 전용 값
         # 스케줄 타임존(기본 KST) 기준 wall-clock 값을 tzinfo 없이 그대로 낸다.
         "next_run_at": runner.next_scheduled_run_at(db).isoformat(),
@@ -295,6 +320,7 @@ def update_schedule(payload: ScheduleIn, db: Session = Depends(get_db)):
     cfg.day = payload.day
     cfg.hour = payload.hour
     cfg.years_back = payload.years_back
+    cfg.countries = payload.countries
     db.commit()
     # 프론트가 저장 후 곧바로 재조회하는 화면이라, GET과 같은 응답(history 포함)을
     # 그대로 돌려준다 — 응답 dict를 두 벌 유지하면 한쪽만 고쳐져 어긋난다.

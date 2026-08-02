@@ -13,6 +13,7 @@ from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import Field, FieldReport, Roadmap, RoadmapCheck, Subfield
 from app.models.paper import Paper
 from app.services import visitors as visitors_service
+from app.prompts import country_name
 from app.services.runner import STEP_LABELS
 
 router = APIRouter(prefix="/api", tags=["public"])
@@ -190,7 +191,8 @@ def _serialize(db: Session, analysis: Analysis) -> dict:
     # 진행 상태를 보여주므로 status로 거르지 않는다.
     years = [
         y for (y,) in db.query(Analysis.year)
-        .filter(Analysis.subfield_id == subfield.id)
+        # 같은 국가의 연도만 — 다른 국가 연도가 섞이면 이동 링크가 404로 간다.
+        .filter(Analysis.subfield_id == subfield.id, Analysis.country == analysis.country)
         .order_by(Analysis.year)
         .all()
     ]
@@ -208,6 +210,8 @@ def _serialize(db: Session, analysis: Analysis) -> dict:
         "report_md": report_md,
         "references": references,
         "sections": sections,
+        "country": analysis.country,
+        "country_name": country_name(analysis.country),
         "stats": analysis.stats_json,
         "searched_count": analysis.searched_count,
         "analyzed_count": analysis.analyzed_count,
@@ -471,9 +475,13 @@ def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/subfields/{subfield_id}/analyses/{year}")
-def get_by_subfield_year(subfield_id: int, year: int, db: Session = Depends(get_db)):
+def get_by_subfield_year(
+    subfield_id: int, year: int, country: str = "KR", db: Session = Depends(get_db)
+):
     analysis = db.query(Analysis).filter(
-        Analysis.subfield_id == subfield_id, Analysis.year == year
+        Analysis.subfield_id == subfield_id,
+        Analysis.year == year,
+        Analysis.country == country,
     ).first()
     if not analysis:
         raise HTTPException(status_code=404, detail="분석 결과를 찾을 수 없습니다.")
