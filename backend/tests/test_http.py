@@ -19,7 +19,10 @@ class _Client:
 
     async def get(self, url, params=None, timeout=None):
         self.calls += 1
-        return self._responses.pop(0)
+        item = self._responses.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
 
 
 @pytest.mark.asyncio
@@ -83,3 +86,54 @@ async def test_short_retry_after_still_backs_off_and_succeeds(monkeypatch):
     response = await get_with_retry("http://x", client=client, service_name="OpenAlex")
     assert response.status_code == 200
     assert slept == [2.0]
+
+
+@pytest.mark.asyncio
+async def test_transient_network_error_is_retried(monkeypatch):
+    """연결 실패는 대개 일시적이라 재시도해야 한다.
+
+    실측(2026-08-01 23:22 UTC): httpx.ConnectError 한 번에 분석 2건이
+    search_attempts=0인 채로 곧장 failed가 됐다. 재시도 루프 안에 있으면서도
+    네트워크 오류에서 즉시 탈출하고 있었다.
+    """
+    slept = []
+
+    async def fake_sleep(delay):
+        slept.append(delay)
+
+    monkeypatch.setattr(_http.asyncio, "sleep", fake_sleep)
+    client = _Client([httpx.ConnectError("All connection attempts failed"), _Resp(200)])
+
+    response = await get_with_retry("http://x", client=client, service_name="OpenAlex")
+    assert response.status_code == 200
+    assert client.calls == 2
+    assert slept == [1]
+
+
+@pytest.mark.asyncio
+async def test_network_error_fails_only_after_exhausting_retries(monkeypatch):
+    async def fake_sleep(delay):
+        pass
+
+    monkeypatch.setattr(_http.asyncio, "sleep", fake_sleep)
+    client = _Client([httpx.ConnectError("boom")] * 3)
+
+    with pytest.raises(RuntimeError, match="네트워크 오류"):
+        await get_with_retry("http://x", client=client, service_name="OpenAlex",
+                             max_attempts=3)
+    assert client.calls == 3
+
+
+@pytest.mark.asyncio
+async def test_timeout_is_retried_and_reported_as_timeout(monkeypatch):
+    """타임아웃도 재시도하되, 소진 시 메시지는 네트워크 오류와 구분해 남긴다."""
+    async def fake_sleep(delay):
+        pass
+
+    monkeypatch.setattr(_http.asyncio, "sleep", fake_sleep)
+    client = _Client([httpx.ReadTimeout("slow")] * 2)
+
+    with pytest.raises(RuntimeError, match="타임아웃"):
+        await get_with_retry("http://x", client=client, service_name="OpenAlex",
+                             max_attempts=2)
+    assert client.calls == 2
