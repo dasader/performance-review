@@ -1135,3 +1135,62 @@ def test_analysis_sections_empty_when_not_three_tier(client):
     a = _done_analysis_with_papers(db, "본문", [paper])
 
     assert client.get(f"/api/analyses/{a.id}").json()["sections"] == []
+
+
+def test_subfield_analysis_lookup_defaults_to_kr(client):
+    db = app.dependency_overrides[get_db]()
+    a = _done_analysis_with_papers(db, "본문", [])
+    r = client.get(f"/api/subfields/{a.subfield_id}/analyses/{a.year}")
+    assert r.status_code == 200
+    assert r.json()["country"] == "KR"
+    assert r.json()["country_name"] == "한국"
+
+
+def test_subfield_analysis_lookup_selects_by_country(client):
+    """같은 세부기술·연도라도 국가가 다르면 다른 분석이다."""
+    db = app.dependency_overrides[get_db]()
+    kr = _done_analysis_with_papers(db, "한국 보고서", [])
+    us = Analysis(subfield_id=kr.subfield_id, year=kr.year, status="done",
+                  query_hash="h-us", report_md="미국 보고서", country="US")
+    db.add(us)
+    db.commit()
+
+    got = client.get(
+        f"/api/subfields/{kr.subfield_id}/analyses/{kr.year}?country=US"
+    ).json()
+    assert got["country"] == "US"
+    assert got["country_name"] == "미국"
+    assert "미국 보고서" in got["report_md"]
+
+
+def test_year_list_is_scoped_to_the_same_country(client):
+    """연도 목록에 다른 국가의 연도가 섞이면 이동 링크가 404로 간다."""
+    db = app.dependency_overrides[get_db]()
+    kr = _done_analysis_with_papers(db, "본문", [])
+    db.add(Analysis(subfield_id=kr.subfield_id, year=kr.year + 1, status="done",
+                    query_hash="h-us", report_md="미국", country="US"))
+    db.commit()
+
+    got = client.get(f"/api/subfields/{kr.subfield_id}/analyses/{kr.year}").json()
+    assert got["years"] == [kr.year]
+
+
+def test_admin_schedule_roundtrips_countries(client):
+    """스케줄러가 돌 국가. 콤마 구분이고 기본은 KR이다."""
+    h = {"X-Admin-Key": settings.admin_key}
+    assert client.get("/api/admin/schedule", headers=h).json()["countries"] == "KR"
+
+    client.put("/api/admin/schedule",
+               json={"enabled": True, "day": 10, "hour": 3, "years_back": 1,
+                     "countries": "KR,US"}, headers=h)
+    assert client.get("/api/admin/schedule", headers=h).json()["countries"] == "KR,US"
+
+
+def test_admin_schedule_rejects_malformed_country_list(client):
+    """빈 값이나 형식이 어긋난 코드는 막는다 — 잘못 저장되면 스케줄러가 조용히
+    존재하지 않는 국가로 검색을 돌려 0건을 받는다."""
+    h = {"X-Admin-Key": settings.admin_key}
+    r = client.put("/api/admin/schedule",
+                   json={"enabled": True, "day": 10, "hour": 3, "years_back": 1,
+                         "countries": "KR,USA"}, headers=h)
+    assert r.status_code == 422
