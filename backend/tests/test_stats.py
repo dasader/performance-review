@@ -253,3 +253,33 @@ def test_compute_with_no_metrics_still_returns_metric_keys():
     s = stats.compute([_p("a")], [], snapshot_at=datetime(2026, 8, 1))
     assert s["metrics_total"] == 0
     assert s["top_metrics"] == []
+
+
+def test_metric_row_reports_min_median_max_range():
+    """분포는 최소~최대 범위로 보여준다.
+
+    p90은 표본이 작으면 최대값과 같아진다 — _percentile의 인덱스가 int(n*0.9)
+    내림이라 n<=10이면 항상 마지막 원소를 가리킨다. 실측으로 저장된 지표 행
+    1,687개 중 1,523개(90.3%)가 p90 == max였다(같은 숫자가 두 열에 나왔다).
+    """
+    ext = [_e("a", [{"name": "효율", "value": str(v), "unit": "%"} for v in [3, 1, 5, 2, 4]])]
+    row = stats.aggregate_metrics(ext)["top_metrics"][0]
+    assert row["min"] == 1.0
+    assert row["median"] == 3.0
+    assert row["max"] == 5.0
+    assert "p90" not in row
+
+
+def test_metric_range_is_meaningful_even_for_two_papers():
+    """표본이 둘뿐이어도 범위는 성립한다 — p90과 달리 하한을 둘 필요가 없다."""
+    ext = [_e("a", [{"name": "효율", "value": "10", "unit": "%"},
+                    {"name": "효율", "value": "30", "unit": "%"}])]
+    row = stats.aggregate_metrics(ext)["top_metrics"][0]
+    assert (row["min"], row["median"], row["max"]) == (10.0, 20.0, 30.0)
+
+
+def test_citation_p90_is_kept():
+    """인용수 p90은 표본이 수백~수천이라 이 문제가 없어 그대로 둔다."""
+    papers = [_p(f"k{i}", citations=i) for i in range(1, 6)]
+    s = stats.compute(papers, [], snapshot_at=datetime(2026, 8, 2))
+    assert s["citations"]["p90"] == 5

@@ -188,8 +188,10 @@ export interface MetricStat {
   name: string;
   unit: string;
   count: number;
+  // 분포는 최소~중앙값~최대 범위다. p90은 쓰지 않는다 — 표본이 작으면 최대값과
+  // 같은 값이 되어 같은 숫자가 두 열에 나왔다(stats.aggregate_metrics 주석 참고).
+  min: number;
   median: number;
-  p90: number;
   max: number;
 }
 
