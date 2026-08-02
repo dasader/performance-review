@@ -72,13 +72,20 @@ async def reduce_subfield(
     analysis: Analysis,
     extractions: list[PaperExtraction],
     papers_by_key: dict[str, Paper],
-) -> str:
-    """세부기술 보고서 생성. 추출 결과가 0건이거나, 있어도 papers_by_key 매칭 실패로
-    LLM에 보낼 본문이 비면 LLM을 호출하지 않는다 —
-    빈 입력으로 부르면 모델이 성과를 통째로 지어낸다."""
+) -> tuple[str, list[dict]]:
+    """세부기술 보고서를 만들고 (최종 보고서, 그룹별 중간 보고서)를 돌려준다.
+
+    3단 reduce의 partial을 버리지 않는 이유: 최종 통합이 partial을 다시 압축하는
+    이중 압축이 500건 이상에서 인용률이 무너지는 직접 원인이다(실측: 단일 reduce
+    350~499구간 9.7% → 3단 500~799구간 5.6%). 화면이 이것을 펼쳐 보여준다.
+    단일 reduce는 그룹이 하나뿐이라 두 번째 원소가 빈 리스트다.
+
+    추출 결과가 0건이거나, 있어도 papers_by_key 매칭 실패로 LLM에 보낼 본문이 비면
+    LLM을 호출하지 않는다 — 빈 입력으로 부르면 모델이 성과를 통째로 지어낸다.
+    """
     no_data_message = "분석 대상 논문이 없어 성과를 정리할 수 없습니다."
     if not extractions:
-        return no_data_message
+        return no_data_message, []
 
     # 대상 세부기술명을 입력에 명시한다. 없으면 모델이 본문 내용만 보고 H1 제목을 새로
     # 지어내, 목록 화면의 세부기술명과 보고서 제목이 어긋난다(실측: "재생에너지" 분석의
@@ -95,12 +102,14 @@ async def reduce_subfield(
                 "[reduce] 추출 %d건이 있으나 papers_by_key 매칭 실패로 본문이 비어 LLM 호출을 건너뜀",
                 len(extractions),
             )
-            return no_data_message
-        return await gemini_sync.generate(
+            return no_data_message, []
+        report = await gemini_sync.generate(
             REDUCE_INSTRUCTION, header + body, thinking=settings.thinking_reduce
         )
+        return report, []
 
     partials: list[str] = []
+    sections: list[dict] = []
     for name, items in groups.items():
         body = format_extractions(items, papers_by_key)
         if not body:
@@ -109,21 +118,23 @@ async def reduce_subfield(
             REDUCE_INSTRUCTION, f"[성과유형: {name}]\n{body}", thinking=settings.thinking_reduce
         )
         partials.append(f"### {name}\n{partial}")
+        sections.append({"name": name, "body": partial})
 
     if not partials:
         logger.warning(
             "[reduce] 추출 %d건이 있으나 모든 그룹에서 papers_by_key 매칭 실패로 본문이 비어 LLM 호출을 건너뜀",
             len(extractions),
         )
-        return no_data_message
+        return no_data_message, []
 
-    return await gemini_sync.generate(
+    report = await gemini_sync.generate(
         REDUCE_INSTRUCTION,
         header
         + "아래는 성과유형별 중간 정리 결과입니다. 이를 하나의 보고서로 통합하세요.\n\n"
         + "\n\n".join(partials),
         thinking=settings.thinking_reduce,
     )
+    return report, sections
 
 
 async def rollup_field(field_name: str, subfield_reports: list[tuple[str, str]]) -> str:

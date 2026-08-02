@@ -340,7 +340,11 @@ async def _do_reduce(db: Session, analysis: Analysis) -> None:
             analysis.id, prior_analyzed_count, new_count,
         )
     else:
-        analysis.report_md = await reducer.reduce_subfield(db, analysis, extractions, papers_by_key)
+        # skip_reduce 분기에서는 sections_json을 건드리지 않는다 — 지우면 화면에서
+        # 세부 보고서가 사라진다(재생성을 생략했는데 내용이 줄어드는 셈).
+        analysis.report_md, analysis.sections_json = await reducer.reduce_subfield(
+            db, analysis, extractions, papers_by_key
+        )
         analysis.report_model_ver = current_model_ver
 
     # 통계는 인용수 등 값이 싸게 바뀌므로 스킵 여부와 무관하게 항상 다시 계산한다.
