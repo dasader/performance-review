@@ -227,6 +227,11 @@ export interface Reference {
   doi: string | null;
 }
 
+export interface ReportSection {
+  name: string;
+  body_md: string;
+}
+
 export interface Analysis {
   id: number;
   field_id: number;
@@ -243,6 +248,9 @@ export interface Analysis {
   // report_md 안에서 괄호로 인용된 논문 제목이 [n] 각주로 치환된 뒤, 실제로 참조된
   // 논문만 등장 순서대로 담긴다. 치환 대상이 없으면 빈 배열.
   references: Reference[];
+  // 3단 reduce의 성과유형별 상세. 각주 번호는 report_md와 같은 체계를 쓴다.
+  // 단일 reduce 분석과 재생성 전 기존 분석은 빈 배열이다.
+  sections?: ReportSection[];
   // 미완료 상태에서는 null이 아니라 백엔드 stats_json 컬럼의 default인 빈 객체({})가 온다.
   stats: Stats | Record<string, never>;
   searched_count: number;
