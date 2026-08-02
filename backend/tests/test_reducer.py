@@ -202,3 +202,27 @@ async def test_reduce_subfield_no_data_returns_empty_sections():
 
     assert "분석 대상 논문이 없어" in report
     assert sections == []
+
+
+def test_reduce_instruction_forbids_unreachable_quotas():
+    """지켜지지 않는 정량 목표는 남아 있는 것이 해롭다 — 모델이 다른 지시도
+    같은 강도로 따르지 않게 된다(실측: 25% 인용 목표가 200건 이상에서 전부 미달)."""
+    from app.prompts import REDUCE_INSTRUCTION
+
+    assert "25% 이상" not in REDUCE_INSTRUCTION
+    assert "8,000자" not in REDUCE_INSTRUCTION
+
+
+def test_reduce_instruction_pins_citation_format_and_position():
+    """백틱 인용(각주 미인식)과 불릿 나열(번호만 남는 항목)을 실제로 겪었다."""
+    from app.prompts import REDUCE_INSTRUCTION
+
+    assert "백틱" in REDUCE_INSTRUCTION
+    assert "문장 안" in REDUCE_INSTRUCTION
+
+
+def test_reduce_instruction_delegates_metric_table_to_code():
+    """정량 표는 stats.aggregate_metrics가 코드로 만든다 — LLM이 또 만들면 중복이다."""
+    from app.prompts import REDUCE_INSTRUCTION
+
+    assert "## 정량 성과 정리" not in REDUCE_INSTRUCTION
