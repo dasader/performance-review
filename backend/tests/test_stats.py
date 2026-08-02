@@ -7,7 +7,7 @@ from app.services import stats
 def _p(key, **kw):
     defaults = dict(paper_key=key, title="T", abstract="A", year=2025, journal="J",
                     authors_json=["김"], institutions_json=["KAIST"], countries_json=["KR"],
-                    citations=0, source="openalex", korea_flag=True)
+                    citations=0, source="openalex")
     defaults.update(kw)
     return Paper(**defaults)
 

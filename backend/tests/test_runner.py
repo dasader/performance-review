@@ -29,7 +29,7 @@ def ctx():
 def _search_paper(key, **kw):
     base = {"paper_key": key, "title": "T", "abstract": "A", "year": 2025, "journal": None,
             "doi": None, "authors": [], "institutions": [], "countries": [],
-            "citations": 0, "source": "openalex", "korea_flag": True}
+            "citations": 0, "source": "openalex", "lead_countries": []}
     base.update(kw)
     return base
 
@@ -117,8 +117,7 @@ async def test_extract_attempts_resets_when_progress_is_made(ctx, monkeypatch):
     db.add(a)
     db.commit()
 
-    p = Paper(paper_key="k1", title="T", abstract="A", year=2025, source="openalex",
-              korea_flag=True)
+    p = Paper(paper_key="k1", title="T", abstract="A", year=2025, source="openalex")
     db.add(p)
     db.commit()
     db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
@@ -153,10 +152,8 @@ async def test_extracted_this_run_accumulates_across_multiple_batches(ctx, monke
     db.add(a)
     db.commit()
 
-    p1 = Paper(paper_key="k1", title="T1", abstract="A1", year=2025, source="openalex",
-               korea_flag=True)
-    p2 = Paper(paper_key="k2", title="T2", abstract="A2", year=2025, source="openalex",
-               korea_flag=True)
+    p1 = Paper(paper_key="k1", title="T1", abstract="A1", year=2025, source="openalex")
+    p2 = Paper(paper_key="k2", title="T2", abstract="A2", year=2025, source="openalex")
     db.add_all([p1, p2])
     db.commit()
     db.add(AnalysisPaper(analysis_id=a.id, paper_id=p1.id))
@@ -211,8 +208,7 @@ async def test_extract_attempts_fails_after_max_when_no_progress(ctx, monkeypatc
     db.add(a)
     db.commit()
 
-    p = Paper(paper_key="k1", title="T", abstract="A", year=2025, source="openalex",
-              korea_flag=True)
+    p = Paper(paper_key="k1", title="T", abstract="A", year=2025, source="openalex")
     db.add(p)
     db.commit()
     db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
@@ -286,8 +282,7 @@ async def test_extract_defers_submit_when_concurrent_slot_limit_reached(ctx, mon
     db.add(a)
     db.commit()
 
-    p = Paper(paper_key="k1", title="T", abstract="A", year=2025, source="openalex",
-              korea_flag=True)
+    p = Paper(paper_key="k1", title="T", abstract="A", year=2025, source="openalex")
     db.add(p)
     db.commit()
     db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
@@ -315,8 +310,7 @@ async def test_extract_submits_when_slot_available(ctx, monkeypatch):
     db.add(a)
     db.commit()
 
-    p = Paper(paper_key="k1", title="T", abstract="A", year=2025, source="openalex",
-              korea_flag=True)
+    p = Paper(paper_key="k1", title="T", abstract="A", year=2025, source="openalex")
     db.add(p)
     db.commit()
     db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
@@ -433,8 +427,7 @@ def test_enqueue_clears_analysis_papers_when_query_changed(ctx):
     논문이 모집단에 영구히 남지 않도록 기존 AnalysisPaper 링크를 비워야 한다."""
     db, sf = ctx
     first = runner.enqueue(db, sf, 2025, 2025, force=False)[0]
-    p = Paper(paper_key="old", title="T", abstract="A", year=2025, source="openalex",
-               korea_flag=True)
+    p = Paper(paper_key="old", title="T", abstract="A", year=2025, source="openalex")
     db.add(p)
     db.commit()
     db.add(AnalysisPaper(analysis_id=first.id, paper_id=p.id))
@@ -459,8 +452,7 @@ def test_enqueue_keeps_analysis_papers_when_force_rerun_with_same_query(ctx):
     지우면 안 된다(I7의 정리는 query_hash 불일치 상황에만 적용)."""
     db, sf = ctx
     first = runner.enqueue(db, sf, 2025, 2025, force=False)[0]
-    p = Paper(paper_key="old", title="T", abstract="A", year=2025, source="openalex",
-               korea_flag=True)
+    p = Paper(paper_key="old", title="T", abstract="A", year=2025, source="openalex")
     db.add(p)
     db.commit()
     db.add(AnalysisPaper(analysis_id=first.id, paper_id=p.id))
@@ -516,8 +508,7 @@ def _reducing_analysis(db, sf, *, report_md=None, analyzed_count=0, report_model
 
 
 def _link_extracted_paper(db, a, sf, key, *, model_ver=None):
-    p = Paper(paper_key=key, title="T", abstract="A", year=2025, source="openalex",
-              korea_flag=True)
+    p = Paper(paper_key=key, title="T", abstract="A", year=2025, source="openalex")
     db.add(p)
     db.commit()
     db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))

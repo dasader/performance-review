@@ -39,7 +39,6 @@ def test_parse_prefers_english_and_flags_korea():
     assert p["year"] == 2025
     assert p["citations"] == 3
     assert p["journal"] == "한국반도체학회지"
-    assert p["korea_flag"] is True
     assert p["countries"] == ["KR"]
     assert p["source"] == "kci"
 

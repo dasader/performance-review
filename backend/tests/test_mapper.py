@@ -29,8 +29,7 @@ def ctx():
 
 
 def _paper(db, key, abstract):
-    p = Paper(paper_key=key, title="T", abstract=abstract, year=2025, source="openalex",
-              korea_flag=True)
+    p = Paper(paper_key=key, title="T", abstract=abstract, year=2025, source="openalex")
     db.add(p)
     db.commit()
     return p

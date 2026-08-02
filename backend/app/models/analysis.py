@@ -9,11 +9,17 @@ from app.database import Base
 
 class Analysis(Base):
     __tablename__ = "analyses"
-    __table_args__ = (UniqueConstraint("subfield_id", "year", name="uq_analysis_year"),)
+    __table_args__ = (
+        UniqueConstraint("subfield_id", "year", "country", name="uq_analysis_year"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     subfield_id: Mapped[int] = mapped_column(ForeignKey("subfields.id"), nullable=False)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
+    # ISO 3166-1 alpha-2. 기존 행은 마이그레이션이 'KR'로 채운다 — 재실행이 필요 없다.
+    # papers/paper_extractions는 국가 중립이라(추출 캐시 키가 paper_key+subfield_id+
+    # model_ver) 공동연구 논문이 여러 국가 분석에 걸려도 추출 비용은 한 번만 든다.
+    country: Mapped[str] = mapped_column(String(2), nullable=False, default="KR")
     # pending | searching | extracting | reducing | done | failed | paused
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     report_md: Mapped[str | None] = mapped_column(Text, nullable=True)

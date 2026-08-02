@@ -23,7 +23,7 @@ def db():
 def _paper(key, **kw):
     base = {"paper_key": key, "title": "T", "abstract": "", "year": 2025, "journal": None,
             "doi": None, "authors": [], "institutions": [], "countries": [],
-            "citations": 0, "source": "openalex", "korea_flag": True}
+            "citations": 0, "source": "openalex", "lead_countries": []}
     base.update(kw)
     return base
 
@@ -48,13 +48,6 @@ def test_merge_keeps_max_citations():
     # 순서를 바꿔도 더 큰 값이 남아야 한다.
     merged_rev = merge_papers(kci, oa)
     assert merged_rev[0]["citations"] == 12
-
-
-def test_merge_korea_flag_true_if_any_source_true():
-    oa = [_paper("10.1/z", korea_flag=False, source="openalex")]
-    kci = [_paper("10.1/z", korea_flag=True, source="kci")]
-    merged = merge_papers(oa, kci)
-    assert merged[0]["korea_flag"] is True
 
 
 def test_merge_keeps_distinct_keys():

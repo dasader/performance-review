@@ -39,7 +39,6 @@ def test_parse_work_flags_korea_and_collects_countries():
     }
     p = _parse_work(work)
     assert p["paper_key"] == "10.1/x"          # DOI가 있으면 DOI가 키
-    assert p["korea_flag"] is True
     assert p["countries"] == ["KR", "US"]
     assert p["institutions"] == ["KAIST", "MIT"]
     assert p["authors"] == ["Kim", "Smith"]
