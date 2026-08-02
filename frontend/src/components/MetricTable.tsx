@@ -21,8 +21,7 @@ export default function MetricTable({
       <h2 className="mb-2 text-xl font-bold tracking-tight text-accent">정량 지표 분포</h2>
       <p className="mb-4 text-sm text-muted">
         추출된 수치를 지표별로 묶어 코드가 전수 집계한 값입니다. 보고서 서술과 달리
-        논문 수에 관계없이 모든 수치가 반영됩니다. 최소·최대는 보고된 값의 범위이고,
-        가운데 굵은 값이 중앙값입니다.
+        논문 수에 관계없이 모든 수치가 반영됩니다. 최소·최대는 보고된 값의 범위입니다.
       </p>
       <table className="w-full border-collapse text-sm">
         <thead>
@@ -47,7 +46,7 @@ export default function MetricTable({
               <td className="py-2 pr-3 text-right tabular-nums text-muted">
                 {m.min.toLocaleString()}
               </td>
-              <td className="py-2 pr-3 text-right font-medium tabular-nums">
+              <td className="py-2 pr-3 text-right tabular-nums">
                 {m.median.toLocaleString()}
               </td>
               <td className="py-2 pr-3 text-right tabular-nums text-muted">
