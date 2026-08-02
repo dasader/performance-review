@@ -1029,3 +1029,75 @@ def test_subfield_reports_apply_footnotes(client):
     assert "Improving Zero-Noise Extrapolation" not in rep["report_md"]
     assert "(#ref-1)" in rep["report_md"]
     assert rep["references"][0]["title"] == "Improving Zero-Noise Extrapolation"
+
+
+def test_analysis_report_footnotes_backtick_cited_title(client):
+    """LLM이 괄호 대신 백틱(코드 스팬)으로 논문을 인용하는 경우가 있다.
+
+    실측(subfield 10 / 2026 안전·신뢰 AI): 서술부 인용 26건 중 23건이 백틱이었고
+    괄호는 3건뿐이라, 괄호만 보던 매칭이 제목을 통째로 노출시켰다.
+    """
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(
+        paper_key="k-bt", title="EG-RAG: Retrieval-Augmented Generation with Evidence Graph",
+        journal="ACL", year=2026, doi="10.1234/egrag", source="openalex",
+    )
+    md = "예를 들어, `EG-RAG: Retrieval-Augmented Generation with Evidence Graph`은 노이즈를 제거했다."
+    a = _done_analysis_with_papers(db, md, [paper])
+
+    body = client.get(f"/api/analyses/{a.id}").json()
+    assert paper.title not in body["report_md"]
+    assert "[\\[1\\]](#ref-1)" in body["report_md"]
+    assert [r["title"] for r in body["references"]] == [paper.title]
+
+
+def test_analysis_report_backtick_non_title_is_left_alone(client):
+    """백틱 안이라도 논문 제목이 아니면 건드리지 않는다 — 용어·코드 표기를 깨면 안 된다."""
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(paper_key="k-x", title="Some Completely Unrelated Paper Title Here",
+                  journal="J", year=2026, doi=None, source="openalex")
+    md = "양자화는 `torch.quantization.prepare_qat` 함수로 적용한다."
+    a = _done_analysis_with_papers(db, md, [paper])
+
+    body = client.get(f"/api/analyses/{a.id}").json()
+    assert "`torch.quantization.prepare_qat`" in body["report_md"]
+    assert body["references"] == []
+
+
+def test_analysis_report_collapses_footnote_only_bullets(client):
+    """인용만 있는 불릿 목록은 한 줄로 접는다.
+
+    실측(subfield 8 / 2026): LLM이 인용을 문단이 아니라 불릿으로 나열해
+    치환 후 '[1]'만 있는 불릿이 5줄씩 쌓였다(서술부 불릿 30줄).
+    """
+    db = app.dependency_overrides[get_db]()
+    papers = [
+        Paper(paper_key="b1", title="Ultra-efficient Physical Field Computing Networks",
+              journal="Nat Commun", year=2026, doi=None, source="openalex"),
+        Paper(paper_key="b2", title="LogFlex: Flexible-Bit Log Arithmetic Accelerator",
+              journal="IEEE Micro", year=2026, doi=None, source="openalex"),
+    ]
+    md = (
+        "로그 양자화는 핵심 기법으로 자리 잡았습니다.\n\n"
+        "*   (Ultra-efficient Physical Field Computing Networks)\n"
+        "*   (LogFlex: Flexible-Bit Log Arithmetic Accelerator)\n\n"
+        "다음 문단입니다.\n"
+    )
+    a = _done_analysis_with_papers(db, md, papers)
+
+    out = client.get(f"/api/analyses/{a.id}").json()["report_md"]
+    assert "*   [\\[1\\]]" not in out and "* [\\[1\\]]" not in out
+    assert "[\\[1\\]](#ref-1)[\\[2\\]](#ref-2)" in out
+    assert "다음 문단입니다." in out
+
+
+def test_analysis_report_keeps_bullets_that_have_text(client):
+    """본문이 있는 불릿은 그대로 둔다 — 접기는 인용만 있는 줄에만 적용한다."""
+    db = app.dependency_overrides[get_db]()
+    paper = Paper(paper_key="b3", title="A Meaningful Paper Title For Testing",
+                  journal="J", year=2026, doi=None, source="openalex")
+    md = "- 양자화 기법이 발전했다 (A Meaningful Paper Title For Testing)\n"
+    a = _done_analysis_with_papers(db, md, [paper])
+
+    out = client.get(f"/api/analyses/{a.id}").json()["report_md"]
+    assert out.startswith("- 양자화 기법이 발전했다 ")

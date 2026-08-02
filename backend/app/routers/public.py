@@ -22,7 +22,27 @@ router = APIRouter(prefix="/api", tags=["public"])
 # 전체가 미치환으로 남는다). `(?:[^()]|\([^()]*\))*` — 괄호가 아닌 문자이거나, 괄호가 없는
 # 내용의 중첩 괄호 한 겹. 두 단계 이상 중첩은 다루지 않는다 — 실제 인용 데이터는 한 겹이면
 # 충분하고, 그 이상을 지원하려면 재귀적 괄호 파서가 필요해 복잡도만 커진다.
-_PAREN_RE = re.compile(r"\(((?:[^()]|\([^()]*\))+)\)")
+# 인용 형식 두 가지를 함께 잡는다.
+#
+# ① 괄호 — 한 단계 중첩까지 허용한다: 인용문 안에 "TrioN (3N0C)"처럼 논문 제목 자체가
+#    괄호를 품는 경우, 바깥 인용 괄호 전체를 잡아야지 안쪽 괄호만 잡으면 안 된다(그러면
+#    바깥 인용 전체가 미치환으로 남는다). `(?:[^()]|\([^()]*\))*` — 괄호가 아닌 문자이거나,
+#    괄호가 없는 내용의 중첩 괄호 한 겹. 두 단계 이상 중첩은 다루지 않는다 — 실제 인용
+#    데이터는 한 겹이면 충분하고, 그 이상은 재귀적 괄호 파서가 필요해 복잡도만 커진다.
+# ② 백틱(코드 스팬) — LLM이 괄호 대신 이 형식으로 인용하는 경우가 실제로 있다.
+#    실측(안전·신뢰 AI 2026): 서술부 인용 26건 중 23건이 백틱이고 괄호는 3건뿐이라,
+#    괄호만 보던 매칭이 제목을 통째로 노출시켰다. 백틱 안에는 코드·용어도 들어오지만
+#    치환은 "내용이 실제 논문 제목과 맞는가"로 판정하므로(_MIN_PARTIAL_TITLE_LEN 포함)
+#    제목이 아닌 코드 스팬은 그대로 남는다.
+_CITE_RE = re.compile(r"\(((?:[^()]|\([^()]*\))+)\)|`([^`\n]+)`")
+
+# 치환 후 "*   [\[1\]](#ref-1)"처럼 인용만 남는 불릿 — LLM이 인용을 문단 안이 아니라
+# 목록으로 나열하면 번호만 있는 항목이 줄줄이 쌓인다(실측 subfield 8 / 2026: 서술부
+# 불릿 30줄). 연속된 그런 줄을 한 문단으로 접는다. 본문이 있는 불릿은 건드리지 않는다.
+_FOOTNOTE_LINK = r"\[\\\[\d+\\\]\]\(#ref-\d+\)"
+_FOOTNOTE_ONLY_BULLETS_RE = re.compile(
+    rf"(?:^[ \t]*[-*][ \t]+(?:{_FOOTNOTE_LINK}[ \t]*)+$\n?)+", re.M
+)
 
 # 짧은 제목(정규화 키 기준 15자 미만)은 괄호 안 텍스트에 부분 문자열로 우연히 등장할
 # 위험이 커서(예: 제목이 "AI"면 "(AI 기반 진단 시스템)"에도 걸림) 부분 매칭 대상에서
@@ -78,7 +98,9 @@ def _apply_footnotes(report_md: str | None, papers: Sequence[Any]) -> tuple[str 
     references: list[dict] = []
 
     def repl(m: re.Match) -> str:
-        content_key = _footnote_key(m.group(1))
+        # group(1)=괄호 인용, group(2)=백틱 인용. 둘 중 매칭된 쪽을 쓴다.
+        content = m.group(1) if m.group(1) is not None else m.group(2)
+        content_key = _footnote_key(content)
         matched: Any | None = None
         for paper, key in candidates:
             if len(key) < _MIN_PARTIAL_TITLE_LEN:
@@ -103,7 +125,14 @@ def _apply_footnotes(report_md: str | None, papers: Sequence[Any]) -> tuple[str 
             })
         return f"[\\[{n}\\]](#ref-{n})"
 
-    return _PAREN_RE.sub(repl, report_md), references
+    substituted = _CITE_RE.sub(repl, report_md)
+
+    def collapse(m: re.Match) -> str:
+        """인용만 남은 불릿 묶음을 각주가 이어진 한 문단으로 접는다."""
+        links = re.findall(_FOOTNOTE_LINK, m.group(0))
+        return "".join(links) + "\n"
+
+    return _FOOTNOTE_ONLY_BULLETS_RE.sub(collapse, substituted), references
 
 
 def _footnoted_report(db: Session, analysis: Analysis) -> tuple[str | None, list[dict]]:
