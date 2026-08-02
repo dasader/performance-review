@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { MetricStat, Stats } from "../api";
+import type { Stats } from "../api";
 
 // I10: source는 openalex/kci 단일 소스뿐 아니라 "both"(양쪽 모두에서 발견됨)도 가진다.
 const SOURCE_LABEL: Record<string, string> = {
@@ -132,8 +132,6 @@ export default function StatsPanel({ stats }: { stats: Stats | Record<string, ne
         />
       </div>
 
-      <MetricTable rows={stats.top_metrics ?? []} unique={stats.metrics_unique ?? 0} />
-
       <div className="grid gap-6 sm:grid-cols-2">
         <RankTable title="상위 기관" rows={stats.top_institutions} />
         <RankTable title="상위 저널" rows={stats.top_journals} />
@@ -227,46 +225,6 @@ function RankBars({ title, rows }: { title: string; rows: [string, number][] }) 
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-function MetricTable({ rows, unique }: { rows: MetricStat[]; unique: number }) {
-  if (!rows.length) return null;
-  return (
-    <div className="avoid-break table-scroll">
-      <h3 className="mb-2 text-sm font-bold text-ink">정량 지표 분포</h3>
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="tbl-head">
-            <th className="py-2 pr-3 text-left">지표</th>
-            <th className="py-2 pr-3 text-right">논문 수</th>
-            <th className="py-2 pr-3 text-right">중앙값</th>
-            <th className="py-2 pr-3 text-right">p90</th>
-            <th className="py-2 text-right">최대</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((m) => (
-            <tr key={`${m.name}|${m.unit}`} className="border-b border-border-light">
-              <td className="py-2 pr-3 text-ink-light">
-                {m.name}
-                {m.unit && <span className="text-muted"> ({m.unit})</span>}
-              </td>
-              <td className="py-2 pr-3 text-right text-xs tabular-nums text-muted">
-                {m.count.toLocaleString()}
-              </td>
-              <td className="py-2 pr-3 text-right tabular-nums">{m.median.toLocaleString()}</td>
-              <td className="py-2 pr-3 text-right tabular-nums">{m.p90.toLocaleString()}</td>
-              <td className="py-2 text-right tabular-nums">{m.max.toLocaleString()}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="mt-2 text-xs text-muted">
-        여러 논문에 반복 등장한 지표만 싣습니다. 한 논문에만 나온 지표가{" "}
-        {unique.toLocaleString()}종 더 있으며, 분포를 낼 수 없어 표에서 제외했습니다.
-      </p>
     </div>
   );
 }
