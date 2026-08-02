@@ -21,15 +21,17 @@ class SearchResult(NamedTuple):
     total_count: int  # OpenAlex가 보고한 잘리기 전 전체 건수 — 하드 가드는 이 값으로 판단해야 한다.
 
 
-def query_hash(subfield: Subfield, year_from: int, year_to: int) -> str:
-    """검색식이나 연도 범위가 바뀌면 해시가 달라져 해당 분석이 '갱신 필요'로 표시된다."""
-    raw = f"{subfield.query}\x00{subfield.query_kci or ''}\x00{year_from}-{year_to}"
+def query_hash(subfield: Subfield, year_from: int, year_to: int, country: str = "KR") -> str:
+    """검색식·연도 범위·국가가 바뀌면 해시가 달라져 해당 분석이 '갱신 필요'로 표시된다.
+
+    국가를 빼면 KR 분석과 US 분석이 서로를 최신으로 착각한다."""
+    raw = f"{subfield.query}\x00{subfield.query_kci or ''}\x00{year_from}-{year_to}\x00{country}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
 _LONGER_WINS = ("abstract", "title")  # 둘 다 있으면 더 긴 쪽
 _FIRST_NONEMPTY_WINS = ("journal", "doi", "year")  # 둘 다 있으면 먼저 온 쪽
-_LONGER_LIST_WINS = ("authors", "institutions", "countries")  # 원소 더 많은 쪽
+_LONGER_LIST_WINS = ("authors", "institutions", "countries", "lead_countries")  # 원소 더 많은 쪽
 
 
 def combine_source(existing_source: str | None, new_source: str | None) -> str:
@@ -75,7 +77,6 @@ def merge_papers(*sources: list[dict]) -> list[dict]:
                 if len(new_list) > len(old_list):
                     existing[field] = paper[field]
             existing["citations"] = max(existing.get("citations") or 0, paper.get("citations") or 0)
-            existing["korea_flag"] = bool(existing.get("korea_flag")) or bool(paper.get("korea_flag"))
             existing["source"] = combine_source(existing.get("source"), paper.get("source"))
             # paper_key: 먼저 온 소스(existing)를 그대로 유지한다(식별자라 병합 대상 아님).
     return list(merged.values())
@@ -157,6 +158,7 @@ async def collect(
     year_to: int,
     *,
     client: httpx.AsyncClient,
+    country: str = "KR",
 ) -> SearchResult:
     """OpenAlex + KCI 검색 후 병합. OpenAlex 비용은 실측해 예산에 기록한다.
 
@@ -166,7 +168,9 @@ async def collect(
     """
     # 여기서는 count_only를 유지한다 — 페이징에 실제로 돈을 쓰기 전에 예산 게이트를
     # 통과시키는 게 목적이라, search()의 total_count를 보려고 먼저 페이징을 시작할 수 없다.
-    count, count_cost = await openalex.count_only(subfield.query, year_from, year_to, client=client)
+    count, count_cost = await openalex.count_only(
+        subfield.query, year_from, year_to, client=client, country=country
+    )
     # 페이지 단가는 설정값을 쓴다 — count_cost는 per-page=1 탐색 요청의 실측 비용이라
     # 페이지 단가로 곱하면 단위가 어긋나고, meta.cost_usd가 비어 0으로 오면 견적이
     # 통째로 0이 되어 게이트가 무력화된다(대량 크롤이 그대로 통과한다).
@@ -176,7 +180,8 @@ async def collect(
 
     try:
         oa = await openalex.search(
-            subfield.query, year_from, year_to, client=client, limit=settings.max_papers_per_analysis
+            subfield.query, year_from, year_to, client=client,
+            limit=settings.max_papers_per_analysis, country=country,
         )
     except Exception as e:
         # I6: 페이지 중간에 실패해도 이미 발생한 비용은 예산에 반영해야 한다 — 그러지
@@ -186,10 +191,15 @@ async def collect(
         raise
     budget.record_usage(db, count_cost + oa.cost_usd, oa.remaining)
 
-    kci_papers = await kci.search(
-        subfield.kci_query(), year_from, year_to,
-        client=client, limit=settings.max_papers_per_analysis,
-    )
+    # KCI는 한국학술지 전용이다. 타국 분석에서 부르면 (a) 만료된 키 때문에 무의미하게
+    # failed되고 (b) KR에만 국내지가 섞여 소스가 비대칭이 된다 — 국가 비교에서 KR
+    # 논문 수만 구조적으로 부풀린다.
+    kci_papers: list[dict] = []
+    if country == "KR":
+        kci_papers = await kci.search(
+            subfield.kci_query(), year_from, year_to,
+            client=client, limit=settings.max_papers_per_analysis,
+        )
 
     merged = merge_papers(oa.papers, kci_papers)
     # OpenAlex에 초록이 없는 Elsevier 논문을 여기서 채운다 — 하류(upsert_papers →
@@ -203,9 +213,9 @@ async def collect(
 
 
 _FIELDS = ("title", "abstract", "year", "journal", "doi", "authors", "institutions",
-           "countries", "citations", "source", "korea_flag")
+           "countries", "lead_countries", "citations", "source")
 _JSON_MAP = {"authors": "authors_json", "institutions": "institutions_json",
-             "countries": "countries_json"}
+             "countries": "countries_json", "lead_countries": "lead_countries_json"}
 
 
 def upsert_papers(db: Session, papers: list[dict]) -> list[Paper]:
