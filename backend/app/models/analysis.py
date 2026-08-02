@@ -47,6 +47,13 @@ class Analysis(Base):
     # _do_reduce가 done 시점에 AnalysisRun.new_papers로 그대로 옮겨 적는다.
     # enqueue()가 이 행을 새로 만들거나 되살릴 때만 0으로 리셋한다(그 외에는 계속 누적).
     extracted_this_run: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # 3단 reduce가 만든 그룹별 중간 보고서. [{"name": 그룹명, "body": 마크다운}, ...]
+    # 현행은 최종 통합 1콜로 다시 압축하면서 이것을 버렸는데, 그 이중 압축이 500건 이상에서
+    # 인용률이 무너지는 직접 원인이다(실측: 단일 reduce 350~499구간 9.7% → 3단 500~799구간
+    # 5.6%). 버리지 않고 남겨 화면에서 펼쳐볼 수 있게 한다.
+    # dict가 아니라 리스트인 이유: 그룹 순서가 곧 보고서 구성 순서인데 JSON 객체의 키
+    # 순서는 명세상 보장되지 않는다. 단일 reduce(그룹 1개)면 빈 리스트다.
+    sections_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
 
 
 class AnalysisPaper(Base):
