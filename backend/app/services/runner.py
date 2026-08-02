@@ -34,13 +34,9 @@ STEP_LABELS = {
 ACTIVE_STATES = ("pending", "searching", "extracting", "reducing")
 
 
-class AnalysisTooLarge(RuntimeError):
-    pass
-
-
 def enqueue(
     db: Session, subfield: Subfield, year_from: int, year_to: int, *, force: bool,
-    trigger: str = "manual",
+    trigger: str = "manual", country: str = "KR",
 ) -> list[Analysis]:
     """연도별 Analysis를 만들거나 되살린다.
 
@@ -53,14 +49,17 @@ def enqueue(
     """
     queued: list[Analysis] = []
     for year in range(year_from, year_to + 1):
-        current_hash = search.query_hash(subfield, year, year)
+        current_hash = search.query_hash(subfield, year, year, country)
         row = db.query(Analysis).filter(
-            Analysis.subfield_id == subfield.id, Analysis.year == year
+            Analysis.subfield_id == subfield.id,
+            Analysis.year == year,
+            Analysis.country == country,
         ).first()
 
         if row is None:
             row = Analysis(subfield_id=subfield.id, year=year, status="pending",
-                           query_hash=current_hash, trigger=trigger, extracted_this_run=0)
+                           query_hash=current_hash, trigger=trigger,
+                           extracted_this_run=0, country=country)
             db.add(row)
             queued.append(row)
         elif row.batch_job_id and row.status in ACTIVE_STATES:
@@ -172,17 +171,21 @@ async def advance(db: Session, analysis: Analysis) -> None:
 
 async def _do_search(db: Session, analysis: Analysis, subfield: Subfield) -> None:
     async with httpx.AsyncClient() as client:
-        result = await search.collect(db, subfield, analysis.year, analysis.year, client=client)
-
-    # C1: search.collect()는 openalex.search(limit=max_papers_per_analysis)로 부르므로
-    # result.papers는 구조적으로 상한을 넘을 수 없다 — len(papers) 기준 가드는 과광범위
-    # 검색식을 "차단"하는 게 아니라 조용히 "절단"만 하고 통과시킨다. 반드시 OpenAlex가
-    # 보고한 잘리기 전 total_count로 판단해야 실제로 차단이 된다.
-    if result.total_count > settings.max_papers_per_analysis:
-        raise AnalysisTooLarge(
-            f"검색 결과 전체 {result.total_count}건이 상한 {settings.max_papers_per_analysis}건을 "
-            f"넘습니다. 검색식을 좁히거나 세부기술을 분할하세요."
+        result = await search.collect(
+            db, subfield, analysis.year, analysis.year,
+            client=client, country=analysis.country,
         )
+
+    # 상한을 넘으면 거부하지 않고 인용 상위 N건을 수집한다(openalex.search가
+    # sort=cited_by_count:desc로 받는다). 거부하면 CN 11개·US 3개 세부기술이 그냥
+    # 실패한다(실측). 잘렸다는 사실은 stats의 population_total·sampled가 드러낸다.
+    #
+    # total_count는 _do_reduce 시점에 다시 얻을 수 없으므로(그때는 DB의 논문 링크만
+    # 본다) 여기서 stats_json에 실어 둔다. _do_reduce가 읽어 stats.compute에 넘긴다.
+    analysis.stats_json = {
+        **(analysis.stats_json or {}),
+        "population_total": result.total_count,
+    }
 
     rows = search.upsert_papers(db, result.papers)
     existing = {
@@ -349,7 +352,10 @@ async def _do_reduce(db: Session, analysis: Analysis) -> None:
 
     # 통계는 인용수 등 값이 싸게 바뀌므로 스킵 여부와 무관하게 항상 다시 계산한다.
     analysis.stats_json = stats.compute(
-        papers, extractions, snapshot_at=analysis.snapshot_at or datetime.now(timezone.utc)
+        papers, extractions,
+        snapshot_at=analysis.snapshot_at or datetime.now(timezone.utc),
+        country=analysis.country,
+        population_total=(analysis.stats_json or {}).get("population_total"),
     )
     analysis.analyzed_count = new_count
     analysis.status = "done"
@@ -429,11 +435,16 @@ def _queue_all_active(
     반환값은 (큐잉 건수, 활성 세부기술 수, 대상 연도) — 뒤 둘은 호출부 로그 문구에 쓰인다.
     """
     years = [now.year - i for i in range(cfg.years_back + 1)]
+    # 콤마 구분 목록. 기본 "KR"이라 켜기 전에는 현행과 같다. 국가마다 검색·추출이
+    # 따로 돌아 비용이 곱해지므로 관리자가 명시적으로 켜야 한다.
+    countries = [c.strip() for c in (cfg.countries or "KR").split(",") if c.strip()]
     subfields = db.query(Subfield).filter(Subfield.active.is_(True)).all()
     queued = 0
     for subfield in subfields:
         for year in years:
-            queued += len(enqueue(db, subfield, year, year, force=True, trigger=trigger))
+            for country in countries:
+                queued += len(enqueue(db, subfield, year, year, force=True,
+                                      trigger=trigger, country=country))
     return queued, len(subfields), years
 
 

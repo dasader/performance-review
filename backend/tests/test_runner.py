@@ -230,45 +230,6 @@ async def test_extract_attempts_fails_after_max_when_no_progress(ctx, monkeypatc
     assert "추출" in a.error
 
 
-async def test_do_search_blocks_on_total_count_not_truncated_papers_len(ctx, monkeypatch):
-    """C1: search.collect가 반환하는 papers는 openalex.search(limit=max_papers_per_analysis)
-    호출 결과라 구조적으로 상한을 넘을 수 없다. len(papers) 기준 가드는 절대 발동하지
-    않으므로, 잘리기 전 전체 건수(total_count)로 판단해야 실제로 차단된다."""
-    db, sf = ctx
-    a = Analysis(subfield_id=sf.id, year=2025, status="searching", query_hash="h")
-    db.add(a)
-    db.commit()
-
-    async def fake_collect(db, subfield, year_from, year_to, *, client):
-        # 실제 코드처럼 papers는 상한 이하로 이미 잘려 있지만 total_count는 훨씬 크다.
-        return search.SearchResult(papers=[], total_count=40000)
-
-    monkeypatch.setattr(runner.search, "collect", fake_collect)
-
-    await runner.advance(db, a)
-    db.refresh(a)
-    assert a.status == "failed"
-    assert "40000" in a.error
-    assert str(settings.max_papers_per_analysis) in a.error
-
-
-async def test_do_search_passes_when_total_count_within_limit(ctx, monkeypatch):
-    db, sf = ctx
-    a = Analysis(subfield_id=sf.id, year=2025, status="searching", query_hash="h")
-    db.add(a)
-    db.commit()
-
-    async def fake_collect(db, subfield, year_from, year_to, *, client):
-        return search.SearchResult(papers=[], total_count=10)
-
-    monkeypatch.setattr(runner.search, "collect", fake_collect)
-
-    await runner.advance(db, a)
-    db.refresh(a)
-    assert a.status == "extracting"
-    assert a.error is None
-
-
 async def test_extract_defers_submit_when_concurrent_slot_limit_reached(ctx, monkeypatch):
     """C2: batch_job_id가 채워진(=진행 중인) analysis 수가 상한 이상이면 새 batch를
     제출하지 않고 다음 루프에서 재시도해야 한다."""
@@ -375,7 +336,7 @@ async def test_search_attempts_fails_after_max_and_resets_on_success(ctx, monkey
     db.add(a2)
     db.commit()
 
-    async def fake_collect_succeeds(db, subfield, year_from, year_to, *, client):
+    async def fake_collect_succeeds(db, subfield, year_from, year_to, *, client, country="KR"):
         return search.SearchResult(papers=[], total_count=0)
 
     monkeypatch.setattr(runner.search, "collect", fake_collect_succeeds)
@@ -394,7 +355,7 @@ async def test_do_search_searched_count_is_cumulative_not_just_latest(ctx, monke
     db.add(a)
     db.commit()
 
-    async def fake_collect_first(db, subfield, year_from, year_to, *, client):
+    async def fake_collect_first(db, subfield, year_from, year_to, *, client, country="KR"):
         return search.SearchResult(
             papers=[_search_paper("k1"), _search_paper("k2")], total_count=2
         )
@@ -407,7 +368,7 @@ async def test_do_search_searched_count_is_cumulative_not_just_latest(ctx, monke
     a.status = "searching"
     db.commit()
 
-    async def fake_collect_second(db, subfield, year_from, year_to, *, client):
+    async def fake_collect_second(db, subfield, year_from, year_to, *, client, country="KR"):
         # 검색식이 좁아져 이번 결과는 1건뿐이라고 가정.
         return search.SearchResult(papers=[_search_paper("k1")], total_count=1)
 
@@ -744,3 +705,42 @@ async def test_do_reduce_preserves_sections_when_skipping_regeneration(ctx, monk
     db.refresh(a)
     assert a.sections_json == kept
     assert a.report_md == "기존 보고서"
+
+
+def test_enqueue_creates_separate_rows_per_country(ctx):
+    db, sf = ctx
+    kr = runner.enqueue(db, sf, 2025, 2025, force=False, country="KR")
+    us = runner.enqueue(db, sf, 2025, 2025, force=False, country="US")
+    assert kr[0].id != us[0].id
+    assert {a.country for a in kr + us} == {"KR", "US"}
+    assert db.query(Analysis).count() == 2
+
+
+def test_enqueue_defaults_to_kr(ctx):
+    db, sf = ctx
+    assert runner.enqueue(db, sf, 2025, 2025, force=False)[0].country == "KR"
+
+
+async def test_oversized_search_is_sampled_not_rejected(ctx, monkeypatch):
+    """상한 초과를 거부하면 CN 11개·US 3개 세부기술이 그냥 실패한다(실측).
+    거부 대신 인용 상위 N건을 수집하고 표본임을 stats에 남긴다."""
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="searching", query_hash="h")
+    db.add(a)
+    db.commit()
+
+    async def fake_collect(*args, **kwargs):
+        return search.SearchResult(papers=[_search_paper("k1")], total_count=25466)
+
+    monkeypatch.setattr(runner.search, "collect", fake_collect)
+
+    await runner.advance(db, a)
+    db.refresh(a)
+    assert a.status == "extracting"
+    assert a.error is None
+    assert a.stats_json["population_total"] == 25466
+
+
+def test_analysis_too_large_is_gone():
+    """상한 초과를 거부하던 하드 가드는 표본 수집으로 대체됐다."""
+    assert not hasattr(runner, "AnalysisTooLarge")

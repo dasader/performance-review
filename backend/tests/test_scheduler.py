@@ -194,3 +194,29 @@ def test_run_scheduled_requeues_already_done_analysis(ctx):
     assert done.status == "pending", "done 분석이 다시 큐잉되지 않으면 신규 논문을 못 잡는다"
     assert done.trigger == "scheduled"
     assert done.report_md == "기존 보고서", "보고서는 유지되어야 한다(신규 0건이면 재생성 생략)"
+
+
+def test_scheduler_queues_every_configured_country(ctx):
+    """schedule_settings.countries는 콤마 구분 목록이다. 기본 KR이라 켜기 전에는
+    현행과 같고, 국가마다 검색·추출이 따로 돌아 비용이 곱해진다."""
+    db, sf = ctx
+    cfg = runner.get_schedule_settings(db)
+    cfg.countries = "KR,US"
+    cfg.years_back = 0
+    db.commit()
+
+    runner.run_scheduled_now(db, now=datetime(2026, 8, 2, 3, 0))
+
+    rows = db.query(Analysis).all()
+    assert {a.country for a in rows} == {"KR", "US"}
+    assert len(rows) == 2
+
+
+def test_scheduler_defaults_to_kr_only(ctx):
+    db, sf = ctx
+    cfg = runner.get_schedule_settings(db)
+    cfg.years_back = 0
+    db.commit()
+
+    runner.run_scheduled_now(db, now=datetime(2026, 8, 2, 3, 0))
+    assert {a.country for a in db.query(Analysis).all()} == {"KR"}
