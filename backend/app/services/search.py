@@ -5,7 +5,9 @@ from typing import NamedTuple
 import httpx
 from sqlalchemy.orm import Session
 
-from app.clients import kci, openalex
+import asyncio
+
+from app.clients import elsevier, kci, openalex
 from app.config import settings
 from app.models.field import Subfield
 from app.models.paper import Paper
@@ -79,6 +81,75 @@ def merge_papers(*sources: list[dict]) -> list[dict]:
     return list(merged.values())
 
 
+async def _fill_missing_abstracts(
+    db: Session, papers: list[dict], *, client: httpx.AsyncClient
+) -> int:
+    """abstract가 빈 Elsevier 논문의 초록을 회수해 dict에 채운다. 채운 건수를 돌려준다.
+
+    OpenAlex 결측 초록의 66.8%가 Elsevier 게재분이고(실측) ScienceDirect Article
+    Retrieval이 무료 키로 88%를 돌려준다. 여기서 dict를 채우면 하류(upsert_papers →
+    mapper.pending_papers → stats)는 한 줄도 바뀌지 않는다.
+
+    대상은 세 조건을 **모두** 만족할 때만이다:
+      ① abstract가 비어 있고 ② DOI가 10.1016/으로 시작하며 ③ DB에도 초록이 없다.
+
+    ③이 없으면 이미 회수해 저장해 둔 논문을 매달 다시 받아온다 — OpenAlex는 같은 논문을
+    계속 초록 없이 돌려주기 때문이다(KR 기준 연 36,000콜 낭비).
+
+    실패는 전부 흡수한다. 보강 단계라 빠져도 결과가 틀리지 않고 예전만큼만 분석될 뿐이며,
+    빠진 만큼은 stats의 no_abstract_count가 드러낸다(검색 소스인 KCI와 정반대 정책).
+
+    ponytail: 실패한 논문에 "시도했음" 표시를 남기지 않는다. 영구 실패는 대상의 약
+    12%(KR 기준 연 360건)라 매달 재시도해도 주당 5만 건 한도의 0.2%이고, 오히려
+    Elsevier가 나중에 초록을 채우면 자동으로 회수되는 이득이 있다. 컬럼을 두면
+    마이그레이션과 "언제 만료시킬 것인가" 정책이 새로 생긴다.
+    """
+    if not settings.elsevier_api_key:
+        return 0
+
+    candidates = [
+        p for p in papers
+        if not p.get("abstract")
+        and (p.get("doi") or "").startswith(elsevier.ELSEVIER_DOI_PREFIX)
+    ]
+    if not candidates:
+        return 0
+
+    keys = [p["paper_key"] for p in candidates]
+    stored = {
+        key for (key,) in db.query(Paper.paper_key).filter(
+            Paper.paper_key.in_(keys), Paper.abstract != ""
+        )
+    }
+    targets = [p for p in candidates if p["paper_key"] not in stored]
+    if not targets:
+        return 0
+
+    semaphore = asyncio.Semaphore(max(1, settings.elsevier_concurrency))
+
+    async def one(paper: dict) -> bool:
+        async with semaphore:
+            try:
+                text = await elsevier.fetch_abstract(paper["doi"], client=client)
+            except Exception as e:
+                # 클라이언트는 예외를 던지지 않기로 돼 있지만, 그 계약이 깨져도
+                # 분석을 멈추지 않는다.
+                logger.debug("[초록회수] %s 실패: %s", paper.get("doi"), e)
+                return False
+            if not text:
+                return False
+            paper["abstract"] = text
+            return True
+
+    results = await asyncio.gather(*(one(p) for p in targets))
+    filled = sum(results)
+    logger.info(
+        "[초록회수] 대상 %d건(전체 %d, DB 기보유 제외 %d) → 회수 %d건",
+        len(targets), len(papers), len(candidates) - len(targets), filled,
+    )
+    return filled
+
+
 async def collect(
     db: Session,
     subfield: Subfield,
@@ -121,6 +192,9 @@ async def collect(
     )
 
     merged = merge_papers(oa.papers, kci_papers)
+    # OpenAlex에 초록이 없는 Elsevier 논문을 여기서 채운다 — 하류(upsert_papers →
+    # pending_papers → stats)는 dict의 abstract만 보므로 바뀌는 곳이 없다.
+    await _fill_missing_abstracts(db, merged, client=client)
     logger.info(
         "[검색] %s %d-%d: OpenAlex %d(전체 %d) + KCI %d → 병합 %d",
         subfield.name, year_from, year_to, len(oa.papers), oa.total_count, len(kci_papers), len(merged),

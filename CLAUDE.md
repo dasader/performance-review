@@ -102,7 +102,7 @@ NN=00은 backend가 8000이 되어 nst-wiki와 충돌하므로 03을 배정했�
 
 | # | 단계 | 파일 | 비고 |
 |---|---|---|---|
-| 1 | search | `app/services/search.py` (`collect`, `upsert_papers`) | OpenAlex + KCI 병렬 검색, DOI/title 정규화 후 중복 제거 |
+| 1 | search | `app/services/search.py` (`collect`, `upsert_papers`) | OpenAlex + KCI 병렬 검색, DOI/title 정규화 후 중복 제거. 초록이 빈 Elsevier 논문은 `_fill_missing_abstracts`가 회수(아래) |
 | 2 | filter | `app/services/mapper.py::pending_papers` | abstract 없는 레코드 제외·추출 캐시 히트 제외. **한국 판정은 여기 없다** — OpenAlex 서버측 `country_code:KR` 필터가 이미 걸러 온다 |
 | 3 | map | `app/services/mapper.py::build_requests` + `app/clients/gemini_batch.py` | Batch JSONL 제출 → 폴링 → 결과 저장, thinking=low |
 | 4 | stats | `app/services/stats.py::compute` | 코드로만 집계, LLM 미사용 |
@@ -231,6 +231,28 @@ H1 제목(`# {이름} {연도}년 성과 분석 보고서`)을 고정하게 한�
 센싱을 1,051건 → 259건으로 좁힌 예). `test_strategic_tech_seed.py`가 개수·괄호 균형과
 `_sanitize_query` 통과 여부(콤마·파이프가 섞이면 검색식이 조용히 쪼개진다)를 고정하므로,
 새 검색식을 추가하면 그 테스트에도 함께 물려야 한다.
+
+### Elsevier 초록 폴백 — 실패해도 넘어간다 (KCI와 정반대)
+
+OpenAlex는 초록을 Crossref에서 받는데 Elsevier가 예치하지 않아 **결측 초록의 66.8%가
+Elsevier 게재분**이다(실측). ScienceDirect Article Retrieval은 **무료 등록 키로 초록을
+준다**(실측 88%, `openaccess=0`인 구독 전용 논문 포함). 전문은 구독이 필요하지만
+우리에게 필요한 건 초록뿐이다. Scopus Abstract Retrieval은 같은 키로 401이라 쓰지 않는다.
+
+`search.collect()`가 `merge_papers` 직후 `_fill_missing_abstracts`로 dict의 `abstract`를
+채운다 — 하류(`upsert_papers` → `mapper.pending_papers` → `stats`)는 한 줄도 바뀌지 않는다.
+
+**대상은 세 조건을 모두 만족할 때만**: ① abstract가 비어 있고 ② DOI가 `10.1016/`으로
+시작하며 ③ **DB에도 초록이 없다**. ③이 없으면 이미 회수해 저장해 둔 논문을 매달 다시
+받아온다(KR 기준 연 36,000콜 낭비) — OpenAlex는 같은 논문을 계속 초록 없이 돌려주기 때문이다.
+
+**실패는 전부 흡수한다.** KCI는 실패 시 분석을 `failed`로 끝내는데 의도적으로 반대다 —
+KCI는 *검색 소스*라 빠지면 모집단이 조용히 줄어 결과가 틀리지만, 이건 *보강* 단계라
+빠져도 예전만큼만 분석될 뿐이고 그 크기를 `no_abstract_count`가 정확히 드러낸다.
+
+`ELSEVIER_API_KEY`가 비면 회수 단계를 통째로 건너뛴다. `ELSEVIER_CONCURRENCY`는 3
+(실측: 3에서 9.5 req/s 무사고, 5에서 429 발생). 실패한 논문에 "시도했음" 표시를
+남기지 않는 이유는 `_fill_missing_abstracts`의 `ponytail:` 주석에 있다.
 
 ## 캐시 3중 키
 

@@ -7,7 +7,9 @@ from app.clients.openalex import OpenAlexResult
 from app.database import Base
 from app.models.field import Field, Subfield
 from app.models.paper import Paper
+from app.config import settings
 from app.services import budget, search as search_module
+from app.services import search
 from app.services.search import merge_papers, query_hash, upsert_papers
 
 
@@ -173,3 +175,106 @@ async def test_collect_records_partial_openalex_cost_when_search_fails_midway(db
 
     # count_only 비용(0.001) + search 중간까지의 비용(0.02)이 모두 반영돼야 한다.
     assert budget.spent_today(db) == pytest.approx(0.021)
+
+
+# ── Elsevier 초록 폴백 (search._fill_missing_abstracts) ──
+
+def _sess():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.database import Base
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine, autocommit=False, autoflush=False)()
+
+
+def _cand(key, doi, abstract=""):
+    return {"paper_key": key, "doi": doi, "abstract": abstract, "title": "T"}
+
+
+async def test_fill_abstracts_skips_everything_when_key_is_empty(monkeypatch):
+    """키가 없으면 클라이언트를 부르지 않는다 — 기존 동작이 그대로여야 한다."""
+    monkeypatch.setattr(settings, "elsevier_api_key", "")
+    called = []
+
+    async def fake(doi, *, client):
+        called.append(doi)
+        return "x"
+
+    monkeypatch.setattr(search.elsevier, "fetch_abstract", fake)
+    papers = [_cand("k1", "10.1016/j.a")]
+
+    assert await search._fill_missing_abstracts(_sess(), papers, client=None) == 0
+    assert called == []
+
+
+async def test_fill_abstracts_only_targets_elsevier_dois_without_abstract(monkeypatch):
+    """ScienceDirect는 Elsevier 콘텐츠만 호스팅한다 — 다른 prefix는 확정 404라
+    쿼터를 버릴 이유가 없다. 이미 초록이 있는 논문도 부르지 않는다."""
+    monkeypatch.setattr(settings, "elsevier_api_key", "k")
+    called = []
+
+    async def fake(doi, *, client):
+        called.append(doi)
+        return "회수된 초록"
+
+    monkeypatch.setattr(search.elsevier, "fetch_abstract", fake)
+    papers = [
+        _cand("k1", "10.1016/j.target"),                 # 대상
+        _cand("k2", "10.1038/nature.x"),                 # Elsevier 아님
+        _cand("k3", "10.1016/j.has", abstract="이미 있음"),  # 이미 초록 보유
+        _cand("k4", None),                               # DOI 없음
+    ]
+
+    filled = await search._fill_missing_abstracts(_sess(), papers, client=None)
+
+    assert called == ["10.1016/j.target"]
+    assert filled == 1
+    assert papers[0]["abstract"] == "회수된 초록"
+    assert papers[2]["abstract"] == "이미 있음"
+
+
+async def test_fill_abstracts_skips_papers_already_stored_with_abstract(monkeypatch):
+    """DB에 이미 회수해 둔 논문을 매달 다시 받아오면 안 된다 —
+    이 검사가 빠지면 KR 기준 연 36,000콜이 조용히 샌다(설계 §4-3)."""
+    monkeypatch.setattr(settings, "elsevier_api_key", "k")
+    db = _sess()
+    db.add(Paper(paper_key="k1", title="T", abstract="예전에 회수한 초록",
+                 doi="10.1016/j.a", source="openalex"))
+    db.add(Paper(paper_key="k2", title="T", abstract="", doi="10.1016/j.b",
+                 source="openalex"))
+    db.commit()
+
+    called = []
+
+    async def fake(doi, *, client):
+        called.append(doi)
+        return "새 초록"
+
+    monkeypatch.setattr(search.elsevier, "fetch_abstract", fake)
+    papers = [_cand("k1", "10.1016/j.a"), _cand("k2", "10.1016/j.b")]
+
+    filled = await search._fill_missing_abstracts(db, papers, client=None)
+
+    assert called == ["10.1016/j.b"]
+    assert filled == 1
+
+
+async def test_fill_abstracts_absorbs_client_failures(monkeypatch):
+    """개별 실패는 건너뛰고 나머지를 계속한다 — 분석이 멈추면 안 된다."""
+    monkeypatch.setattr(settings, "elsevier_api_key", "k")
+
+    async def fake(doi, *, client):
+        if doi.endswith("bad"):
+            raise RuntimeError("서비스 장애")
+        return None if doi.endswith("none") else "본문"
+
+    monkeypatch.setattr(search.elsevier, "fetch_abstract", fake)
+    papers = [_cand("k1", "10.1016/j.bad"), _cand("k2", "10.1016/j.none"),
+              _cand("k3", "10.1016/j.ok")]
+
+    filled = await search._fill_missing_abstracts(_sess(), papers, client=None)
+
+    assert filled == 1
+    assert papers[2]["abstract"] == "본문"
+    assert papers[0]["abstract"] == ""
