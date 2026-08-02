@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     kci_page_size: int = 100
     kci_max_pages: int = 20
 
+    # OpenAlex 결측 초록을 ScienceDirect Article Retrieval로 회수한다(결측의 66.8%가
+    # Elsevier 게재분, 회수율 실측 88%). **비어 있으면 회수 단계를 통째로 건너뛴다** —
+    # 키 없이도 기존 동작이 그대로여야 하므로 Gemini 클라이언트 지연 생성과 같은 원칙이다.
+    elsevier_api_key: str = ""
+    # 실측: 동시성 1→3.0 req/s, 3→9.5(429 없음), 5→14.6(429 발생).
+    # 문서상 한도 10 req/s에 가장 근접하면서 429가 나지 않는 값.
+    elsevier_concurrency: int = 3
+
     admin_key: str
     database_url: str
 
