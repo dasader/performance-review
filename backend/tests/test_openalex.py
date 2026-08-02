@@ -119,3 +119,61 @@ async def test_search_attaches_partial_cost_to_exception_on_mid_page_failure(mon
         await openalex.search("q", 2024, 2024, client=None, limit=1000)
 
     assert exc_info.value.cost_usd == pytest.approx(0.01)
+
+
+def test_filter_expression_uses_given_country():
+    expr = openalex._filter_expr("q", 2025, 2025, "CN")
+    assert "authorships.institutions.country_code:CN" in expr
+    assert ":KR" not in expr
+
+
+def test_filter_expression_defaults_to_kr():
+    assert "country_code:KR" in openalex._filter_expr("q", 2025, 2025)
+
+
+def test_parse_work_extracts_lead_countries_from_corresponding_authors():
+    """참여국(countries)과 주도국(lead_countries)은 다른 값이다 — 실측으로 일본 논문의
+    47%가 자국이 주도하지 않은 국제공동연구다."""
+    work = {
+        "id": "https://openalex.org/W1", "doi": "https://doi.org/10.1/x",
+        "title": "T", "publication_year": 2026, "cited_by_count": 3,
+        "authorships": [
+            {"author": {"display_name": "A"}, "is_corresponding": True,
+             "institutions": [{"display_name": "KAIST", "country_code": "KR"}]},
+            {"author": {"display_name": "B"}, "is_corresponding": False,
+             "institutions": [{"display_name": "MIT", "country_code": "US"}]},
+        ],
+    }
+    p = openalex._parse_work(work)
+    assert set(p["countries"]) == {"KR", "US"}
+    assert p["lead_countries"] == ["KR"]
+    assert "korea_flag" not in p
+
+
+def test_parse_work_leaves_lead_countries_empty_when_no_corresponding_flag():
+    """is_corresponding 보유율은 91~94%라 없는 경우가 있다 — 빈 리스트로 두고
+    stats가 '주도 미상'으로 센다. 없는 정보를 추측해 채우지 않는다."""
+    work = {
+        "id": "https://openalex.org/W2", "title": "T", "publication_year": 2026,
+        "authorships": [
+            {"author": {"display_name": "A"},
+             "institutions": [{"display_name": "KAIST", "country_code": "KR"}]},
+        ],
+    }
+    assert openalex._parse_work(work)["lead_countries"] == []
+
+
+async def test_search_sorts_by_citations_and_passes_country(monkeypatch):
+    """상한에 걸려 잘릴 때 무엇이 남는지를 정하려면 정렬이 필요하다 —
+    기본 정렬(relevance_score)은 불투명해 국가 간 비교의 기준선으로 쓸 수 없다."""
+    seen = {}
+
+    async def fake_get_with_retry(url, *, client, params, service_name, context):
+        seen.update(params)
+        return _FakeResponse({"meta": {"cost_usd": 0.001, "count": 1}, "results": []})
+
+    monkeypatch.setattr(openalex, "get_with_retry", fake_get_with_retry)
+    await openalex.search("q", 2025, 2025, client=None, limit=100, country="CN")
+
+    assert seen["sort"] == "cited_by_count:desc"
+    assert "country_code:CN" in seen["filter"]

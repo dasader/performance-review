@@ -43,6 +43,7 @@ def _parse_work(work: dict) -> dict:
     authorships = work.get("authorships") or []
 
     authors, institutions, countries = [], [], []
+    lead_countries: list[str] = []
     for a in authorships:
         name = (a.get("author") or {}).get("display_name")
         if name:
@@ -53,6 +54,10 @@ def _parse_work(work: dict) -> dict:
             code = inst.get("country_code")
             if code and code not in countries:
                 countries.append(code)
+            # is_corresponding이 없는 논문이 6~9% 있다 — 그때는 비워 두고 stats가
+            # "주도 미상"으로 센다. 추측해 채우면 주도/참여 비율이 조용히 틀어진다.
+            if code and a.get("is_corresponding") and code not in lead_countries:
+                lead_countries.append(code)
 
     location = work.get("primary_location") or {}
     journal = (location.get("source") or {}).get("display_name")
@@ -66,9 +71,9 @@ def _parse_work(work: dict) -> dict:
         "authors": authors,
         "institutions": institutions,
         "countries": countries,
+        "lead_countries": lead_countries,
         "citations": int(work.get("cited_by_count") or 0),
         "source": "openalex",
-        "korea_flag": "KR" in countries,
     }
 
 
@@ -78,19 +83,19 @@ def _sanitize_query(query: str) -> str:
     return query.replace(",", " ").replace("|", " ")
 
 
-def _filter_expr(query: str, year_from: int, year_to: int) -> str:
+def _filter_expr(query: str, year_from: int, year_to: int, country: str = "KR") -> str:
     """연도를 범위로 한 번에 건다 — 연도별 개별 조회 대비 콜수가 1/N이 된다.
-    KR 필터를 서버측에 걸어 불필요한 페이지를 받지 않는다."""
+    국가 필터를 서버측에 걸어 불필요한 페이지를 받지 않는다(추가 비용 0)."""
     return (
         f"title_and_abstract.search:{_sanitize_query(query)},"
         f"publication_year:{year_from}-{year_to},"
-        f"authorships.institutions.country_code:KR"
+        f"authorships.institutions.country_code:{country}"
     )
 
 
-def _base_params(query: str, year_from: int, year_to: int) -> dict:
+def _base_params(query: str, year_from: int, year_to: int, country: str = "KR") -> dict:
     return {
-        "filter": _filter_expr(query, year_from, year_to),
+        "filter": _filter_expr(query, year_from, year_to, country),
         "api_key": settings.openalex_api_key,
     }
 
@@ -103,10 +108,11 @@ def estimate_pages(count: int) -> int:
 
 
 async def count_only(
-    query: str, year_from: int, year_to: int, *, client: httpx.AsyncClient
+    query: str, year_from: int, year_to: int, *, client: httpx.AsyncClient,
+    country: str = "KR",
 ) -> tuple[int, float]:
     """검색 건수만 확인한다(미리보기·실행 전 견적용). per_page=1로 1콜."""
-    params = {**_base_params(query, year_from, year_to), "per-page": 1, "select": "id"}
+    params = {**_base_params(query, year_from, year_to, country), "per-page": 1, "select": "id"}
     response = await get_with_retry(
         API_URL, client=client, params=params, service_name="OpenAlex", context=query
     )
@@ -116,9 +122,17 @@ async def count_only(
 
 
 async def search(
-    query: str, year_from: int, year_to: int, *, client: httpx.AsyncClient, limit: int
+    query: str, year_from: int, year_to: int, *, client: httpx.AsyncClient, limit: int,
+    country: str = "KR",
 ) -> OpenAlexResult:
-    """cursor 페이징으로 최대 `limit`건 수집. 비용과 잔여 헤더를 누적해 함께 반환한다."""
+    """cursor 페이징으로 최대 `limit`건 수집. 비용과 잔여 헤더를 누적해 함께 반환한다.
+
+    인용수 내림차순으로 정렬해 받는다. 상한(max_papers_per_analysis)에 걸려 잘릴 때
+    **무엇이 남는지**를 정하기 위해서다 — OpenAlex 기본 정렬(relevance_score)은 텍스트
+    유사도가 섞인 불투명한 점수라 국가 간 비교의 기준선으로 쓸 수 없다. cursor 페이징과
+    병용되고 비용이 동일한 것, 당해연도도 정렬이 유의미한 것은 실측으로 확인했다.
+    분석은 연도별로 따로 돌므로(enqueue) 정렬 대상이 항상 한 연도 안이라 연도 간
+    인용 누적 차이가 개입하지 않는다."""
     papers: list[dict] = []
     cost = 0.0
     remaining: str | None = None
@@ -128,10 +142,11 @@ async def search(
     try:
         while cursor and len(papers) < limit:
             params = {
-                **_base_params(query, year_from, year_to),
+                **_base_params(query, year_from, year_to, country),
                 "per-page": min(settings.openalex_per_page, limit - len(papers)),
                 "select": SELECT,
                 "cursor": cursor,
+                "sort": "cited_by_count:desc",
             }
             response = await get_with_retry(
                 API_URL, client=client, params=params, service_name="OpenAlex", context=query
