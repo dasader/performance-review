@@ -129,3 +129,45 @@ def test_analysis_sections_json_roundtrips_group_order():
     db.commit()
     db.refresh(a)
     assert [x["name"] for x in a.sections_json] == ["알고리즘", "신소재"]
+
+
+def test_analysis_country_defaults_to_kr_and_is_unique_per_year():
+    """기존 KR 분석이 자동 귀속되도록 기본값을 KR로 둔다. 같은 세부기술·연도라도
+    국가가 다르면 별도 행이어야 한다."""
+    db = _session()
+    a = Analysis(subfield_id=1, year=2025, status="pending", query_hash="h")
+    db.add(a)
+    db.commit()
+    db.refresh(a)
+    assert a.country == "KR"
+
+    db.add(Analysis(subfield_id=1, year=2025, status="pending", query_hash="h",
+                    country="US"))
+    db.commit()          # 국가가 다르면 통과해야 한다
+
+    db.add(Analysis(subfield_id=1, year=2025, status="pending", query_hash="h",
+                    country="US"))
+    with pytest.raises(IntegrityError):
+        db.commit()      # 같은 (세부기술, 연도, 국가)는 막혀야 한다
+
+
+def test_paper_has_lead_countries_and_no_korea_flag():
+    """lead_countries_json은 교신저자 소속국이다. korea_flag는 읽는 곳이 없어 지웠다."""
+    db = _session()
+    p = Paper(paper_key="k", title="T", source="openalex",
+              countries_json=["KR", "US"], lead_countries_json=["KR"])
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    assert p.lead_countries_json == ["KR"]
+    assert not hasattr(p, "korea_flag")
+
+
+def test_schedule_setting_has_countries():
+    from app.models.schedule import ScheduleSetting
+    db = _session()
+    row = ScheduleSetting(id=1, enabled=True, day=10, hour=3, years_back=1)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    assert row.countries == "KR"

@@ -105,7 +105,8 @@ def _parse_search_xml(xml_text: str) -> list[dict]:
             "countries": ["KR"],
             "citations": citations,
             "source": "kci",
-            "korea_flag": True,
+            # KCI 응답에는 저자 소속 정보가 없어 주도국을 알 수 없다.
+            "lead_countries": [],
         })
     return papers
 

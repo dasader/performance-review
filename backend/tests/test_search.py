@@ -23,7 +23,7 @@ def db():
 def _paper(key, **kw):
     base = {"paper_key": key, "title": "T", "abstract": "", "year": 2025, "journal": None,
             "doi": None, "authors": [], "institutions": [], "countries": [],
-            "citations": 0, "source": "openalex", "korea_flag": True}
+            "citations": 0, "source": "openalex", "lead_countries": []}
     base.update(kw)
     return base
 
@@ -48,13 +48,6 @@ def test_merge_keeps_max_citations():
     # 순서를 바꿔도 더 큰 값이 남아야 한다.
     merged_rev = merge_papers(kci, oa)
     assert merged_rev[0]["citations"] == 12
-
-
-def test_merge_korea_flag_true_if_any_source_true():
-    oa = [_paper("10.1/z", korea_flag=False, source="openalex")]
-    kci = [_paper("10.1/z", korea_flag=True, source="kci")]
-    merged = merge_papers(oa, kci)
-    assert merged[0]["korea_flag"] is True
 
 
 def test_merge_keeps_distinct_keys():
@@ -127,10 +120,10 @@ async def test_collect_returns_openalex_total_count_alongside_merged_papers(db, 
     판단할 수 있다."""
     sf = Subfield(field_id=1, name="HBM", query="hbm")
 
-    async def fake_count_only(query, year_from, year_to, *, client):
+    async def fake_count_only(query, year_from, year_to, *, client, country="KR"):
         return 40000, 0.001
 
-    async def fake_oa_search(query, year_from, year_to, *, client, limit):
+    async def fake_oa_search(query, year_from, year_to, *, client, limit, country="KR"):
         # 실제 openalex.search()처럼 limit(=max_papers_per_analysis)로 잘린 결과.
         return OpenAlexResult(papers=[], cost_usd=0.01, remaining="9", total_count=40000)
 
@@ -154,10 +147,10 @@ async def test_collect_records_partial_openalex_cost_when_search_fails_midway(db
     반복될 때 spent_today가 실제 소비를 못 따라가 check_budget이 계속 승인해버린다."""
     sf = Subfield(field_id=1, name="HBM", query="hbm")
 
-    async def fake_count_only(query, year_from, year_to, *, client):
+    async def fake_count_only(query, year_from, year_to, *, client, country="KR"):
         return 10, 0.001
 
-    async def fake_oa_search_fails(query, year_from, year_to, *, client, limit):
+    async def fake_oa_search_fails(query, year_from, year_to, *, client, limit, country="KR"):
         err = RuntimeError("OpenAlex 오류 500: 페이지 중간 실패")
         err.cost_usd = 0.02  # 이미 성공한 페이지 몇 건어치 비용
         raise err
@@ -278,3 +271,50 @@ async def test_fill_abstracts_absorbs_client_failures(monkeypatch):
     assert filled == 1
     assert papers[2]["abstract"] == "본문"
     assert papers[0]["abstract"] == ""
+
+
+def test_query_hash_differs_by_country():
+    """국가가 해시에 들어가지 않으면 KR 분석과 US 분석이 서로를 최신으로 착각한다."""
+    sf = Subfield(id=1, field_id=1, name="s", query="q")
+    assert query_hash(sf, 2025, 2025, "KR") != query_hash(sf, 2025, 2025, "US")
+
+
+def test_query_hash_defaults_to_kr():
+    sf = Subfield(id=1, field_id=1, name="s", query="q")
+    assert query_hash(sf, 2025, 2025) == query_hash(sf, 2025, 2025, "KR")
+
+
+def test_merge_takes_longer_lead_countries_list():
+    oa = [_paper("10.1/z", lead_countries=["KR"], source="openalex")]
+    kci = [_paper("10.1/z", lead_countries=["KR", "US"], source="kci")]
+    assert merge_papers(oa, kci)[0]["lead_countries"] == ["KR", "US"]
+
+
+async def test_collect_skips_kci_for_non_kr(monkeypatch):
+    """KCI는 한국학술지 전용이다 — 타국 분석에서 부르면 만료된 키 때문에 무의미하게
+    failed되고, KR에만 국내지가 섞여 소스가 비대칭이 된다(비교에서 KR만 부풀린다)."""
+    called = {"kci": 0}
+
+    async def fake_count(*a, **k):
+        return 0, 0.0
+
+    async def fake_search(*a, **k):
+        return OpenAlexResult(papers=[], cost_usd=0.0, remaining=None, total_count=0)
+
+    async def fake_kci(*a, **k):
+        called["kci"] += 1
+        return []
+
+    monkeypatch.setattr(search_module.openalex, "count_only", fake_count)
+    monkeypatch.setattr(search_module.openalex, "search", fake_search)
+    monkeypatch.setattr(search_module.kci, "search", fake_kci)
+    monkeypatch.setattr(settings, "elsevier_api_key", "")
+
+    db = _sess()
+    sf = Subfield(id=1, field_id=1, name="s", query="q")
+
+    await search_module.collect(db, sf, 2025, 2025, client=None, country="US")
+    assert called["kci"] == 0
+
+    await search_module.collect(db, sf, 2025, 2025, client=None, country="KR")
+    assert called["kci"] == 1

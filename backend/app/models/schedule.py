@@ -25,6 +25,8 @@ class ScheduleSetting(Base):
     day: Mapped[int] = mapped_column(Integer, nullable=False)
     hour: Mapped[int] = mapped_column(Integer, nullable=False)
     years_back: Mapped[int] = mapped_column(Integer, nullable=False)
+    # 스케줄러가 돌 국가. 콤마 구분("KR,US,CN"). 기본 KR이라 켜기 전에는 현행과 같다.
+    countries: Mapped[str] = mapped_column(String(100), nullable=False, default="KR")
 
 
 class AnalysisRun(Base):

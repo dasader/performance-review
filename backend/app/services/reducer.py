@@ -10,7 +10,12 @@ from app.config import settings
 from app.models.analysis import Analysis
 from app.models.field import Field, FieldReport, Roadmap, RoadmapCheck, Subfield
 from app.models.paper import Paper, PaperExtraction
-from app.prompts import REDUCE_INSTRUCTION, ROADMAP_CHECK_INSTRUCTION, ROLLUP_INSTRUCTION
+from app.prompts import (
+    REDUCE_INSTRUCTION,
+    ROADMAP_CHECK_INSTRUCTION,
+    ROLLUP_INSTRUCTION,
+    country_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +97,10 @@ async def reduce_subfield(
     # 보고서 제목이 "에너지 변환 및 자원 순환 공학"으로 나왔다). 3단 reduce는 최종 합성
     # 입력이 중간 요약뿐이라 세부기술명이 아예 사라져 더 크게 어긋난다.
     subfield = db.get(Subfield, analysis.subfield_id)
-    header = f"[세부기술: {subfield.name if subfield else '미상'} / {analysis.year}]\n"
+    header = (
+        f"[세부기술: {subfield.name if subfield else '미상'} / {analysis.year}"
+        f" / {country_name(analysis.country)}]\n"
+    )
 
     groups = group_for_reduce(extractions)
     if len(groups) == 1:

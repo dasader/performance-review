@@ -7,7 +7,7 @@ from app.services import stats
 def _p(key, **kw):
     defaults = dict(paper_key=key, title="T", abstract="A", year=2025, journal="J",
                     authors_json=["김"], institutions_json=["KAIST"], countries_json=["KR"],
-                    citations=0, source="openalex", korea_flag=True)
+                    citations=0, source="openalex", lead_countries_json=[])
     defaults.update(kw)
     return Paper(**defaults)
 
@@ -283,3 +283,39 @@ def test_citation_p90_is_kept():
     papers = [_p(f"k{i}", citations=i) for i in range(1, 6)]
     s = stats.compute(papers, [], snapshot_at=datetime(2026, 8, 2))
     assert s["citations"]["p90"] == 5
+
+
+def test_attribution_splits_solo_lead_participant_unknown():
+    """참여 기준만 쓰면 JP와 CN의 숫자를 같은 의미로 읽게 된다 — 실측으로 일본 논문의
+    47%가 자국이 주도하지 않은 국제공동연구이고 중국은 7.5%뿐이다."""
+    papers = [
+        _p("solo", countries_json=["KR"], lead_countries_json=["KR"]),
+        _p("lead", countries_json=["KR", "US"], lead_countries_json=["KR"]),
+        _p("part", countries_json=["KR", "US"], lead_countries_json=["US"]),
+        _p("unk",  countries_json=["KR", "US"], lead_countries_json=[]),
+    ]
+    s = stats.compute(papers, [], snapshot_at=datetime(2026, 8, 2), country="KR")
+    assert s["attribution"] == {"단독": 1, "주도": 1, "참여": 1, "주도 미상": 1}
+
+
+def test_attribution_follows_the_analysis_country():
+    papers = [_p("a", countries_json=["US", "KR"], lead_countries_json=["US"])]
+    s = stats.compute(papers, [], snapshot_at=datetime(2026, 8, 2), country="US")
+    assert s["attribution"]["주도"] == 1
+
+
+def test_partner_countries_exclude_the_analysis_country():
+    papers = [_p("a", countries_json=["CN", "US"], lead_countries_json=["CN"])]
+    s = stats.compute(papers, [], snapshot_at=datetime(2026, 8, 2), country="CN")
+    assert dict(s["top_partner_countries"]) == {"US": 1}
+    assert s["intl_collab_ratio"] == 1.0
+
+
+def test_sampled_flag_marks_truncated_collections():
+    """상한에 걸려 잘린 표본을 전수와 나란히 놓으면 인용수가 구조적으로 부풀려진다 —
+    표본임을 반드시 드러낸다."""
+    papers = [_p("a")]
+    full = stats.compute(papers, [], snapshot_at=datetime(2026, 8, 2), population_total=1)
+    cut = stats.compute(papers, [], snapshot_at=datetime(2026, 8, 2), population_total=5000)
+    assert full["sampled"] is False and full["population_total"] == 1
+    assert cut["sampled"] is True and cut["population_total"] == 5000
