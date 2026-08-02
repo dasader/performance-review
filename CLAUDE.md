@@ -365,6 +365,12 @@ batch 폴링·`resume_paused`까지** 함께 멈춘다. 실측(2026-08-01): Open
 (소진은 그 잡의 잘못이 아니므로 — 올리면 재개 후에도 상한에 걸려 `failed`가 된다).
 `resume_paused`가 UTC 자정에 자동 재개한다.
 
+**연결 실패·타임아웃도 429와 같은 백오프로 재시도한다.** `httpx.RequestError`(하위 타입인
+`TimeoutException` 포함)를 재시도 루프 안에서 잡아 지수 백오프하고, `max_attempts`를 소진한
+뒤에야 `RuntimeError`로 올린다. 예전에는 루프 안에 있으면서도 여기서 곧바로 예외를 던져
+**한 번 튄 연결에 분석이 통째로 `failed`가 됐다** — 실측(2026-08-01 23:22 UTC):
+`httpx.ConnectError` 한 번에 2건이 `search_attempts=0`인 채로 죽었다.
+
 ## 분석 삭제 정책 — `DELETE /api/admin/analyses/{id}`
 
 분석(보고서) 삭제는 `Analysis`/`AnalysisPaper`/`AnalysisRun`(보고서·통계·링크·이력)만 지우고

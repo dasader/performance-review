@@ -30,13 +30,26 @@ async def get_with_retry(
     max_attempts/timeout 기본값은 .env(HTTP_MAX_ATTEMPTS/HTTP_TIMEOUT_SECONDS)에서 온다."""
     max_attempts = max_attempts if max_attempts is not None else settings.http_max_attempts
     timeout = timeout if timeout is not None else settings.http_timeout_seconds
+    last_error: httpx.RequestError | None = None
     for attempt in range(max_attempts):
         try:
             response = await client.get(url, params=params, timeout=timeout)
-        except httpx.TimeoutException as e:
-            raise RuntimeError(f"{service_name} 타임아웃: {context}") from e
         except httpx.RequestError as e:
-            raise RuntimeError(f"{service_name} 네트워크 오류: {context}") from e
+            # 연결 실패·타임아웃은 대개 일시적이다(TimeoutException도 RequestError의
+            # 하위 타입이라 여기서 함께 잡힌다). 재시도 루프 안에 있으면서도 여기서
+            # 즉시 예외를 올리면 한 번 튄 연결에 분석이 통째로 failed가 된다 —
+            # 실측(2026-08-01 23:22 UTC): httpx.ConnectError 한 번에 2건이
+            # search_attempts=0인 채로 죽었다. 429와 같은 지수 백오프에 합류시킨다.
+            last_error = e
+            if attempt == max_attempts - 1:
+                break
+            delay = 2 ** attempt
+            logger.warning(
+                "%s 연결 실패 (%d/%d), %.1fs 후 재시도: %s",
+                service_name, attempt + 1, max_attempts, delay, e,
+            )
+            await asyncio.sleep(delay)
+            continue
 
         if response.status_code == 429:
             # 잔여 요청 수와 잔여 예산 중 **하나라도** 바닥이면 소진이다. 요청 수만 보면
@@ -69,6 +82,11 @@ async def get_with_retry(
             raise RuntimeError(f"{service_name} 오류 {response.status_code}: {context}")
         return response
 
+    if last_error is not None:
+        kind = "타임아웃" if isinstance(last_error, httpx.TimeoutException) else "네트워크 오류"
+        raise RuntimeError(
+            f"{service_name} {kind} — {max_attempts}회 재시도 후 실패: {context}"
+        ) from last_error
     raise RateLimited(f"{service_name} 429 재시도 소진: {context}")
 
 
