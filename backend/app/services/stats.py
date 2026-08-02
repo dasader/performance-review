@@ -90,8 +90,14 @@ def aggregate_metrics(extractions: list[PaperExtraction]) -> dict:
             "name": labels[key].most_common(1)[0][0],
             "unit": key[1],
             "count": len(nums),
+            # 분포는 최소~중앙값~최대 범위로 보여준다. p90은 쓰지 않는다 —
+            # _percentile의 인덱스가 int(n*0.9) 내림이라 n<=10이면 항상 마지막 원소를
+            # 가리켜 최대값과 **같은 값**이 된다. 실측(저장된 지표 행 1,687개 중
+            # 1,523개 = 90.3%)에서 p90 == max였고, 같은 숫자가 두 열에 나와 서로 다른
+            # 통계인 것처럼 보였다. 범위는 표본이 둘이어도 성립해 하한을 둘 필요가 없다.
+            # 인용수 p90(compute의 citations)은 표본이 수백~수천이라 문제가 없어 그대로 둔다.
+            "min": round(min(nums), 4),
             "median": round(statistics.median(nums), 4),
-            "p90": round(_percentile(nums, 0.9), 4),
             "max": round(max(nums), 4),
         }
         for key, nums in values.items()
