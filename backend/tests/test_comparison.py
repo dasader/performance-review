@@ -116,9 +116,11 @@ def _seed(db, countries=("KR",), *, year=2026, report="# 보고서", stats=None)
 
     country를 반드시 명시하는 이유: SQLAlchemy의 default=는 INSERT 시점에만 적용돼
     직접 만든 객체에는 안 들어간다(4단계에서 헤더가 'None'으로 나온 원인).
-    """
-    import json as _json
 
+    stats_json은 **dict**로 넣는다 — 컬럼이 JSON 타입이라 SQLAlchemy가 자동
+    역직렬화하므로 읽을 때도 dict다. 여기에 문자열을 넣으면 실제와 달라져
+    "코드에서 json.loads를 부르는" 버그를 테스트가 통과시킨다(실제로 그랬다).
+    """
     f = Field(name="반도체·디스플레이", slug="semi", order_no=1)
     db.add(f)
     db.flush()
@@ -134,7 +136,7 @@ def _seed(db, countries=("KR",), *, year=2026, report="# 보고서", stats=None)
                 status="done",
                 query_hash="h",
                 report_md=report,
-                stats_json=_json.dumps(stats or _stats()),
+                stats_json=stats or _stats(),
             )
         )
     db.commit()
