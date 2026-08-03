@@ -45,11 +45,27 @@ def _metric_key(name: str) -> str:
     return _SEP_RE.sub(" ", _PAREN_RE.sub(" ", name)).strip().lower()
 
 
+# 범위 표기("4-6", "70~600", "40–55", "-20~20"). 하한과 상한을 함께 잡아 중간값을 쓴다.
+# 구분자는 하이픈·물결·엔대시·엠대시. 상한의 부호는 받지 않는다 — "-20-10"은 실제로
+# "-20 ~ -10"인지 "-20 ~ 10"인지 알 수 없어, 모호한 쪽은 범위로 읽지 않고 첫 숫자만 쓴다.
+_RANGE_RE = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*[-~\u2013\u2014]\s*(\d+(?:\.\d+)?)\s*$")
+
+
 def _metric_value(raw: object) -> float | None:
-    """값 문자열에서 첫 숫자를 뽑는다. '~14' '1,200' '18.43'을 처리하고,
-    숫자가 없으면 None — 집계에서 빠지되 metrics_total에는 남는다."""
+    """값 문자열에서 대표 숫자를 뽑는다. '~14' '1,200' '18.43'을 처리하고,
+    숫자가 없으면 None — 집계에서 빠지되 metrics_total에는 남는다.
+
+    범위 표기는 **중간값**을 쓴다. 실측(2026-08-03, v3 추출 42,417개 값): 5.09%가
+    범위 표기이고 그중 35.9%는 상한이 하한의 2배 이상이다(평균 16배). 하한만 취하면
+    이 5%가 체계적으로 낮게 잡힌다 — "70-600"을 70으로 세는 식이다. 분포 요약
+    (최소·중앙값·최대)의 대표값으로는 한쪽 끝보다 중앙이 맞고, 통째로 버리면 5%를 잃는다.
+    """
     text = raw if isinstance(raw, str) else str(raw or "")
-    match = _NUM_RE.search(text.replace(",", ""))
+    text = text.replace(",", "")
+    span = _RANGE_RE.match(text)
+    if span:
+        return (float(span.group(1)) + float(span.group(2))) / 2
+    match = _NUM_RE.search(text)
     return float(match.group()) if match else None
 
 
