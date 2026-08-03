@@ -10,7 +10,6 @@ reducer.py에 넣지 않은 이유: reducer는 이미 세부기술 reduce·분�
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timezone
 
@@ -181,9 +180,9 @@ async def process_comparison(db: Session, row: CountryComparison) -> None:
     subfield = db.get(Subfield, row.subfield_id)
     name = subfield.name if subfield else str(row.subfield_id)
 
-    table = build_comparison_table(
-        [(code, json.loads(a.stats_json or "{}")) for code, a in pairs]
-    )
+    # stats_json은 JSON 컬럼이라 SQLAlchemy가 이미 dict로 준다 — json.loads를 부르면
+    # TypeError가 난다(실측: 첫 실행이 여기서 failed).
+    table = build_comparison_table([(code, a.stats_json or {}) for code, a in pairs])
     bodies = "\n\n".join(
         f"## {country_name(code)} 보고서\n{a.report_md}" for code, a in pairs
     )
