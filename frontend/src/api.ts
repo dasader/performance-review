@@ -426,3 +426,39 @@ export interface Roadmap {
   goal_count: number;
   updated_at: string | null;
 }
+
+// 국가 비교 보고서. FieldReport와 같은 큐잉 규약 — "생성"은 즉시 실행이 아니라
+// 큐잉이라 화면이 status를 폴링한다.
+export interface Comparison {
+  subfield_id: number;
+  subfield_name: string | null;
+  year: number;
+  // 정렬된 국가 코드와 그 한글 이름(같은 순서).
+  countries: string[];
+  country_names: string[];
+  status: "pending" | "done" | "failed";
+  error: string | null;
+  report_md: string;
+  // 합성에 들어간 국가 수.
+  source_count: number;
+  generated_at: string | null;
+}
+
+export function getComparison(subfieldId: number, year: number, countries: string[]) {
+  return get<Comparison>(
+    `/subfields/${subfieldId}/comparison?year=${year}&countries=${countries.join(",")}`,
+  );
+}
+
+export function enqueueComparison(
+  subfieldId: number,
+  year: number,
+  countries: string[],
+  adminKey: string,
+) {
+  return post<{ subfield_id: number; year: number; countries: string[]; status: string }>(
+    `/admin/subfields/${subfieldId}/comparison?year=${year}&countries=${countries.join(",")}`,
+    {},
+    adminKey,
+  );
+}

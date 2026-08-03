@@ -7,6 +7,7 @@ const FieldDetail = lazy(() => import("./pages/FieldDetail"));
 const Report = lazy(() => import("./pages/Report"));
 const Admin = lazy(() => import("./pages/Admin"));
 const FieldReportPage = lazy(() => import("./pages/FieldReportPage"));
+const ComparisonPage = lazy(() => import("./pages/ComparisonPage"));
 
 export default function App() {
   return (
@@ -22,6 +23,9 @@ export default function App() {
             element={<FieldReportPage kind="roadmap-check" />}
           />
           <Route path="/analyses/:analysisId" element={<Report />} />
+          {/* :year 라우트보다 앞에 둔다 — 뒤에 두면 /subfields/:id/:year가
+              "compare"를 연도로 먼저 매칭한다. */}
+          <Route path="/subfields/:subfieldId/compare/:year" element={<ComparisonPage />} />
           <Route path="/subfields/:subfieldId/:year" element={<Report />} />
           <Route path="/admin" element={<Admin />} />
         </Routes>
