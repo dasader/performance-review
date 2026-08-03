@@ -18,7 +18,8 @@ from app.models.field import (
     RoadmapCheck,
     Subfield,
 )
-from app.models.paper import Paper
+from app.models.paper import Paper, PaperExtraction
+from app.services import mapper, stats
 from app.services import visitors as visitors_service
 from app.prompts import country_name
 from app.services.runner import STEP_LABELS
@@ -570,3 +571,69 @@ def get_comparison(
         "source_count": row.source_count,
         "generated_at": row.generated_at.isoformat() if row.generated_at else None,
     }
+
+
+@router.get("/analyses/{analysis_id}/metrics")
+def metric_drilldown(analysis_id: int, name: str, unit: str = "", db: Session = Depends(get_db)):
+    """지표 표의 한 행("전력변환효율 447편") 뒤에 있는 논문 목록.
+
+    저장하지 않고 조회 시점에 계산한다 — stats_json에 논문 키를 넣으면 PCE 하나만
+    447개 키라 blob이 MB 단위로 부풀고 재계산 때마다 커진다.
+
+    묶음은 stats._metric_key/_metric_value를 그대로 재사용한다. 다른 정규화를 쓰면
+    "표는 447편인데 목록은 12편"이 되어 화면이 스스로를 반박한다.
+
+    이상값을 기계적으로 거를 수 없기 때문에 필요한 화면이다 — "전력변환효율"이라는
+    같은 이름 아래 태양전지 PCE와 전력회로 변환효율이 섞이고, 값만 보고는 "오류"와
+    "다른 대상"을 구분할 수 없다(§10-2). 지우는 대신 확인 가능하게 만든다.
+    """
+    analysis = db.get(Analysis, analysis_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail="분석을 찾을 수 없습니다.")
+
+    want = (stats._metric_key(name), unit.strip())
+
+    # 이 분석에 실제로 링크된 논문만 본다 — paper_extractions는 세부기술 단위 캐시라
+    # 다른 연도 논문까지 들어 있다.
+    titles = {
+        p.paper_key: p
+        for p in db.query(Paper)
+        .join(AnalysisPaper, AnalysisPaper.paper_id == Paper.id)
+        .filter(AnalysisPaper.analysis_id == analysis.id)
+    }
+    extractions = (
+        db.query(PaperExtraction)
+        .filter(
+            PaperExtraction.subfield_id == analysis.subfield_id,
+            PaperExtraction.model_ver == mapper.model_ver(),
+            PaperExtraction.paper_key.in_(titles.keys()) if titles else False,
+        )
+        .all()
+    )
+
+    rows = []
+    for extraction in extractions:
+        paper = titles.get(extraction.paper_key)
+        for metric in extraction.metrics_json or []:
+            if not isinstance(metric, dict):
+                continue
+            metric_name = (metric.get("name") or "").strip()
+            if (stats._metric_key(metric_name), (metric.get("unit") or "").strip()) != want:
+                continue
+            value = stats._metric_value(metric.get("value"))
+            if value is None:
+                continue
+            rows.append({
+                "value": value,
+                "raw": metric.get("value"),
+                "target": metric.get("target"),
+                "label": metric_name,
+                "title": paper.title if paper else None,
+                "journal": paper.journal if paper else None,
+                "year": paper.year if paper else None,
+                "doi": paper.doi if paper else None,
+            })
+
+    # 값 내림차순 — 이상값 확인이 이 화면의 목적이라 큰 값이 위로 온다.
+    rows.sort(key=lambda r: r["value"], reverse=True)
+    return {"name": name, "unit": unit, "count": len(rows), "rows": rows}

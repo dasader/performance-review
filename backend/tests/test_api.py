@@ -1379,3 +1379,71 @@ def test_footnote_keeps_partial_semicolon_match_intact(client):
     r = client.get(f"/api/analyses/{aid}").json()
     assert "알 수 없는 다른 논문 제목입니다" in r["report_md"]
     assert r["references"] == []
+
+
+def _seed_metric_drilldown(db, *, year=2031):
+    """지표 드릴다운용 — 논문 2건 + 같은 지표를 담은 추출 2건."""
+    from app.models import PaperExtraction
+    from app.services import mapper
+
+    a = Analysis(subfield_id=1, year=year, status="done", query_hash="h", stats_json={})
+    db.add(a)
+    db.flush()
+    rows = [
+        ("pk-m1", "쿡 컨버터를 쓴 논문", "97.3", "Z-소스 쿡 컨버터"),
+        ("pk-m2", "양자점 태양전지 논문", "1.67", "CdS 양자점 태양전지"),
+    ]
+    for key, title, value, target in rows:
+        p = Paper(paper_key=key, title=title, journal="Nature", year=2025,
+                  doi=f"10.1/{key}", source="openalex")
+        db.add(p)
+        db.flush()
+        db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
+        db.add(PaperExtraction(
+            paper_key=key, subfield_id=1, tech_summary="요약",
+            metrics_json=[{"name": "전력변환효율(PCE)", "value": value,
+                           "unit": "%", "target": target}],
+            model_ver=mapper.model_ver(),
+        ))
+    db.commit()
+    return a.id
+
+
+def test_metric_drilldown_lists_papers_behind_a_number(client):
+    """표의 "PCE 447편"에서 어느 논문인지 볼 수 있어야 한다.
+
+    이상값을 기계적으로 거를 수는 없으므로(같은 이름 아래 다른 물리량이 섞인다 —
+    태양전지 PCE와 전력회로 변환효율) 지우는 대신 검증 가능하게 만든다.
+    """
+    db = app.dependency_overrides[get_db]()
+    aid = _seed_metric_drilldown(db)
+    db.close()
+
+    r = client.get(f"/api/analyses/{aid}/metrics",
+                   params={"name": "전력변환효율(PCE)", "unit": "%"})
+    assert r.status_code == 200
+    rows = r.json()["rows"]
+    assert len(rows) == 2
+    # 값 내림차순 — 이상값을 확인하려는 것이 이 화면의 목적이라 큰 값이 위로 온다.
+    assert rows[0]["value"] == 97.3
+    assert rows[0]["target"] == "Z-소스 쿡 컨버터"
+    assert rows[0]["title"] == "쿡 컨버터를 쓴 논문"
+    assert rows[0]["doi"] == "10.1/pk-m1"
+
+
+def test_metric_drilldown_uses_the_same_normalization_as_the_table(client):
+    """표와 같은 정규화(_metric_key)로 묶어야 숫자가 일치한다 —
+    괄호·구분자 차이로 갈리면 "447편인데 목록은 12편"이 된다."""
+    db = app.dependency_overrides[get_db]()
+    aid = _seed_metric_drilldown(db, year=2032)
+    db.close()
+
+    # 괄호를 뺀 표기로 물어도 같은 그룹을 찾는다.
+    r = client.get(f"/api/analyses/{aid}/metrics",
+                   params={"name": "전력변환효율", "unit": "%"})
+    assert len(r.json()["rows"]) == 2
+
+
+def test_metric_drilldown_404_for_unknown_analysis(client):
+    r = client.get("/api/analyses/99999/metrics", params={"name": "x", "unit": "%"})
+    assert r.status_code == 404

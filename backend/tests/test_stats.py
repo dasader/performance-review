@@ -319,3 +319,49 @@ def test_sampled_flag_marks_truncated_collections():
     cut = stats.compute(papers, [], snapshot_at=datetime(2026, 8, 2), population_total=5000)
     assert full["sampled"] is False and full["population_total"] == 1
     assert cut["sampled"] is True and cut["population_total"] == 5000
+
+
+def test_range_values_use_the_midpoint_not_the_lower_bound():
+    """범위 표기("4-6")는 중간값으로 집계한다.
+
+    실측(2026-08-03, v3 추출 42,417개 값): 5.09%(2,159개)가 범위 표기이고, 그중
+    35.9%는 상한이 하한의 2배 이상이다(평균 16배). 하한만 취하면 이 5%가 체계적으로
+    낮게 잡힌다 — "70-600"을 70으로 세는 식이다.
+
+    중간값을 쓰는 이유: 분포 요약(최소·중앙값·최대)의 대표값으로는 한쪽 끝보다
+    중앙이 맞다. 범위를 통째로 버리면 5%를 잃는다.
+    """
+    ext = [_e("a", [
+        {"name": "효율", "value": "4-6", "unit": "%"},
+        {"name": "효율", "value": "70~600", "unit": "%"},
+        # 전각 대시(–)도 같은 범위 표기다 — 실측 데이터에 섞여 있다.
+        {"name": "효율", "value": "40–55", "unit": "%"},
+    ])]
+    agg = stats.aggregate_metrics(ext)
+    row = agg["top_metrics"][0]
+    assert row["count"] == 3
+    assert row["min"] == 5.0        # (4+6)/2
+    assert row["median"] == 47.5    # (40+55)/2
+    assert row["max"] == 335.0      # (70+600)/2
+
+
+def test_negative_lower_bound_range_is_still_a_range():
+    """'-20~20' 같은 음수 하한도 범위로 읽는다(중간값 0)."""
+    ext = [_e("a", [
+        {"name": "가변범위", "value": "-20~20", "unit": "도"},
+        {"name": "가변범위", "value": "-10~10", "unit": "도"},
+    ])]
+    agg = stats.aggregate_metrics(ext)
+    assert agg["top_metrics"][0]["median"] == 0.0
+
+
+def test_hyphen_in_non_range_values_is_not_treated_as_a_range():
+    """범위가 아닌 하이픈은 건드리지 않는다 — 첫 숫자만 뽑던 기존 동작 유지."""
+    ext = [_e("a", [
+        # 음수 하나. "-5 ~ ..." 형태가 아니므로 범위가 아니다.
+        {"name": "온도차", "value": "-5", "unit": "K"},
+        {"name": "온도차", "value": "-3", "unit": "K"},
+    ])]
+    agg = stats.aggregate_metrics(ext)
+    assert agg["top_metrics"][0]["min"] == -5.0
+    assert agg["top_metrics"][0]["max"] == -3.0
