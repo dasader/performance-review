@@ -322,3 +322,17 @@ async def test_job_loop_marks_failed_comparison_without_crashing(monkeypatch):
     db.refresh(row)
     assert row.status == "failed"
     assert "LLM 폭발" in (row.error or "")
+
+
+def test_compare_instruction_separates_missing_abstracts_from_volume():
+    """결측률 금지 조항이 과잉 적용되면 실재하는 발표량 차이까지 부정한다.
+
+    실측(차세대 메모리반도체 2025 KR+CN 첫 생성): 모델이 "수집된 논문 수의 차이는
+    abstract 보유율 차이에서 기인한다"고 썼는데 틀렸다 — 수집은 820 vs 304로
+    abstract 필터링 이전에 이미 2.7배 차이가 났다. 결측은 820→731, 304→278 구간만
+    설명한다. 금지를 약화시키지 말고 구간을 명시해 정밀화한다."""
+    from app.prompts import COMPARE_INSTRUCTION
+
+    assert "수집" in COMPARE_INSTRUCTION and "모집단" in COMPARE_INSTRUCTION
+    # 결측이 설명하는 구간이 명시돼야 한다
+    assert "구간" in COMPARE_INSTRUCTION
