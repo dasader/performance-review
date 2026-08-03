@@ -1328,3 +1328,54 @@ def test_footnote_ignores_too_short_truncated_citation(client):
     r = client.get(f"/api/analyses/{aid}").json()
     assert "(Deep...)" in r["report_md"]   # 원문 그대로 둔다
     assert r["references"] == []
+
+
+def test_footnote_splits_semicolon_separated_citations(client):
+    """한 괄호에 ';'로 여러 논문을 나열한 인용을 각각의 각주로 바꾼다.
+
+    실측(차세대 메모리반도체 KR 2025): 잘림 매칭을 고친 뒤에도 남은 미치환 8건 중
+    5건이 이 형태였다. 괄호 안 전체를 하나의 제목으로 보면 어느 쪽과도 안 맞는다.
+    """
+    db = app.dependency_overrides[get_db]()
+    t1 = "Emulating Nociceptor and Synaptic Functions in GaOx Resistive Memory"
+    t2 = "Toward More Realistic Neuromorphic Devices with Oxide Semiconductors"
+    a = Analysis(subfield_id=1, year=2028, status="done", query_hash="h", stats_json={},
+                 report_md=f"연구가 보고되었다 ({t1}; {t2}).")
+    db.add(a)
+    db.flush()
+    for i, t in enumerate((t1, t2), start=1):
+        p = Paper(paper_key=f"pk-multi-{i}", title=t, journal="Nature",
+                  year=2025, doi=f"10.1/m{i}", source="openalex")
+        db.add(p)
+        db.flush()
+        db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
+    db.commit()
+    aid = a.id
+    db.close()
+
+    r = client.get(f"/api/analyses/{aid}").json()
+    assert "(#ref-1)" in r["report_md"] and "(#ref-2)" in r["report_md"]
+    assert len(r["references"]) == 2
+    assert t1 not in r["report_md"] and t2 not in r["report_md"]
+
+
+def test_footnote_keeps_partial_semicolon_match_intact(client):
+    """일부만 매칭되면 통째로 원문을 둔다 — 매칭 안 된 쪽 텍스트가 사라지면 안 된다."""
+    db = app.dependency_overrides[get_db]()
+    t1 = "Emulating Nociceptor and Synaptic Functions in GaOx Resistive Memory"
+    a = Analysis(subfield_id=1, year=2029, status="done", query_hash="h", stats_json={},
+                 report_md=f"연구가 보고되었다 ({t1}; 알 수 없는 다른 논문 제목입니다).")
+    db.add(a)
+    db.flush()
+    p = Paper(paper_key="pk-partial", title=t1, journal="Nature",
+              year=2025, doi="10.1/p1", source="openalex")
+    db.add(p)
+    db.flush()
+    db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
+    db.commit()
+    aid = a.id
+    db.close()
+
+    r = client.get(f"/api/analyses/{aid}").json()
+    assert "알 수 없는 다른 논문 제목입니다" in r["report_md"]
+    assert r["references"] == []
