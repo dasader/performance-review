@@ -276,3 +276,47 @@ async def test_process_sends_table_and_bodies_only(monkeypatch):
     assert row.status == "done"
     assert row.source_count == 2
     assert row.report_md == "# 비교 보고서"
+
+
+async def test_job_loop_processes_pending_comparison(monkeypatch):
+    """비교 보고서도 잡 루프가 한 틱에 하나씩 처리한다.
+
+    _process_report가 row.field_id를 로그에 직접 참조하면 여기서 AttributeError가
+    난다 — 비교 행에는 field_id가 없다(subfield_id를 가진다)."""
+    from app.services import runner
+
+    db = _session()
+    sid = _seed(db, ("KR", "US"))
+    row = comparison.enqueue_comparison(db, sid, 2026, ["KR", "US"])
+
+    called = {}
+
+    async def fake_process(_db, r):
+        called["id"] = r.id
+        r.status = "done"
+        _db.commit()
+
+    monkeypatch.setattr(runner.comparison, "process_comparison", fake_process)
+    await runner.advance_field_reports(db)
+
+    assert called.get("id") == row.id
+    assert row.status == "done"
+
+
+async def test_job_loop_marks_failed_comparison_without_crashing(monkeypatch):
+    """한 건의 실패가 루프 전체를 멈추지 않는다 — 그 행만 failed로 남는다."""
+    from app.services import runner
+
+    db = _session()
+    sid = _seed(db, ("KR", "US"))
+    row = comparison.enqueue_comparison(db, sid, 2026, ["KR", "US"])
+
+    async def boom(_db, _r):
+        raise RuntimeError("LLM 폭발")
+
+    monkeypatch.setattr(runner.comparison, "process_comparison", boom)
+    await runner.advance_field_reports(db)   # 예외가 밖으로 새면 안 된다
+
+    db.refresh(row)
+    assert row.status == "failed"
+    assert "LLM 폭발" in (row.error or "")

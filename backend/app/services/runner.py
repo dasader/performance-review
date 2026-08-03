@@ -13,10 +13,10 @@ from app.clients._http import RateLimited
 from app.config import settings
 from app.database import SessionLocal
 from app.models.analysis import Analysis, AnalysisPaper
-from app.models.field import FieldReport, RoadmapCheck, Subfield
+from app.models.field import CountryComparison, FieldReport, RoadmapCheck, Subfield
 from app.models.paper import Paper, PaperExtraction
 from app.models.schedule import AnalysisRun, ScheduledRun, ScheduleSetting
-from app.services import mapper, reducer, search, stats
+from app.services import comparison, mapper, reducer, search, stats
 from app.services.budget import BudgetExceeded, spent_today
 
 logger = logging.getLogger(__name__)
@@ -607,7 +607,7 @@ def schedule_history(db: Session, *, limit: int = 12) -> list[dict]:
 
 
 async def advance_field_reports(db: Session) -> None:
-    """pending인 분야 종합 보고서·로드맵 점검을 한 틱에 하나씩 처리한다.
+    """pending인 분야 종합 보고서·로드맵 점검·국가 비교를 한 틱에 하나씩 처리한다.
 
     한 틱에 전부 부르지 않는 이유: 각 생성이 LLM 1콜(약 10~17초)이라, 일괄로 큐잉된
     수십 건을 한 루프에서 다 돌리면 루프가 수 분간 블로킹돼 세부기술 분석 잡까지
@@ -615,7 +615,8 @@ async def advance_field_reports(db: Session) -> None:
     자원을 나눠 쓴다(느리지만 rate-limit 철학과 일치).
 
     분야 종합을 로드맵 점검보다 먼저 처리한다 — 점검이 더 오래 걸려(17초) 종합이
-    그 뒤에 줄서면 오래 대기하기 때문이다.
+    그 뒤에 줄서면 오래 대기하기 때문이다. 국가 비교는 입력이 가장 커(국가 수만큼
+    보고서가 붙는다) 맨 뒤에 둔다.
     """
     field_row = (
         db.query(FieldReport)
@@ -635,17 +636,30 @@ async def advance_field_reports(db: Session) -> None:
     )
     if check_row is not None:
         await _process_report(db, check_row, reducer.process_roadmap_check, "로드맵 점검")
+        return
+
+    compare_row = (
+        db.query(CountryComparison)
+        .filter(CountryComparison.status == "pending")
+        .order_by(CountryComparison.id)
+        .first()
+    )
+    if compare_row is not None:
+        await _process_report(db, compare_row, comparison.process_comparison, "국가 비교")
 
 
 async def _process_report(db: Session, row, processor, label: str) -> None:
     """report 행 하나를 처리하고, 실패하면 status=failed + error로 남긴다.
-    한 건의 실패가 루프 전체를 멈추지 않게 여기서 흡수한다(세부기술 잡의 advance와 대칭)."""
+    한 건의 실패가 루프 전체를 멈추지 않게 여기서 흡수한다(세부기술 잡의 advance와 대칭).
+
+    row는 FieldReport·RoadmapCheck·CountryComparison 중 하나라 공통 컬럼이 id·year뿐이다
+    — field_id를 직접 읽으면 비교 행(subfield_id를 가진다)에서 AttributeError가 난다."""
     try:
-        logger.info("[%s] field=%d year=%d 처리 시작", label, row.field_id, row.year)
+        logger.info("[%s] id=%d year=%d 처리 시작", label, row.id, row.year)
         await processor(db, row)
-        logger.info("[%s] field=%d year=%d 완료", label, row.field_id, row.year)
+        logger.info("[%s] id=%d year=%d 완료", label, row.id, row.year)
     except Exception as e:
-        logger.exception("[%s] field=%d year=%d 실패", label, row.field_id, row.year)
+        logger.exception("[%s] id=%d year=%d 실패", label, row.id, row.year)
         db.rollback()
         row.status = "failed"
         row.error = str(e)
