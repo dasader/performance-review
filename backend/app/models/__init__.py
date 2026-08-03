@@ -3,6 +3,7 @@
 from app.models.analysis import Analysis, AnalysisPaper  # noqa: F401
 from app.models.budget import OpenAlexUsage  # noqa: F401
 from app.models.field import (  # noqa: F401
+    CountryComparison,
     Field,
     FieldReport,
     Roadmap,

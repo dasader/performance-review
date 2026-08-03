@@ -10,7 +10,14 @@ from app.clients._html import strip_html
 from app.config import settings
 from app.database import get_db
 from app.models.analysis import Analysis, AnalysisPaper
-from app.models.field import Field, FieldReport, Roadmap, RoadmapCheck, Subfield
+from app.models.field import (
+    CountryComparison,
+    Field,
+    FieldReport,
+    Roadmap,
+    RoadmapCheck,
+    Subfield,
+)
 from app.models.paper import Paper
 from app.services import visitors as visitors_service
 from app.prompts import country_name
@@ -486,3 +493,41 @@ def get_by_subfield_year(
     if not analysis:
         raise HTTPException(status_code=404, detail="분석 결과를 찾을 수 없습니다.")
     return _serialize(db, analysis)
+
+
+@router.get("/subfields/{subfield_id}/comparison")
+def get_comparison(
+    subfield_id: int, year: int, countries: str, db: Session = Depends(get_db)
+):
+    """비교 보고서 조회 — 캐시만 읽는다(생성은 관리자만).
+
+    pending/failed도 그대로 내려준다. 화면이 status로 폴링·경고를 판단한다
+    (분야 보고서와 같은 규약).
+    """
+    key = ",".join(sorted({c.strip().upper() for c in countries.split(",") if c.strip()}))
+    row = (
+        db.query(CountryComparison)
+        .filter(
+            CountryComparison.subfield_id == subfield_id,
+            CountryComparison.year == year,
+            CountryComparison.countries == key,
+        )
+        .one_or_none()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="비교 보고서가 아직 생성되지 않았습니다.")
+
+    subfield = db.get(Subfield, subfield_id)
+    codes = row.countries.split(",")
+    return {
+        "subfield_id": row.subfield_id,
+        "subfield_name": subfield.name if subfield else None,
+        "year": row.year,
+        "countries": codes,
+        "country_names": [country_name(c) for c in codes],
+        "status": row.status,
+        "error": row.error,
+        "report_md": row.report_md,
+        "source_count": row.source_count,
+        "generated_at": row.generated_at.isoformat() if row.generated_at else None,
+    }

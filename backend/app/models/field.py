@@ -115,3 +115,35 @@ class RoadmapCheck(Base):
     checked_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # 생성 시점의 로드맵 판본. 이후 로드맵이 바뀌면 재생성 필요 신호가 된다.
     roadmap_version: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+
+
+class CountryComparison(Base):
+    """같은 세부기술·연도의 국가별 분석을 합성한 비교 보고서 캐시.
+
+    FieldReport와 같은 큐잉 패턴이다 — 관리자가 "생성"을 누르면 pending 행만 만들고
+    실제 LLM 호출은 runner.loop이 한 틱에 하나씩 처리한다.
+
+    countries가 유일키에 포함되는 이유: 같은 세부기술·연도라도 "KR,US"와 "KR,US,CN"은
+    다른 보고서다. 국가 조합을 바꿔 만들어도 기존 것을 덮어쓰지 않는다.
+    """
+
+    __tablename__ = "country_comparisons"
+    __table_args__ = (
+        UniqueConstraint("subfield_id", "year", "countries", name="uq_comparison"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    subfield_id: Mapped[int] = mapped_column(ForeignKey("subfields.id"), nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    # 정렬된 콤마 구분 국가 코드("CN,KR,US"). 정렬해 저장하는 이유는 같은 조합을
+    # 다른 순서로 요청해도 같은 행을 재사용하기 위해서다 — 안 그러면 같은 비교가
+    # 순서만 바꿔 여러 행으로 쌓인다.
+    countries: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="done")
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 재생성 중에도 옛 본문을 남긴다(FieldReport와 같은 이유) — 처리가 끝나기 전까지
+    # 이전 보고서를 계속 보여주기 위해서다.
+    report_md: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    generated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # 합성에 실제로 들어간 국가 수.
+    source_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
