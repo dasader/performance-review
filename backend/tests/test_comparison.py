@@ -169,3 +169,29 @@ def test_collect_skips_empty_report():
 
     with pytest.raises(ValueError, match="US"):
         comparison.collect_country_analyses(db, sid, 2026, ["KR", "US"])
+
+
+def test_compare_instruction_forbids_the_known_traps():
+    """비교 보고서가 저지르기 쉬운 오독을 프롬프트가 직접 금지해야 한다.
+    각 항목은 실측으로 확인된 함정이라 문구를 약화시키면 안 된다."""
+    from app.prompts import COMPARE_INSTRUCTION
+
+    # 길이 = 압축률 차이. 실측(2026-08-03): 3단 reduce에 들어간 12건의 종합 보고서가
+    # 분석 501건이든 1,850건이든 약 5,000자에서 포화하고, 단일 reduce로 끝난 245건짜리는
+    # 10,549자다. 금지하지 않으면 "논문 많은 쪽이 빈약하다"로 정반대 결론이 난다.
+    assert "길이" in COMPARE_INSTRUCTION
+    # 표본율이 다른 국가끼리 인용수·논문수 직접 비교 금지
+    assert "표본율" in COMPARE_INSTRUCTION
+    # 참여 기준 중복 계상 — 국가별 합계는 총합과 다르다
+    assert "중복" in COMPARE_INSTRUCTION
+    # 순위·점수 생성 금지
+    assert "순위" in COMPARE_INSTRUCTION
+    # 한계 절 강제
+    assert "한계" in COMPARE_INSTRUCTION
+
+
+def test_compare_instruction_forbids_recomputing_the_table():
+    """대조표는 코드가 만든다. 모델이 다시 계산하면 틀린다."""
+    from app.prompts import COMPARE_INSTRUCTION
+
+    assert "계산" in COMPARE_INSTRUCTION
