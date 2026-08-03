@@ -10,14 +10,23 @@ reducer.py에 넣지 않은 이유: reducer는 이미 세부기술 reduce·분�
 
 from __future__ import annotations
 
+import json
 import logging
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.models import Analysis
-from app.prompts import country_name
+from app.clients import gemini_sync
+from app.config import settings
+from app.models import Analysis, CountryComparison, Subfield
+from app.prompts import COMPARE_INSTRUCTION, country_name
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    """DB의 naive DateTime 컬럼에 맞춘 현재 UTC 시각(reducer._utcnow와 같다)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def collect_country_analyses(
@@ -108,3 +117,90 @@ def build_comparison_table(rows: list[tuple[str, dict]]) -> str:
             )
 
     return "\n".join([header, sep, *body])
+
+
+def enqueue_comparison(
+    db: Session, subfield_id: int, year: int, countries: list[str]
+) -> CountryComparison:
+    """비교 보고서를 pending으로 큐잉한다(실제 LLM 호출은 runner가 한다).
+
+    검증을 여기(큐잉 시점)서 하는 이유는 FieldReport와 같다 — 관리자가 즉시 404/409를
+    받게 하고, 큐잉해 놓고 나중에 조용히 failed되는 것을 피한다.
+
+    국가 목록은 정렬해 저장한다. 같은 조합을 다른 순서로 요청해도 같은 행을 재사용하기
+    위해서다 — 안 그러면 같은 비교가 순서만 바꿔 여러 행으로 쌓인다.
+
+    재생성이면 기존 report_md는 그대로 두고 status만 pending으로 되돌린다 —
+    처리가 끝나기 전까지 이전 보고서를 계속 보여주기 위해서다.
+    """
+    if db.get(Subfield, subfield_id) is None:
+        raise LookupError(f"세부기술 {subfield_id}를 찾을 수 없습니다.")
+
+    codes = sorted({c.strip().upper() for c in countries if c.strip()})
+    if len(codes) < 2:
+        raise ValueError("비교하려면 국가가 2개 이상이어야 합니다.")
+
+    # 여기서는 검증만 하고 결과는 버린다 — 처리 시점에 다시 읽는다(그 사이 바뀔 수 있다).
+    collect_country_analyses(db, subfield_id, year, codes)
+
+    key = ",".join(codes)
+    row = (
+        db.query(CountryComparison)
+        .filter(
+            CountryComparison.subfield_id == subfield_id,
+            CountryComparison.year == year,
+            CountryComparison.countries == key,
+        )
+        .one_or_none()
+    )
+    if row is None:
+        row = CountryComparison(
+            subfield_id=subfield_id, year=year, countries=key, generated_at=_utcnow()
+        )
+        db.add(row)
+    row.status = "pending"
+    row.error = None
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+async def process_comparison(db: Session, row: CountryComparison) -> None:
+    """pending 비교 보고서 하나를 실제로 생성한다. runner.loop이 호출한다.
+
+    큐잉 이후 분석이 지워졌을 수 있으므로 여기서 다시 검증한다 — 빈 입력으로 LLM을
+    부르면 없는 성과를 지어낸다(reduce_subfield의 no_data 가드와 같은 이유).
+
+    입력은 대조표 + 각국 **종합** 보고서다. sections_json(세부 보고서)은 넣지 않는다 —
+    5개국이면 약 725KB(약 18만 토큰)가 되고, 2단계에서 확인한 이중 압축을 비교 단계에서
+    반복한다(실측: CN 2025 세부 144,730자 vs 종합 4,813자). 대신 그 대가로 생기는
+    "논문 많은 국가의 보고서가 더 짧다"를 COMPARE_INSTRUCTION이 금지한다.
+    """
+    codes = row.countries.split(",")
+    pairs = collect_country_analyses(db, row.subfield_id, row.year, codes)
+    subfield = db.get(Subfield, row.subfield_id)
+    name = subfield.name if subfield else str(row.subfield_id)
+
+    table = build_comparison_table(
+        [(code, json.loads(a.stats_json or "{}")) for code, a in pairs]
+    )
+    bodies = "\n\n".join(
+        f"## {country_name(code)} 보고서\n{a.report_md}" for code, a in pairs
+    )
+    payload = (
+        f"[세부기술: {name} / {row.year}년 / 비교 국가: "
+        f"{', '.join(country_name(c) for c in codes)}]\n\n"
+        f"### 대조표(코드 집계 — 다시 계산하지 마세요)\n{table}\n\n{bodies}"
+    )
+
+    logger.info(
+        "[비교] %s %d년 %s — 보고서 %d건 합성", name, row.year, row.countries, len(pairs)
+    )
+    row.report_md = await gemini_sync.generate(
+        COMPARE_INSTRUCTION, payload, thinking=settings.thinking_reduce
+    )
+    row.generated_at = _utcnow()
+    row.source_count = len(pairs)
+    row.status = "done"
+    row.error = None
+    db.commit()

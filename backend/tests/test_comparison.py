@@ -195,3 +195,84 @@ def test_compare_instruction_forbids_recomputing_the_table():
     from app.prompts import COMPARE_INSTRUCTION
 
     assert "계산" in COMPARE_INSTRUCTION
+
+
+def test_enqueue_normalizes_country_order():
+    """국가 순서가 달라도 같은 행을 재사용한다 — 안 그러면 같은 비교가
+    순서만 바꿔 여러 행으로 쌓인다."""
+    db = _session()
+    sid = _seed(db, ("KR", "US"))
+
+    a = comparison.enqueue_comparison(db, sid, 2026, ["US", "KR"])
+    b = comparison.enqueue_comparison(db, sid, 2026, ["KR", "US"])
+    assert a.id == b.id
+    assert a.countries == "KR,US"
+
+
+def test_enqueue_rejects_single_country():
+    db = _session()
+    sid = _seed(db, ("KR",))
+
+    with pytest.raises(ValueError, match="2개"):
+        comparison.enqueue_comparison(db, sid, 2026, ["KR"])
+
+
+def test_enqueue_rejects_unknown_subfield():
+    db = _session()
+    _seed(db, ("KR", "US"))
+
+    with pytest.raises(LookupError):
+        comparison.enqueue_comparison(db, 999, 2026, ["KR", "US"])
+
+
+def test_enqueue_keeps_old_body_on_regenerate():
+    """재생성 큐잉은 status만 pending으로 되돌리고 본문은 남긴다 —
+    처리 완료 전까지 이전 보고서를 계속 보여주기 위해서다(FieldReport와 같음)."""
+    db = _session()
+    sid = _seed(db, ("KR", "US"))
+
+    row = comparison.enqueue_comparison(db, sid, 2026, ["KR", "US"])
+    row.report_md = "# 이전 보고서"
+    row.status = "done"
+    db.commit()
+
+    again = comparison.enqueue_comparison(db, sid, 2026, ["KR", "US"])
+    assert again.status == "pending"
+    assert again.report_md == "# 이전 보고서"
+
+
+async def test_process_sends_table_and_bodies_only(monkeypatch):
+    """LLM 입력에 대조표와 각국 종합 보고서가 들어가고, sections_json(세부 보고서)은
+    들어가지 않는다.
+
+    세부까지 넣으면 5개국에서 약 725KB(약 18만 토큰)가 되고, 2단계에서 확인한 이중
+    압축을 비교 단계에서 반복한다(실측: CN 2025 세부 144,730자 vs 종합 4,813자)."""
+    from app.services import comparison as comp
+
+    db = _session()
+    sid = _seed(db, ("KR", "US"))
+    # 세부 보고서가 있어도 입력에 새어들면 안 된다
+    a = db.query(Analysis).filter(Analysis.country == "KR").one()
+    a.sections_json = '[{"name": "성과유형 A", "body": "세부내용-누출감지용"}]'
+    db.commit()
+
+    captured = {}
+
+    async def fake_generate(system, user, *, thinking=None, **kw):
+        captured["system"] = system
+        captured["user"] = user
+        return "# 비교 보고서"
+
+    monkeypatch.setattr(comp.gemini_sync, "generate", fake_generate)
+
+    row = comp.enqueue_comparison(db, sid, 2026, ["KR", "US"])
+    await comp.process_comparison(db, row)
+
+    p = captured["user"]
+    assert "대조표" in p
+    assert "한국 보고서" in p and "미국 보고서" in p
+    assert "차세대 메모리반도체" in p and "2026" in p   # 무엇을 비교하는지 헤더로 고정
+    assert "세부내용-누출감지용" not in p               # sections_json이 새어들지 않았다
+    assert row.status == "done"
+    assert row.source_count == 2
+    assert row.report_md == "# 비교 보고서"
