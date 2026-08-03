@@ -19,7 +19,7 @@ from app.deps import require_admin
 from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import Field, FieldReport, Roadmap, RoadmapCheck, Subfield
 from app.models.schedule import AnalysisRun
-from app.services import budget, mapper, reducer, runner, search
+from app.services import budget, comparison, mapper, reducer, runner, search
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -525,3 +525,33 @@ def retry(analysis_id: int, db: Session = Depends(get_db)):
     analysis.search_attempts = 0   # 카운터를 리셋 안 하면 첫 재시도에서 즉시 다시 failed된다.
     db.commit()
     return {"ok": True, "id": analysis.id}
+
+
+@router.post("/subfields/{subfield_id}/comparison")
+def enqueue_comparison(
+    subfield_id: int, year: int, countries: str, db: Session = Depends(get_db)
+):
+    """국가 비교 보고서를 pending으로 큐잉한다. countries는 콤마 구분(예: KR,US,CN).
+
+    형식 오류·국가 2개 미만은 422, 세부기술 없음은 404, 분석이 없는 국가는 409.
+    국가 코드 형식을 여기서 막는 이유는 스케줄 countries와 같다 — 잘못 저장되면
+    존재하지 않는 국가로 조회가 돌아 조용히 404가 되고 원인을 찾기 어렵다.
+    """
+    codes = [c.strip().upper() for c in countries.split(",") if c.strip()]
+    if any(len(c) != 2 or not c.isalpha() for c in codes):
+        raise HTTPException(status_code=422, detail="국가 코드는 두 글자 알파벳이어야 합니다.")
+    try:
+        row = comparison.enqueue_comparison(db, subfield_id, year, codes)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        # 국가 2개 미만은 요청 형식 문제(422), 분석 부재는 상태 충돌(409)로 나눈다.
+        if "2개" in str(e):
+            raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e))
+    return {
+        "subfield_id": row.subfield_id,
+        "year": row.year,
+        "countries": row.countries.split(","),
+        "status": row.status,
+    }

@@ -1194,3 +1194,85 @@ def test_admin_schedule_rejects_malformed_country_list(client):
                    json={"enabled": True, "day": 10, "hour": 3, "years_back": 1,
                          "countries": "KR,USA"}, headers=h)
     assert r.status_code == 422
+
+
+def _seed_countries(db, countries=("KR", "US"), *, year=2026, subfield_id=1):
+    """비교 API 테스트용 — 지정 국가의 done 분석을 심는다.
+
+    country를 반드시 명시한다: SQLAlchemy의 default=는 INSERT 시점에만 적용돼
+    직접 만든 객체에는 안 들어간다.
+    """
+    for c in countries:
+        db.add(Analysis(subfield_id=subfield_id, year=year, country=c, status="done",
+                        query_hash="h", report_md=f"# {c} 보고서", stats_json={}))
+    db.commit()
+
+
+def test_enqueue_comparison_requires_two_countries(client):
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db)
+    db.close()
+
+    r = client.post("/api/admin/subfields/1/comparison",
+                    params={"year": 2026, "countries": "KR"},
+                    headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 422
+
+
+def test_enqueue_comparison_rejects_bad_country_code(client):
+    """잘못 저장되면 존재하지 않는 국가로 조회가 돌아 조용히 404가 된다."""
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db)
+    db.close()
+
+    r = client.post("/api/admin/subfields/1/comparison",
+                    params={"year": 2026, "countries": "KR,USA"},
+                    headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 422
+
+
+def test_enqueue_comparison_409_when_country_missing(client):
+    """분석이 없는 국가를 요청하면 409 — 큐잉 시점에 즉시 알려준다."""
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR",))
+    db.close()
+
+    r = client.post("/api/admin/subfields/1/comparison",
+                    params={"year": 2026, "countries": "KR,JP"},
+                    headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 409
+    assert "JP" in r.json()["detail"]
+
+
+def test_enqueue_comparison_404_for_unknown_subfield(client):
+    r = client.post("/api/admin/subfields/999/comparison",
+                    params={"year": 2026, "countries": "KR,US"},
+                    headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 404
+
+
+def test_get_comparison_404_before_generation(client):
+    r = client.get("/api/subfields/1/comparison",
+                   params={"year": 2026, "countries": "KR,US"})
+    assert r.status_code == 404
+
+
+def test_get_comparison_normalizes_country_order(client):
+    """조회도 국가 순서를 정규화해야 큐잉한 행을 찾는다."""
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db)
+    db.close()
+
+    client.post("/api/admin/subfields/1/comparison",
+                params={"year": 2026, "countries": "US,KR"},
+                headers={"X-Admin-Key": settings.admin_key})
+
+    r = client.get("/api/subfields/1/comparison",
+                   params={"year": 2026, "countries": "KR,US"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["countries"] == ["KR", "US"]
+    assert body["country_names"] == ["한국", "미국"]
+    # pending도 그대로 내려준다 — 화면이 status로 폴링을 판단한다
+    assert body["status"] == "pending"
+    assert body["subfield_name"] == "양자컴퓨팅"
