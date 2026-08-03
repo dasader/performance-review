@@ -266,6 +266,7 @@ function ReportBody({ data }: { data: Analysis }) {
               <MetricTable
                 rows={data.stats.top_metrics ?? []}
                 unique={data.stats.metrics_unique ?? 0}
+                analysisId={data.id}
               />
             </>
           )}
