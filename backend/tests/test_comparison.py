@@ -2,11 +2,13 @@
 
 from datetime import datetime
 
+import pytest
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import CountryComparison
+from app.models import Analysis, CountryComparison, Field, Subfield
 from app.services import comparison
 
 
@@ -107,3 +109,63 @@ def test_comparison_table_labels_the_base_of_each_group():
 
     assert "귀속" in table and "수집 기준" in table
     assert "성과유형" in table and "분석 기준" in table
+
+
+def _seed(db, countries=("KR",), *, year=2026, report="# 보고서", stats=None):
+    """세부기술 1개 + 지정 국가의 done 분석을 심는다.
+
+    country를 반드시 명시하는 이유: SQLAlchemy의 default=는 INSERT 시점에만 적용돼
+    직접 만든 객체에는 안 들어간다(4단계에서 헤더가 'None'으로 나온 원인).
+    """
+    import json as _json
+
+    f = Field(name="반도체·디스플레이", slug="semi", order_no=1)
+    db.add(f)
+    db.flush()
+    sf = Subfield(field_id=f.id, name="차세대 메모리반도체", query="memory", query_kci=None)
+    db.add(sf)
+    db.flush()
+    for c in countries:
+        db.add(
+            Analysis(
+                subfield_id=sf.id,
+                year=year,
+                country=c,
+                status="done",
+                query_hash="h",
+                report_md=report,
+                stats_json=_json.dumps(stats or _stats()),
+            )
+        )
+    db.commit()
+    return sf.id
+
+
+def test_collect_requires_every_requested_country():
+    """요청한 국가 중 하나라도 done 분석이 없으면 ValueError —
+    일부만으로 만들면 '그 국가는 성과가 없다'로 오독된다."""
+    db = _session()
+    sid = _seed(db, ("KR",))
+
+    with pytest.raises(ValueError, match="US"):
+        comparison.collect_country_analyses(db, sid, 2026, ["KR", "US"])
+
+
+def test_collect_returns_requested_order():
+    db = _session()
+    sid = _seed(db, ("KR", "US"))
+
+    pairs = comparison.collect_country_analyses(db, sid, 2026, ["US", "KR"])
+    assert [c for c, _ in pairs] == ["US", "KR"]
+
+
+def test_collect_skips_empty_report():
+    """본문이 빈 분석(논문 0건)은 없는 것으로 친다 — 합성에 넣어봐야
+    모델이 근거 없이 채워 넣을 여지만 준다(rollup_field와 같은 이유)."""
+    db = _session()
+    sid = _seed(db, ("KR", "US"))
+    db.query(Analysis).filter(Analysis.country == "US").one().report_md = ""
+    db.commit()
+
+    with pytest.raises(ValueError, match="US"):
+        comparison.collect_country_analyses(db, sid, 2026, ["KR", "US"])

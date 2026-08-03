@@ -12,9 +12,38 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy.orm import Session
+
+from app.models import Analysis
 from app.prompts import country_name
 
 logger = logging.getLogger(__name__)
+
+
+def collect_country_analyses(
+    db: Session, subfield_id: int, year: int, countries: list[str]
+) -> list[tuple[str, Analysis]]:
+    """요청된 국가의 done 분석을 요청 순서대로 돌려준다.
+
+    하나라도 없으면 ValueError(→409). 일부 국가만으로 비교 보고서를 만들면 "그 국가는
+    성과가 없다"로 오독되므로 부분 생성을 아예 막는다.
+    """
+    found = {
+        a.country: a
+        for a in db.query(Analysis).filter(
+            Analysis.subfield_id == subfield_id,
+            Analysis.year == year,
+            Analysis.country.in_(countries),
+            Analysis.status == "done",
+        )
+        # 본문이 빈 분석(논문 0건)은 없는 것으로 친다 — 합성에 넣어봐야 모델이 근거
+        # 없이 채워 넣을 여지만 준다(rollup_field의 빈 보고서 제외와 같은 이유).
+        if a.report_md
+    }
+    missing = [c for c in countries if c not in found]
+    if missing:
+        raise ValueError(f"{year}년 완성된 분석이 없는 국가: {', '.join(missing)}")
+    return [(c, found[c]) for c in countries]
 
 
 def _pct(part: int, whole: int) -> str:
