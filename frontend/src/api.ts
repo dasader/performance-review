@@ -462,3 +462,24 @@ export function enqueueComparison(
     adminKey,
   );
 }
+
+// 지표 표의 한 행 뒤에 있는 논문 목록(§10-1). 이상값을 기계적으로 거를 수 없어
+// — 같은 지표명 아래 다른 물리량이 섞인다 — 지우는 대신 확인 가능하게 만든 것이다.
+export interface MetricPaper {
+  value: number;
+  raw: string | null;
+  // 측정 대상. "97.3%가 왜 여기 있지"의 답이 대개 여기 있다(예: "쿡 컨버터").
+  target: string | null;
+  label: string;
+  title: string | null;
+  journal: string | null;
+  year: number | null;
+  doi: string | null;
+}
+
+export function getMetricPapers(analysisId: number, name: string, unit: string) {
+  const q = new URLSearchParams({ name, unit });
+  return get<{ name: string; unit: string; count: number; rows: MetricPaper[] }>(
+    `/analyses/${analysisId}/metrics?${q}`,
+  );
+}
