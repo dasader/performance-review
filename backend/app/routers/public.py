@@ -53,6 +53,16 @@ _FOOTNOTE_ONLY_BULLETS_RE = re.compile(
 # 제목들) 기준의 여유 있는 하한선이다 — 과학적으로 도출된 값은 아니다.
 _MIN_PARTIAL_TITLE_LEN = 15
 
+# LLM이 긴 제목을 "..."로 잘라 인용하는 경우 — 실측(차세대 메모리반도체 KR 2025 재실행
+# 후): 서술부 인용 10건 중 8건이 잘린 형태라 각주가 36개에서 4개로 줄었다. 매칭은
+# "DB 제목이 인용문에 포함되는가"를 보는데 잘린 인용은 반대(인용문이 제목의 앞부분)라
+# 걸리지 않는다. 말줄임 표시를 떼고 접두사로 한 번 더 본다.
+#
+# 접두사 매칭은 부분 매칭보다 오탐 위험이 크다(제목 앞부분은 분야 상용구가 겹치기 쉽다
+# — "Enhanced Performance of..."). 그래서 하한을 부분 매칭(15)보다 높게 잡는다.
+_TRUNCATION_RE = re.compile(r"(?:\.\.\.|…)\s*$")
+_MIN_TRUNCATED_PREFIX_LEN = 30
+
 
 def _footnote_key(s: str) -> str:
     """각주 매칭용 비교 키: strip_html로 태그를 벗긴 뒤 공백을 전부 제거하고 소문자화한다.
@@ -104,13 +114,22 @@ def _apply_footnotes(report_md: str | None, papers: Sequence[Any]) -> tuple[str 
         # group(1)=괄호 인용, group(2)=백틱 인용. 둘 중 매칭된 쪽을 쓴다.
         content = m.group(1) if m.group(1) is not None else m.group(2)
         content_key = _footnote_key(content)
+        # 말줄임으로 잘린 인용인가. 그렇다면 접두사 매칭도 허용한다.
+        truncated = bool(_TRUNCATION_RE.search(content.strip()))
+        prefix_key = _footnote_key(_TRUNCATION_RE.sub("", content.strip()))
         matched: Any | None = None
         for paper, key in candidates:
             if len(key) < _MIN_PARTIAL_TITLE_LEN:
                 if content_key != key:
                     continue
             elif key not in content_key:
-                continue
+                # 잘린 인용은 방향이 반대다 — 인용문이 제목의 앞부분이다.
+                if not (
+                    truncated
+                    and len(prefix_key) >= _MIN_TRUNCATED_PREFIX_LEN
+                    and key.startswith(prefix_key)
+                ):
+                    continue
             matched = paper
             break
         if matched is None:

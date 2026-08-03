@@ -1276,3 +1276,55 @@ def test_get_comparison_normalizes_country_order(client):
     # pending도 그대로 내려준다 — 화면이 status로 폴링을 판단한다
     assert body["status"] == "pending"
     assert body["subfield_name"] == "양자컴퓨팅"
+
+
+def test_footnote_matches_title_truncated_with_ellipsis(client):
+    """LLM이 긴 제목을 '...'로 잘라 인용하면 각주로 안 바뀌어 제목이 노출된다.
+
+    실측(차세대 메모리반도체 KR 2025 재실행 후): 서술부 인용 10건 중 8건이 잘린
+    형태라 각주가 36개에서 4개로 줄었다. 매처는 "DB 제목이 인용문에 포함되는가"를
+    보는데 잘린 인용은 반대(인용문이 제목의 앞부분)라 걸리지 않았다.
+    """
+    db = app.dependency_overrides[get_db]()
+    long_title = (
+        "Enhanced Device Characteristics of Hybrid Channel Poly-Si IGO Structures "
+        "with Interlayers by Suppressing Oxidation Induced Variability"
+    )
+    a = Analysis(subfield_id=1, year=2026, status="done", query_hash="h", stats_json={},
+                 report_md=f"성과가 보고되었다 ({long_title[:60]}...).")
+    db.add(a)
+    db.flush()
+    p = Paper(paper_key="pk-trunc", title=long_title, journal="Nature",
+              year=2025, doi="10.1/trunc", source="openalex")
+    db.add(p)
+    db.flush()
+    db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
+    db.commit()
+    aid = a.id
+    db.close()
+
+    r = client.get(f"/api/analyses/{aid}").json()
+    assert "(#ref-1)" in r["report_md"]
+    assert long_title[:60] not in r["report_md"]   # 제목이 노출되지 않는다
+    assert len(r["references"]) == 1
+
+
+def test_footnote_ignores_too_short_truncated_citation(client):
+    """짧게 잘린 인용은 우연히 다른 논문의 앞부분과 겹칠 수 있어 치환하지 않는다."""
+    db = app.dependency_overrides[get_db]()
+    a = Analysis(subfield_id=1, year=2027, status="done", query_hash="h", stats_json={},
+                 report_md="성과가 보고되었다 (Deep...).")
+    db.add(a)
+    db.flush()
+    p = Paper(paper_key="pk-short", title="Deep Learning for Memory Devices",
+              journal="Nature", year=2025, doi="10.1/short", source="openalex")
+    db.add(p)
+    db.flush()
+    db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
+    db.commit()
+    aid = a.id
+    db.close()
+
+    r = client.get(f"/api/analyses/{aid}").json()
+    assert "(Deep...)" in r["report_md"]   # 원문 그대로 둔다
+    assert r["references"] == []
