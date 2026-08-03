@@ -110,14 +110,11 @@ def _apply_footnotes(report_md: str | None, papers: Sequence[Any]) -> tuple[str 
     numbers: dict[int, int] = {}  # paper.id -> 각주 번호
     references: list[dict] = []
 
-    def repl(m: re.Match) -> str:
-        # group(1)=괄호 인용, group(2)=백틱 인용. 둘 중 매칭된 쪽을 쓴다.
-        content = m.group(1) if m.group(1) is not None else m.group(2)
-        content_key = _footnote_key(content)
-        # 말줄임으로 잘린 인용인가. 그렇다면 접두사 매칭도 허용한다.
-        truncated = bool(_TRUNCATION_RE.search(content.strip()))
-        prefix_key = _footnote_key(_TRUNCATION_RE.sub("", content.strip()))
-        matched: Any | None = None
+    def _lookup(text: str) -> Any | None:
+        """인용 텍스트 하나에 대응하는 논문을 찾는다. 못 찾으면 None."""
+        content_key = _footnote_key(text)
+        truncated = bool(_TRUNCATION_RE.search(text.strip()))
+        prefix_key = _footnote_key(_TRUNCATION_RE.sub("", text.strip()))
         for paper, key in candidates:
             if len(key) < _MIN_PARTIAL_TITLE_LEN:
                 if content_key != key:
@@ -130,21 +127,44 @@ def _apply_footnotes(report_md: str | None, papers: Sequence[Any]) -> tuple[str 
                     and key.startswith(prefix_key)
                 ):
                     continue
-            matched = paper
-            break
-        if matched is None:
-            return m.group(0)
-        n = numbers.get(matched.id)
+            return paper
+        return None
+
+    def _number(paper: Any) -> int:
+        n = numbers.get(paper.id)
         if n is None:
             n = len(references) + 1
-            numbers[matched.id] = n
+            numbers[paper.id] = n
             references.append({
                 "n": n,
-                "title": matched.title,
-                "journal": matched.journal,
-                "year": matched.year,
-                "doi": matched.doi,
+                "title": paper.title,
+                "journal": paper.journal,
+                "year": paper.year,
+                "doi": paper.doi,
             })
+        return n
+
+    def repl(m: re.Match) -> str:
+        # group(1)=괄호 인용, group(2)=백틱 인용. 둘 중 매칭된 쪽을 쓴다.
+        content = m.group(1) if m.group(1) is not None else m.group(2)
+
+        # 한 괄호에 ";"로 여러 논문을 나열한 인용 — 실측(차세대 메모리반도체 KR 2025):
+        # 잘림 매칭을 고친 뒤 남은 미치환 8건 중 5건이 이 형태였다. 전체를 하나의 제목으로
+        # 보면 어느 쪽과도 안 맞는다.
+        #
+        # 하나라도 못 찾으면 통째로 원문을 둔다. 부분 매칭만으로 괄호 전체를 치환하면
+        # 매칭 안 된 쪽 텍스트가 조용히 사라진다(이 방어가 없을 때 실제로 그랬다).
+        if ";" in content:
+            parts = [x.strip() for x in content.split(";") if x.strip()]
+            found = [_lookup(x) for x in parts]
+            if len(parts) > 1 and all(f is not None for f in found):
+                return "".join(f"[\\[{_number(f)}\\]](#ref-{_number(f)})" for f in found)
+            return m.group(0)
+
+        matched = _lookup(content)
+        if matched is None:
+            return m.group(0)
+        n = _number(matched)
         return f"[\\[{n}\\]](#ref-{n})"
 
     substituted = _CITE_RE.sub(repl, report_md)
