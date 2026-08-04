@@ -140,20 +140,35 @@ def build_comparison_table(rows: list[tuple[str, dict]]) -> str:
 _FIRST_SECTION_RE = re.compile(r"^##\s*1\..*$", re.M)
 
 
-def _with_table(report_md: str, table: str) -> str:
-    """코드가 만든 대조표를 1절 제목 바로 뒤에 끼워 넣는다.
+# 모델이 직접 그린 대조표. 머리행이 "| 항목 |"으로 시작하는 표 블록을 통째로 잡는다 —
+# build_comparison_table이 만드는 표의 서명이라, 모델이 베낀 것도 같은 머리행을 쓴다.
+# 다른 표(예: "| 연도 | 건수 |")는 걸리지 않는다.
+# "| 항목 |" 머리행으로 시작해 | 로 시작하는 줄이 이어지는 동안까지가 한 표다.
+# re.S를 쓰지 않는다 — 쓰면 .* 가 줄바꿈을 넘어 뒤 서술까지 먹는다(실측).
+_DRAWN_TABLE_RE = re.compile(r"^\|[ \t]*항목[ \t]*\|[^\n]*\n(?:\|[^\n]*\n?)*", re.M)
 
-    모델에게 베끼게 하지 않는 이유 — 실측으로 두 번 실패했다: 처음엔 형식을 바꿔
-    실어 그룹 제목·계층 기호가 사라졌고, 프롬프트를 고치자 이번엔 표를 통째로 빼고
-    서술만 했다. 코드가 이미 갖고 있는 것을 모델에게 왕복시킬 이유가 없다.
+
+def _with_table(report_md: str, table: str) -> str:
+    """코드가 만든 대조표를 1절 제목 바로 뒤에 끼워 넣고, 모델이 직접 그린 표는 걷어낸다.
+
+    모델에게 표를 맡기지 않는 이유 — 실측으로 **세 번** 실패했다: ① 형식을 바꿔 실어
+    그룹 제목·계층 기호가 사라졌고, ② 프롬프트를 고치자 표를 통째로 빼고 서술만 했고,
+    ③ 삽입을 코드로 옮긴 뒤에는 프롬프트의 "표를 그리지 마세요"를 어기고 자기 표를
+    그려 4개국 쌍별 3건 중 2건에서 표가 두 번 나왔다(사용자 신고).
+
+    프롬프트로 부탁하는 것을 그만두고 코드가 지운다. 지우는 대상은 "| 항목 |"으로
+    시작하는 표뿐이라 다른 표는 남는다.
 
     제목을 못 찾으면 맨 앞에 붙인다 — 표가 사라지는 경우는 없어야 한다.
     """
+    cleaned = _DRAWN_TABLE_RE.sub("", report_md or "")
+    # 표를 걷어내면 빈 줄이 세 겹으로 남는다 — 두 겹으로 접는다.
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
     block = f"\n\n{table}\n"
-    m = _FIRST_SECTION_RE.search(report_md or "")
+    m = _FIRST_SECTION_RE.search(cleaned)
     if m is None:
-        return f"{table}\n\n{report_md or ''}"
-    return report_md[: m.end()] + block + report_md[m.end():]
+        return f"{table}\n\n{cleaned}"
+    return cleaned[: m.end()] + block + cleaned[m.end():]
 
 
 def compare_instruction(rows: list[tuple[str, dict]]) -> str:
