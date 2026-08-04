@@ -354,6 +354,14 @@ def field_summary(field_id: int, year: int, db: Session = Depends(get_db)):
             Analysis.subfield_id.in_([s.id for s in subfields]), Analysis.year == year
         )
     }
+    # 국가 목록은 세부기술마다 질의하면 55번 나간다 — 한 번에 모아 읽어 붙인다.
+    countries_by_subfield: dict[int, list[str]] = {}
+    for row in db.query(Analysis.subfield_id, Analysis.country).filter(
+        Analysis.subfield_id.in_([s.id for s in subfields]),
+        Analysis.year == year,
+        Analysis.status == "done",
+    ):
+        countries_by_subfield.setdefault(row.subfield_id, []).append(row.country)
 
     rows = []
     total_searched = total_analyzed = 0
@@ -371,6 +379,7 @@ def field_summary(field_id: int, year: int, db: Session = Depends(get_db)):
             "status_label": STEP_LABELS.get(a.status, a.status) if a else "미실행",
             "searched_count": searched,
             "analyzed_count": analyzed,
+            "countries": sorted(countries_by_subfield.get(s.id, [])),
         })
 
     return {
@@ -570,7 +579,42 @@ def get_comparison(
         "report_md": row.report_md,
         "source_count": row.source_count,
         "generated_at": row.generated_at.isoformat() if row.generated_at else None,
+        "sections": row.sections_json,
     }
+
+
+@router.get("/subfields/{subfield_id}/availability")
+def subfield_availability(subfield_id: int, year: int, db: Session = Depends(get_db)):
+    """이 세부기술·연도에 완성된 국가 분석과 비교 보고서 목록.
+
+    화면의 국가 줄이 이것만 보고 링크를 만든다. **미보유는 아예 내려주지 않는다** —
+    공개 화면 방문자에게 "아직 안 돌렸다"는 운영 사정을 보일 이유가 없다(그 정보가
+    필요한 사람은 관리자이고, 관리자 격자가 전부 보여준다).
+    """
+    countries = sorted(
+        a.country
+        for a in db.query(Analysis.country).filter(
+            Analysis.subfield_id == subfield_id,
+            Analysis.year == year,
+            Analysis.status == "done",
+        )
+    )
+    comparisons = []
+    for c in (
+        db.query(CountryComparison)
+        .filter(
+            CountryComparison.subfield_id == subfield_id,
+            CountryComparison.year == year,
+            CountryComparison.status == "done",
+        )
+        .order_by(CountryComparison.countries)
+    ):
+        codes = c.countries.split(",")
+        comparisons.append({
+            "countries": codes,
+            "label": " vs ".join(country_name(x) for x in codes),
+        })
+    return {"countries": countries, "comparisons": comparisons}
 
 
 @router.get("/analyses/{analysis_id}/metrics")

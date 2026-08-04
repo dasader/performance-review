@@ -12,7 +12,7 @@ from app.database import Base, get_db
 from app.main import app
 from app.models.analysis import Analysis, AnalysisPaper
 from app.models.budget import OpenAlexUsage
-from app.models.field import Field, Subfield
+from app.models.field import CountryComparison, Field, Subfield
 from app.models.paper import Paper, PaperExtraction
 from app.models.schedule import AnalysisRun
 from app.routers import admin as admin_module
@@ -1276,6 +1276,57 @@ def test_get_comparison_normalizes_country_order(client):
     # pending도 그대로 내려준다 — 화면이 status로 폴링을 판단한다
     assert body["status"] == "pending"
     assert body["subfield_name"] == "양자컴퓨팅"
+
+
+def test_get_comparison_carries_pairwise_sections(client):
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR", "CN"), year=2026)
+    db.add(CountryComparison(subfield_id=1, year=2026, countries="CN,KR",
+                             status="done", report_md="x",
+                             sections_json=[{"name": "한국 vs 중국", "body": "본문"}],
+                             generated_at=datetime(2026, 8, 4)))
+    db.commit()
+    db.close()
+
+    got = client.get("/api/subfields/1/comparison",
+                     params={"year": 2026, "countries": "KR,CN"}).json()
+    assert got["sections"][0]["name"] == "한국 vs 중국"
+
+
+def test_availability_lists_only_done_countries(client):
+    """미보유 국가는 아예 내려주지 않는다 — 화면이 숨김으로 처리하기 위해서다."""
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR", "CN"), year=2026)
+    db.add(Analysis(subfield_id=1, year=2026, country="US", status="searching",
+                    query_hash="h", stats_json={}))
+    db.commit()
+    db.close()
+
+    r = client.get("/api/subfields/1/availability", params={"year": 2026})
+    assert r.status_code == 200
+    assert r.json()["countries"] == ["CN", "KR"]      # US는 done이 아니라 빠진다
+
+
+def test_availability_lists_done_comparisons(client):
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR", "CN"), year=2026)
+    db.add(CountryComparison(subfield_id=1, year=2026, countries="CN,KR",
+                             status="done", report_md="x",
+                             generated_at=datetime(2026, 8, 4)))
+    db.commit()
+    db.close()
+
+    got = client.get("/api/subfields/1/availability", params={"year": 2026}).json()
+    assert got["comparisons"] == [{"countries": ["CN", "KR"], "label": "중국 vs 한국"}]
+
+
+def test_field_summary_rows_carry_countries(client):
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR", "CN"), year=2026)
+    db.close()
+
+    rows = client.get("/api/fields/1/summary", params={"year": 2026}).json()["subfields"]
+    assert rows[0]["countries"] == ["CN", "KR"]
 
 
 def test_footnote_matches_title_truncated_with_ellipsis(client):
