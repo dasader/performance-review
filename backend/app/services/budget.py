@@ -1,8 +1,9 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.services import _time
 from app.config import settings
 from app.models.budget import OpenAlexUsage
 
@@ -11,8 +12,6 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
-def _today() -> date:
-    return datetime.now(timezone.utc).date()
 
 
 def reset_time_utc() -> datetime:
@@ -22,10 +21,10 @@ def reset_time_utc() -> datetime:
 
 
 def _row(db: Session) -> OpenAlexUsage:
-    row = db.query(OpenAlexUsage).filter(OpenAlexUsage.usage_date == _today()).first()
+    row = db.query(OpenAlexUsage).filter(OpenAlexUsage.usage_date == _time.today()).first()
     if row:
         return row
-    row = OpenAlexUsage(usage_date=_today(), cost_usd=0.0)
+    row = OpenAlexUsage(usage_date=_time.today(), cost_usd=0.0)
     db.add(row)
     try:
         # flush가 아니라 commit이다 — 빈 행 INSERT의 usage_date 유니크 락을 즉시 놓기
@@ -40,7 +39,7 @@ def _row(db: Session) -> OpenAlexUsage:
         # 다른 세션이 같은 usage_date 행을 먼저 커밋한 경우(동시 첫 요청).
         # 롤백 후 재조회하면 그 행을 찾을 수 있다.
         db.rollback()
-        row = db.query(OpenAlexUsage).filter(OpenAlexUsage.usage_date == _today()).first()
+        row = db.query(OpenAlexUsage).filter(OpenAlexUsage.usage_date == _time.today()).first()
         if row is None:
             raise
     return row

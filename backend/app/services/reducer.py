@@ -1,10 +1,10 @@
 import logging
 import re
 from collections import defaultdict
-from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.services import _time
 from app.clients import gemini_sync
 from app.config import settings
 from app.models.analysis import Analysis
@@ -20,9 +20,6 @@ from app.prompts import (
 logger = logging.getLogger(__name__)
 
 
-def _utcnow() -> datetime:
-    """DB의 naive DateTime 컬럼에 맞춘 현재 UTC 시각(tzinfo 제거)."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def format_extractions(
@@ -199,7 +196,7 @@ def enqueue_field_report(db: Session, field_id: int, year: int) -> FieldReport:
         .one_or_none()
     )
     if row is None:
-        row = FieldReport(field_id=field_id, year=year, generated_at=_utcnow())
+        row = FieldReport(field_id=field_id, year=year, generated_at=_time.utcnow())
         db.add(row)
     row.status = "pending"
     row.error = None
@@ -222,7 +219,7 @@ async def process_field_report(db: Session, row: FieldReport) -> None:
 
     logger.info("[rollup] %s %d년 — 세부기술 보고서 %d건 합성", field.name, row.year, len(reports))
     row.report_md = await rollup_field(field.name, reports)
-    row.generated_at = _utcnow()
+    row.generated_at = _time.utcnow()
     row.source_count = len(reports)
     row.status = "done"
     row.error = None
@@ -282,7 +279,7 @@ def enqueue_roadmap_check(db: Session, field_id: int, year: int) -> RoadmapCheck
         .one_or_none()
     )
     if row is None:
-        row = RoadmapCheck(field_id=field_id, year=year, generated_at=_utcnow())
+        row = RoadmapCheck(field_id=field_id, year=year, generated_at=_time.utcnow())
         db.add(row)
     row.status = "pending"
     row.error = None
@@ -333,7 +330,7 @@ async def process_roadmap_check(db: Session, row: RoadmapCheck) -> None:
         )
 
     row.report_md = report_md
-    row.generated_at = _utcnow()
+    row.generated_at = _time.utcnow()
     row.source_count = len(reports)
     row.goal_count = goal_count
     row.checked_count = checked_count

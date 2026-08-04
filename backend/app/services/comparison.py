@@ -11,10 +11,10 @@ reducer.py에 넣지 않은 이유: reducer는 이미 세부기술 reduce·분�
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.services import _time
 from app.clients import gemini_sync
 from app.config import settings
 from app.models import Analysis, CountryComparison, Subfield
@@ -23,9 +23,6 @@ from app.prompts import COMPARE_INSTRUCTION, country_name
 logger = logging.getLogger(__name__)
 
 
-def _utcnow() -> datetime:
-    """DB의 naive DateTime 컬럼에 맞춘 현재 UTC 시각(reducer._utcnow와 같다)."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def collect_country_analyses(
@@ -154,7 +151,7 @@ def enqueue_comparison(
     )
     if row is None:
         row = CountryComparison(
-            subfield_id=subfield_id, year=year, countries=key, generated_at=_utcnow()
+            subfield_id=subfield_id, year=year, countries=key, generated_at=_time.utcnow()
         )
         db.add(row)
     row.status = "pending"
@@ -198,7 +195,7 @@ async def process_comparison(db: Session, row: CountryComparison) -> None:
     row.report_md = await gemini_sync.generate(
         COMPARE_INSTRUCTION, payload, thinking=settings.thinking_reduce
     )
-    row.generated_at = _utcnow()
+    row.generated_at = _time.utcnow()
     row.source_count = len(pairs)
     row.status = "done"
     row.error = None
