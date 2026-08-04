@@ -4,8 +4,9 @@ import { ApiError, enqueueComparison, get, type AdminSubfield } from "../api";
 // 국가 비교 보고서 생성. FieldReportsPanel과 같은 규약 — 생성은 큐잉이고
 // 실제 LLM 호출은 잡 루프가 한 틱에 하나씩 처리한다.
 //
-// 일괄 실행(run-all 상당)은 두지 않았다: 어떤 국가 조합을 일괄로 돌릴지가
-// 아직 불분명하다. 개별 큐잉으로 몇 건 만들어 본 뒤 정한다.
+// 일괄 실행은 여기 두지 않는다 — "국가 현황" 탭의 ComparisonGrid가 그 역할을
+// 한다(설정된 국가 전체를 pairs|all로 일괄 큐잉). 여기는 임의 조합을 만드는
+// 유일한 통로로 남는다.
 export default function ComparisonPanel({
   adminKey,
   onUnauthorized,

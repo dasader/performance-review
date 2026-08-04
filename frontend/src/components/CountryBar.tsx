@@ -24,7 +24,9 @@ export default function CountryBar({
   if (countries.length < 2 && comparisons.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 print:hidden">
+    // 여백은 이 컴포넌트가 스스로 진다 — Report.tsx가 바깥에서 mt-4를 감싸면
+    // null을 반환하는 흔한 단일 국가 경우에도 빈 줄이 16px 남는다(리뷰 지적).
+    <div className="mt-4 flex flex-wrap items-center gap-2 print:hidden">
       {countries.map((c) => (
         <Link
           key={c}

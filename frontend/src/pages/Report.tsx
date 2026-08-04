@@ -98,6 +98,9 @@ export default function Report() {
   }, [analysisId, subfieldId, year, country]);
 
   useEffect(() => {
+    // 세부기술을 옮기면(A→B) 이전 국가 줄이 한 프레임 남아 B의 보고서 위에
+    // A의 국가·비교 목록이 잘못 뜬다(리뷰 지적) — 요청 전에 먼저 비운다.
+    setAvail(null);
     if (!data) return;
     getAvailability(data.subfield_id, data.year)
       .then(setAvail)
@@ -221,15 +224,13 @@ function ReportBody({ data, avail }: { data: Analysis; avail: Availability | nul
       </div>
 
       {avail && (
-        <div className="mt-4">
-          <CountryBar
-            subfieldId={data.subfield_id}
-            year={data.year}
-            current={data.country}
-            countries={avail.countries}
-            comparisons={avail.comparisons}
-          />
-        </div>
+        <CountryBar
+          subfieldId={data.subfield_id}
+          year={data.year}
+          current={data.country}
+          countries={avail.countries}
+          comparisons={avail.comparisons}
+        />
       )}
 
       <header className="mb-6" style={{ animation: "fadeUp 0.3s ease-out both" }}>

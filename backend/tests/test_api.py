@@ -927,6 +927,24 @@ def test_fields_reports_current_year_progress(client):
     assert row["current_year_done"] == 1
 
 
+def test_fields_current_year_done_does_not_double_count_other_countries(client):
+    """국가 필터가 없으면 같은 세부기술의 KR·US 분석이 둘 다 세어져 분자(done)가
+    분모(활성 세부기술 수)를 넘어설 수 있다(리뷰 지적)."""
+    from datetime import datetime, timezone
+
+    year = datetime.now(timezone.utc).year
+    db = app.dependency_overrides[get_db]()
+    for country in ("KR", "US"):
+        db.add(Analysis(subfield_id=1, year=year, country=country, status="done",
+                        query_hash="h", report_md="본문", stats_json={}))
+    db.commit()
+    db.close()
+
+    row = next(f for f in client.get("/api/fields").json() if f["id"] == 1)
+    # 활성 세부기술은 픽스처의 "양자컴퓨팅" 1개뿐이므로 분자도 1을 넘을 수 없다.
+    assert row["current_year_done"] == 1
+
+
 # ── 분야 보고서 큐잉·일괄 실행 ──
 
 def test_field_report_failure_marks_failed_not_crash_loop(client, monkeypatch):
@@ -1362,6 +1380,40 @@ def test_field_summary_rows_carry_countries(client):
 
     rows = client.get("/api/fields/1/summary", params={"year": 2026}).json()["subfields"]
     assert rows[0]["countries"] == ["CN", "KR"]
+
+
+def test_field_summary_reports_korea_numbers_not_other_country(client):
+    """국가별로 분석이 여러 건이면 {subfield_id: analysis} 맵이 국가 무관 "아무 분석"을
+    골라, 상태·건수가 다른 나라 것인데 행의 링크(analysis_id 무관, subfield_id 기준)는
+    한국 보고서를 여는 어긋남이 생긴다(리뷰 지적). KR과 건수가 다른 US 분석을 함께
+    심어 KR 쪽 숫자만 나오는지 고정한다."""
+    db = app.dependency_overrides[get_db]()
+    db.add(Analysis(subfield_id=1, year=2026, country="KR", status="done", query_hash="h",
+                    report_md="# KR", stats_json={}, searched_count=10, analyzed_count=8))
+    db.add(Analysis(subfield_id=1, year=2026, country="US", status="failed", query_hash="h",
+                    report_md="", stats_json={}, searched_count=999, analyzed_count=777))
+    db.commit()
+    db.close()
+
+    rows = client.get("/api/fields/1/summary", params={"year": 2026}).json()["subfields"]
+    row = next(r for r in rows if r["subfield_id"] == 1)
+    assert row["status"] == "done"
+    assert row["searched_count"] == 10
+    assert row["analyzed_count"] == 8
+
+
+def test_field_years_counts_subfield_once_across_countries(client):
+    """국가 필터가 없으면 세부기술 하나가 국가 수만큼 중복 집계된다(리뷰 지적:
+    6개 세부기술 × 2개국이 "(12/24)"로 뜸). KR·US 두 국가를 심어도 세부기술 1개는
+    1로만 세어져야 한다."""
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR", "US"), year=2026)
+    db.close()
+
+    years = client.get("/api/fields/1/years").json()
+    row = next(y for y in years if y["year"] == 2026)
+    assert row["subfield_count"] == 1
+    assert row["done_count"] == 1
 
 
 def test_footnote_matches_title_truncated_with_ellipsis(client):

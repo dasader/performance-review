@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  ACTIVE_STATUSES,
   ApiError,
   getComparisonGrid,
   runAllComparisons,
@@ -88,13 +89,54 @@ export default function ComparisonGrid({
 
   useEffect(load, [load]);
 
+  // 일괄 실행(최대 1년치 55분) 뒤 화면이 굳어 있지 않도록, 뭔가 진행 중이면
+  // FieldReportsPanel과 같은 규약(5초 폴링)으로 다시 읽는다.
+  const hasPending =
+    rows?.some(
+      (r) =>
+        Object.values(r.analyses).some((s) => ACTIVE_STATUSES.has(s)) ||
+        Object.values(r.comparisons).some((s) => s === "pending"),
+    ) ?? false;
+  useEffect(() => {
+    if (!hasPending) return;
+    const timer = setInterval(load, 5000);
+    return () => clearInterval(timer);
+  }, [hasPending, load]);
+
+  // 열은 설정된 국가만으로 만들면 설정에 없는 국가의 기존 분석·비교가 화면에서
+  // 사라진다(리뷰 지적 — 예: 설정은 KR뿐인데 CN 분석·KR-CN 비교가 이미 있는 경우).
+  // 설정된 국가 + 행에 실제로 존재하는 국가(분석 키·비교 키를 콤마로 쪼갠 것)의
+  // 합집합으로 열을 만들되, 설정된 국가를 앞에 두어 운영자가 의도한 집합이 먼저
+  // 보이게 한다. 일괄 생성 버튼은 이 합집합이 아니라 설정된 국가만 대상으로 한다
+  // (아래 runAll — 백엔드가 큐잉 시 스케줄 설정을 다시 읽으므로 버튼은 그 집합과만
+  // 일치해야 혼란이 없다).
+  const present = new Set<string>();
+  for (const row of rows ?? []) {
+    for (const c of Object.keys(row.analyses)) present.add(c);
+    for (const combo of Object.keys(row.comparisons)) {
+      for (const c of combo.split(",")) present.add(c);
+    }
+  }
+  const extraCountries = [...present].filter((c) => !countries.includes(c)).sort();
+  const allCountries = [...countries, ...extraCountries];
+
   // 기준국 — 비교의 한쪽을 고정하는 방식(comparison.py::pair_countries)과 같다.
-  // KR이 목록에 있으면 KR, 없으면 첫 국가.
-  const base = countries.includes("KR") ? "KR" : countries[0];
-  const otherCountries = countries.filter((c) => c !== base);
-  // 다국 열은 국가가 3개 이상일 때만 — 2개면 1:1 비교와 같은 열이 된다.
-  const showMulti = countries.length >= 3;
-  const multiKey = comboKey(countries);
+  // **정렬 후** KR이 있으면 KR, 없으면 정렬된 첫 국가 — pair_countries도 정렬된
+  // 목록을 받는다(enqueue_comparison이 국가를 정렬해 저장). 여기서 정렬하지 않고
+  // 설정 순서(countries[0])를 그대로 쓰면, 예를 들어 설정이 "US,CN,JP"(KR 없음)일 때
+  // 프론트는 US를 기준으로 CN·JP와 짝짓지만 백엔드는 정렬된 첫 국가 CN을 기준으로
+  // JP·US와 짝지어, US-JP 조합을 영영 "미생성"으로 잘못 표시한다(리뷰 지적 버그).
+  const sortedAll = [...allCountries].sort();
+  const base = sortedAll.includes("KR") ? "KR" : sortedAll[0];
+  const otherCountries = allCountries.filter((c) => c !== base);
+  // 다국 열은 국가가 3개 이상일 때만 — 2개면 1:1 비교와 같은 열이 된다. 열 표시는
+  // 합집합 기준(이미 존재하는 다국 비교를 보여줘야 하므로), 버튼은 아래에서 따로
+  // 설정된 국가 기준으로 판단한다.
+  const showMultiColumn = allCountries.length >= 3;
+  const multiKey = comboKey(allCountries);
+  // 다국 비교 일괄 생성 버튼은 설정된 국가 집합에서만 의미가 있다(백엔드가 그 집합을
+  // 다시 읽어 큐잉하므로).
+  const showMultiButton = countries.length >= 3;
 
   const runAll = async (mode: "pairs" | "all") => {
     const label = mode === "pairs" ? "1:1 비교" : "다국 비교";
@@ -136,9 +178,11 @@ export default function ComparisonGrid({
       </div>
 
       <p className="mt-2 text-xs text-muted">
-        열의 국가는 자동 스케줄 설정(대상 국가)을 따릅니다 — 국가를 늘리려면 "자동
-        스케줄" 탭에서 먼저 등록해야 합니다. 상대국 분석이 없는 조합은 큐잉해도
-        건너뜁니다.
+        열은 자동 스케줄 설정(대상 국가)에 실제로 분석·비교가 있는 다른 국가까지
+        더해서 보여줍니다 — 이미 만들어진 결과는 설정과 무관하게 항상 보입니다.
+        <strong className="text-ink"> 일괄 생성 버튼은 설정된 국가만</strong> 대상으로
+        하므로, 설정에 없는 국가는 "국가 비교" 탭에서 개별 큐잉해야 합니다. 상대국
+        분석이 없는 조합은 큐잉해도 건너뜁니다.
       </p>
       <p className="mt-1 text-xs text-muted">
         점 배지는 실행 상태(완료·진행 중·실패·일시중지), "미생성"은 아직 큐잉되지 않음,
@@ -161,7 +205,7 @@ export default function ComparisonGrid({
         >
           1:1 비교 일괄 생성
         </button>
-        {showMulti && (
+        {showMultiButton && (
           <button
             type="button"
             onClick={() => runAll("all")}
@@ -184,20 +228,20 @@ export default function ComparisonGrid({
             <thead className="tbl-head">
               <tr className="border-b border-border">
                 <th>세부기술</th>
-                {countries.map((c) => (
+                {allCountries.map((c) => (
                   <th key={`a-${c}`}>{COUNTRY_NAMES[c] ?? c} 분석</th>
                 ))}
                 {otherCountries.map((c) => (
                   <th key={`c-${c}`}>{COUNTRY_NAMES[c] ?? c} 비교</th>
                 ))}
-                {showMulti && <th>다국 비교</th>}
+                {showMultiColumn && <th>다국 비교</th>}
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.subfield_id} className="border-b border-border-light">
                   <td className="py-3 pr-3 font-medium text-ink">{row.subfield_name}</td>
-                  {countries.map((c) => (
+                  {allCountries.map((c) => (
                     <td key={`a-${c}`} className="py-3 pr-3 text-center">
                       <StatusCell status={row.analyses[c]} />
                     </td>
@@ -216,11 +260,11 @@ export default function ComparisonGrid({
                       </td>
                     );
                   })}
-                  {showMulti &&
+                  {showMultiColumn &&
                     (() => {
                       const status = row.comparisons[multiKey];
                       const blocked =
-                        status !== "done" && countries.some((c) => row.analyses[c] !== "done");
+                        status !== "done" && allCountries.some((c) => row.analyses[c] !== "done");
                       return (
                         <td className="py-3 text-center">
                           <StatusCell
