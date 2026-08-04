@@ -744,3 +744,31 @@ async def test_oversized_search_is_sampled_not_rejected(ctx, monkeypatch):
 def test_analysis_too_large_is_gone():
     """상한 초과를 거부하던 하드 가드는 표본 수집으로 대체됐다."""
     assert not hasattr(runner, "AnalysisTooLarge")
+
+
+async def test_loop_advances_analyses_before_reports(ctx, monkeypatch):
+    """보고서 합성이 분석 파이프라인을 막지 않아야 한다.
+
+    비교 하나가 쌍별 포함 최대 2분 걸리는데, 그것이 분석 루프보다 먼저 돌면
+    그 틱의 세부기술 진행이 통째로 밀린다. 보고서는 파이프라인보다 우선이 아니다.
+    """
+    order: list[str] = []
+
+    async def fake_reports(db):
+        order.append("reports")
+
+    async def fake_advance(db, analysis):
+        order.append("analysis")
+
+    monkeypatch.setattr(runner, "advance_field_reports", fake_reports)
+    monkeypatch.setattr(runner, "advance", fake_advance)
+    monkeypatch.setattr(runner, "run_scheduled_if_due", lambda db: None)
+    monkeypatch.setattr(runner, "resume_paused", lambda db: None)
+
+    db, sf = ctx
+    db.add(Analysis(subfield_id=sf.id, year=2026, country="KR", status="pending",
+                    query_hash="h"))
+    db.commit()
+    await runner._tick(db)
+
+    assert order == ["analysis", "reports"]

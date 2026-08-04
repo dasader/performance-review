@@ -19,11 +19,25 @@ from app.services import _time
 from app.clients import gemini_sync
 from app.config import settings
 from app.models import Analysis, CountryComparison, Subfield
-from app.prompts import COMPARE_INSTRUCTION, country_name
+from app.prompts import COMPARE_INSTRUCTION, COMPARE_SYNTHESIS_INSTRUCTION, country_name
 
 logger = logging.getLogger(__name__)
 
 
+
+
+# 비교의 기준국. "한국과의 비교"가 목적이므로 KR을 한쪽에 고정한다.
+_BASE_COUNTRY = "KR"
+
+
+def pair_countries(codes: list[str]) -> list[tuple[str, str]]:
+    """비교할 국가 쌍 목록. 기준국(KR)을 한쪽에 고정한다.
+
+    codes는 정렬 저장이라 KR이 가운데 올 수 있다(CN,KR,US) — 첫 원소를 기준으로
+    삼으면 "중국 vs 미국"이 되어 목적을 잃는다. KR이 없으면 첫 국가를 기준으로 한다.
+    """
+    base = _BASE_COUNTRY if _BASE_COUNTRY in codes else codes[0]
+    return [(base, c) for c in codes if c != base]
 
 
 def collect_country_analyses(
@@ -209,43 +223,78 @@ def enqueue_comparison(
 
 
 async def process_comparison(db: Session, row: CountryComparison) -> None:
-    """pending 비교 보고서 하나를 실제로 생성한다. runner.loop이 호출한다.
+    """pending 비교 보고서 하나를 생성한다. runner.loop이 호출한다.
 
-    큐잉 이후 분석이 지워졌을 수 있으므로 여기서 다시 검증한다 — 빈 입력으로 LLM을
-    부르면 없는 성과를 지어낸다(reduce_subfield의 no_data 가드와 같은 이유).
+    **쌍별로 만든 뒤 종합한다.** 3개국 이상을 한 콜에 넣으면 국가가 늘수록 각 나라 몫이
+    줄어든다 — 2단계에서 확인한 이중 압축과 같은 문제다. 한국과 각 국가를 1:1로 대조해
+    sections_json에 보관하고, 그 위에 종합 1콜을 얹는다. 쌍별 분량은 국가 수와 무관하므로
+    구조적으로 축약이 일어나지 않는다.
 
-    입력은 대조표 + 각국 **종합** 보고서다. sections_json(세부 보고서)은 넣지 않는다 —
-    5개국이면 약 725KB(약 18만 토큰)가 되고, 2단계에서 확인한 이중 압축을 비교 단계에서
-    반복한다(실측: CN 2025 세부 144,730자 vs 종합 4,813자). 대신 그 대가로 생기는
-    "논문 많은 국가의 보고서가 더 짧다"를 COMPARE_INSTRUCTION이 금지한다.
+    2개국이면 종합을 건너뛴다 — 쌍이 하나뿐이라 그것이 곧 보고서다(현행 비용 유지).
+
+    한 틱 안에서 순차로 콜을 던진다. 콜 단위로 쪼개 콜마다 한 틱을 쓰면 110건 ×
+    (평균 4콜) = 440콜 × 30초 ≈ 3.7시간이다. 현재처럼 비교 1건(쌍별+종합 전부)을
+    한 틱에 묶으면 110건 × 30초 ≈ 55분으로 끝난다 — 이쪽을 택한 이유. 순차라
+    동시성은 늘지 않는다.
     """
     codes = row.countries.split(",")
     pairs = collect_country_analyses(db, row.subfield_id, row.year, codes)
+    by_code = dict(pairs)
     subfield = db.get(Subfield, row.subfield_id)
     name = subfield.name if subfield else str(row.subfield_id)
 
     # stats_json은 JSON 컬럼이라 SQLAlchemy가 이미 dict로 준다 — json.loads를 부르면
     # TypeError가 난다(실측: 첫 실행이 여기서 failed).
-    stats_rows = [(code, a.stats_json or {}) for code, a in pairs]
-    table = build_comparison_table(stats_rows)
-    bodies = "\n\n".join(
-        f"## {country_name(code)} 보고서\n{a.report_md}" for code, a in pairs
-    )
-    payload = (
-        f"[세부기술: {name} / {row.year}년 / 비교 국가: "
-        f"{', '.join(country_name(c) for c in codes)}]\n\n"
-        # 표는 근거로 주되 보고서에 다시 그리라고 하지 않는다 — 삽입은 _with_table이 한다.
-        f"### 대조표(코드 집계 — 근거로만 쓰세요. 보고서에는 시스템이 넣습니다)\n"
-        f"{table}\n\n{bodies}"
-    )
+    all_stats = [(code, a.stats_json or {}) for code, a in pairs]
+    full_table = build_comparison_table(all_stats)
 
-    logger.info(
-        "[비교] %s %d년 %s — 보고서 %d건 합성", name, row.year, row.countries, len(pairs)
-    )
-    generated = await gemini_sync.generate(
-        compare_instruction(stats_rows), payload, thinking=settings.thinking_reduce
-    )
-    row.report_md = _with_table(generated, table)
+    sections: list[dict] = []
+    # 종합 입력용 원문(표 삽입 전). sections["body"]에는 화면 표시를 위해 표를 끼우지만,
+    # 그 표를 그대로 종합 콜에 다시 먹이면 3개국에서 표가 3장(쌍별 2장 + full_table)
+    # 들어간다 — 쌍별 표는 "근거로만 쓰라"는 프레이밍 없이 실려 모델이 베낄 유인이
+    # 남는다(표 삽입을 코드로 옮긴 이유와 같은 문제: 실측으로 재서식·누락 두 번 실패).
+    # body(원문)를 한 번만 만들고 sections/raw_bodies 양쪽에 그대로 쓴다 — 한쪽에서
+    # 문자열을 오려 다른 쪽을 만들지 않는다.
+    raw_bodies: list[str] = []
+    for base, other in pair_countries(codes):
+        stats_rows = [(base, by_code[base].stats_json or {}),
+                      (other, by_code[other].stats_json or {})]
+        table = build_comparison_table(stats_rows)
+        bodies = "\n\n".join(
+            f"## {country_name(c)} 보고서\n{by_code[c].report_md}" for c in (base, other)
+        )
+        payload = (
+            f"[세부기술: {name} / {row.year}년 / 비교 국가: "
+            f"{country_name(base)}, {country_name(other)}]\n\n"
+            f"### 대조표(코드 집계 — 근거로만 쓰세요. 보고서에는 시스템이 넣습니다)\n"
+            f"{table}\n\n{bodies}"
+        )
+        logger.info("[비교] %s %d년 — %s vs %s 생성", name, row.year, base, other)
+        body = await gemini_sync.generate(
+            compare_instruction(stats_rows), payload, thinking=settings.thinking_reduce
+        )
+        section_name = f"{country_name(base)} vs {country_name(other)}"
+        sections.append({"name": section_name, "body": _with_table(body, table)})
+        raw_bodies.append(f"## {section_name}\n{body}")
+
+    if len(sections) == 1:
+        # 쌍이 하나뿐 — 그것이 곧 보고서다. 펼칠 것이 없으므로 sections는 비운다.
+        row.report_md = sections[0]["body"]
+        row.sections_json = []
+    else:
+        joined = "\n\n".join(raw_bodies)
+        payload = (
+            f"[세부기술: {name} / {row.year}년 / 비교 국가: "
+            f"{', '.join(country_name(c) for c in codes)}]\n\n"
+            f"### 대조표(코드 집계 — 근거로만 쓰세요)\n{full_table}\n\n{joined}"
+        )
+        logger.info("[비교] %s %d년 — 쌍별 %d건 종합", name, row.year, len(sections))
+        synthesis = await gemini_sync.generate(
+            COMPARE_SYNTHESIS_INSTRUCTION, payload, thinking=settings.thinking_reduce
+        )
+        row.report_md = _with_table(synthesis, full_table)
+        row.sections_json = sections
+
     row.generated_at = _time.utcnow()
     row.source_count = len(pairs)
     row.status = "done"

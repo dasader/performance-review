@@ -440,3 +440,130 @@ async def test_table_is_prepended_when_the_model_omits_the_heading(monkeypatch):
     await comp.process_comparison(db, row)
 
     assert "| **모집단과 표본** |" in row.report_md
+
+
+def test_comparison_holds_pairwise_sections():
+    """쌍별 보고서를 보관한다. analyses.sections_json과 같은 모양이다."""
+    db = _session()
+    row = CountryComparison(
+        subfield_id=1, year=2026, countries="CN,KR,US",
+        generated_at=datetime(2026, 8, 4),
+        sections_json=[{"name": "한국 vs 미국", "body": "본문"}],
+    )
+    db.add(row)
+    db.commit()
+
+    saved = db.query(CountryComparison).one()
+    assert saved.sections_json[0]["name"] == "한국 vs 미국"
+
+
+def test_sections_default_is_empty_list():
+    """기본값이 None이면 화면이 length를 읽다 터진다."""
+    db = _session()
+    db.add(CountryComparison(subfield_id=1, year=2026, countries="CN,KR",
+                             generated_at=datetime(2026, 8, 4)))
+    db.commit()
+    assert db.query(CountryComparison).one().sections_json == []
+
+
+def test_pairs_are_against_korea_regardless_of_sort_order():
+    """countries는 정렬 저장이라 KR이 가운데 온다(CN,KR,US). 첫 원소를 기준국으로
+    삼으면 '중국 vs 미국'이 되어 '한국과의 비교'라는 목적을 잃는다."""
+    assert comparison.pair_countries(["CN", "KR", "US"]) == [("KR", "CN"), ("KR", "US")]
+
+
+def test_pairs_fall_back_to_first_when_korea_absent():
+    assert comparison.pair_countries(["CN", "US"]) == [("CN", "US")]
+
+
+def test_two_countries_make_a_single_pair():
+    assert comparison.pair_countries(["CN", "KR"]) == [("KR", "CN")]
+
+
+def test_synthesis_instruction_forbids_repeating_the_pairwise_bodies():
+    """종합이 쌍별 내용을 다시 쓰면 그게 곧 축약 압력이 된다 — 쌍별 상세가 이미
+    보관되므로 종합은 국가를 가로지르는 관찰만 한다."""
+    from app.prompts import COMPARE_SYNTHESIS_INSTRUCTION
+
+    assert "반복" in COMPARE_SYNTHESIS_INSTRUCTION
+    assert "가로질러" in COMPARE_SYNTHESIS_INSTRUCTION
+    # 쌍별과 같은 금지 조항을 공유한다(길이·표본율·순위)
+    for word in ("길이", "표본율", "순위"):
+        assert word in COMPARE_SYNTHESIS_INSTRUCTION
+
+
+async def test_three_countries_produce_pairwise_sections_and_a_synthesis(monkeypatch):
+    """3개국이면 쌍별 2건 + 종합 1콜 = 3콜. 쌍별은 sections_json에 남는다."""
+    from app.services import comparison as comp
+
+    db = _session()
+    sid = _seed(db, ("KR", "US", "CN"))
+
+    calls = []
+
+    async def fake_generate(system, user, *, thinking=None, **kw):
+        calls.append(user)
+        return f"# 결과 {len(calls)}"
+
+    monkeypatch.setattr(comp.gemini_sync, "generate", fake_generate)
+    row = comp.enqueue_comparison(db, sid, 2026, ["KR", "US", "CN"])
+    await comp.process_comparison(db, row)
+
+    assert len(calls) == 3
+    assert [s["name"] for s in row.sections_json] == ["한국 vs 중국", "한국 vs 미국"]
+    # 종합 입력에는 쌍별 결과가 들어간다
+    assert "결과 1" in calls[-1] and "결과 2" in calls[-1]
+    assert row.status == "done"
+    # 최종 본문은 종합(마지막 콜) 결과여야 한다 — sections[-1]을 잘못 대입해도
+    # 위 어설션들은 통과하므로 report_md를 직접 봐야 그 오배선을 잡는다.
+    assert "결과 3" in row.report_md
+    # 코드가 끼운 표는 3개국 대조표(full_table) 하나뿐이어야 한다.
+    assert "| 항목 | 중국 | 한국 | 미국 |" in row.report_md
+
+
+async def test_synthesis_payload_excludes_pairwise_tables(monkeypatch):
+    """종합 콜에는 쌍별 표가 실리면 안 된다 — 실린 표는 '근거로만 쓰라'는 프레이밍이
+    없어 모델이 그대로 베낄 유인이 남는다(표 삽입을 코드로 옮긴 이유와 같은 함정).
+    쌍별 본문은 화면용으로 표가 끼워지지만(sections_json), 종합 입력은 표 삽입 전
+    원문이어야 한다."""
+    from app.services import comparison as comp
+
+    db = _session()
+    sid = _seed(db, ("KR", "US", "CN"))
+
+    calls = []
+
+    async def fake_generate(system, user, *, thinking=None, **kw):
+        calls.append(user)
+        return f"# 결과 {len(calls)}"
+
+    monkeypatch.setattr(comp.gemini_sync, "generate", fake_generate)
+    row = comp.enqueue_comparison(db, sid, 2026, ["KR", "US", "CN"])
+    await comp.process_comparison(db, row)
+
+    synthesis_payload = calls[-1]
+    # 쌍별 본문(모델 출력)은 들어간다
+    assert "결과 1" in synthesis_payload and "결과 2" in synthesis_payload
+    # 그룹 헤더는 full_table 한 번만 — 쌍별 표 2장이 섞이면 3번 나온다
+    assert synthesis_payload.count("| **모집단과 표본** |") == 1
+
+
+async def test_two_countries_skip_the_synthesis(monkeypatch):
+    """쌍이 하나뿐이면 그것이 곧 보고서다 — 종합을 건너뛰어 현행 비용을 유지한다."""
+    from app.services import comparison as comp
+
+    db = _session()
+    sid = _seed(db, ("KR", "US"))
+    calls = []
+
+    async def fake_generate(system, user, *, thinking=None, **kw):
+        calls.append(user)
+        return "# 쌍별 결과"
+
+    monkeypatch.setattr(comp.gemini_sync, "generate", fake_generate)
+    row = comp.enqueue_comparison(db, sid, 2026, ["KR", "US"])
+    await comp.process_comparison(db, row)
+
+    assert len(calls) == 1
+    assert row.sections_json == []          # 펼칠 것이 없다
+    assert "쌍별 결과" in row.report_md

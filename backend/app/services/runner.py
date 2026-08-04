@@ -666,6 +666,31 @@ async def _process_report(db: Session, row, processor, label: str) -> None:
         db.commit()
 
 
+async def _tick(db: Session) -> None:
+    """루프 한 주기. 테스트가 sleep 없이 한 틱만 돌릴 수 있게 분리했다.
+
+    ★ 분석을 먼저 전진시키고 보고서를 나중에 처리한다. 비교 하나가 쌍별 포함 최대
+    2분 걸리는데 그것이 앞에 있으면 그 틱의 세부기술 진행이 통째로 밀린다 —
+    보고서 합성은 검색·추출 파이프라인보다 우선이 아니다.
+    """
+    run_scheduled_if_due(db)
+    resume_paused(db)
+    # report_md(보고서 마크다운, 건당 12KB 규모)와 stats_json은 advance()가
+    # 읽지 않는다 — _do_reduce가 쓰기만 한다. defer하지 않으면 30초마다
+    # 활성 분석 전체의 보고서 본문을 통째로 읽어온다(월간 실행 직후엔
+    # 55개 세부기술 × 연도 규모라 수 MB에 이른다). 지연 로딩이라
+    # _do_reduce의 대입은 그대로 동작한다.
+    active = (
+        db.query(Analysis)
+        .filter(Analysis.status.in_(ACTIVE_STATES))
+        .options(defer(Analysis.report_md), defer(Analysis.stats_json))
+        .all()
+    )
+    for analysis in active:
+        await advance(db, analysis)
+    await advance_field_reports(db)
+
+
 async def loop() -> None:
     """미완 잡을 주기적으로 스캔해 전진시킨다. 상태가 전부 DB에 있으므로
     프로세스가 죽었다 살아나도 그대로 이어진다."""
@@ -674,22 +699,7 @@ async def loop() -> None:
         try:
             db = SessionLocal()
             try:
-                run_scheduled_if_due(db)
-                resume_paused(db)
-                await advance_field_reports(db)
-                # report_md(보고서 마크다운, 건당 12KB 규모)와 stats_json은 advance()가
-                # 읽지 않는다 — _do_reduce가 쓰기만 한다. defer하지 않으면 30초마다
-                # 활성 분석 전체의 보고서 본문을 통째로 읽어온다(월간 실행 직후엔
-                # 55개 세부기술 × 연도 규모라 수 MB에 이른다). 지연 로딩이라
-                # _do_reduce의 대입은 그대로 동작한다.
-                active = (
-                    db.query(Analysis)
-                    .filter(Analysis.status.in_(ACTIVE_STATES))
-                    .options(defer(Analysis.report_md), defer(Analysis.stats_json))
-                    .all()
-                )
-                for analysis in active:
-                    await advance(db, analysis)
+                await _tick(db)
             finally:
                 db.close()
         except Exception:
