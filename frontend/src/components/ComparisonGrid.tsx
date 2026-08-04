@@ -6,6 +6,7 @@ import {
   type ComparisonGridRow,
 } from "../api";
 import { COUNTRY_NAMES } from "../lib/countries";
+import StatusBadge from "./StatusBadge";
 
 // 관리자 "국가 현황" 격자 — 세부기술 × (국가 분석 · 비교 보고서) 한눈에 보기 +
 // 일괄 생성. FieldReportsPanel과 같은 규약(연도 입력 · 일괄 버튼 · busy 상태)을 쓴다.
@@ -19,19 +20,35 @@ function comboKey(countries: string[]): string {
   return [...countries].sort().join(",");
 }
 
-function StatusMark({
+// runner.py::STEP_LABELS와 같은 한글 라벨 — 이 엔드포인트(comparison-grid)는
+// status_label을 함께 내려주지 않으므로(다른 admin 엔드포인트와 다르게 원시 상태
+// 문자열만 옴) 프론트에서 짝을 맞춘다. 백엔드를 건드리지 않는 것이 이번 수정의
+// 제약이라 여기서 고정한다.
+const STATUS_LABEL: Record<string, string> = {
+  pending: "대기 중",
+  searching: "논문 검색 중",
+  extracting: "성과 추출 중",
+  reducing: "보고서 작성 중",
+  done: "완료",
+  failed: "실패",
+  paused: "일시중지",
+};
+
+// 이전에는 ●/○/— 세 기호로 done·(그 외 전부)·불가만 구분했는데, "그 외 전부"에
+// 실패·진행 중·대기가 모두 뭉개져 실패한 생성이 화면에서 안 보이는 문제가 있었다
+// (리뷰 지적). StatusBadge(FieldReportsPanel과 같은 부품)로 바꿔 done/진행 중/실패/
+// 일시중지를 점 색으로 구분하고, 상태 행 자체가 없는 "미생성"과 상대국 분석이 없어
+// 애초에 만들 수 없는 "—"만 남긴다 — 이 둘은 후속 조치가 다르므로 구분을 유지한다
+// (미생성 → 지금 큐잉하면 됨, — → 상대국부터 분석해야 함).
+function StatusCell({
   status,
   blockedTitle,
 }: {
   status: string | undefined;
   blockedTitle?: string;
 }) {
-  if (status === "done") {
-    return (
-      <span className="text-positive" title="완료" aria-label="완료">
-        ●
-      </span>
-    );
+  if (status) {
+    return <StatusBadge status={status} label={STATUS_LABEL[status] ?? status} />;
   }
   if (blockedTitle) {
     return (
@@ -40,11 +57,7 @@ function StatusMark({
       </span>
     );
   }
-  return (
-    <span className="text-muted" title="없음" aria-label="없음">
-      ○
-    </span>
-  );
+  return <span className="text-xs text-muted">미생성</span>;
 }
 
 export default function ComparisonGrid({
@@ -127,6 +140,10 @@ export default function ComparisonGrid({
         스케줄" 탭에서 먼저 등록해야 합니다. 상대국 분석이 없는 조합은 큐잉해도
         건너뜁니다.
       </p>
+      <p className="mt-1 text-xs text-muted">
+        점 배지는 실행 상태(완료·진행 중·실패·일시중지), "미생성"은 아직 큐잉되지 않음,
+        —는 상대국 분석이 없어 지금은 만들 수 없음을 뜻합니다.
+      </p>
 
       {countries.length < 2 && rows && (
         <p className="mt-3 banner banner-warn">
@@ -182,7 +199,7 @@ export default function ComparisonGrid({
                   <td className="py-3 pr-3 font-medium text-ink">{row.subfield_name}</td>
                   {countries.map((c) => (
                     <td key={`a-${c}`} className="py-3 pr-3 text-center">
-                      <StatusMark status={row.analyses[c]} />
+                      <StatusCell status={row.analyses[c]} />
                     </td>
                   ))}
                   {otherCountries.map((c) => {
@@ -192,7 +209,7 @@ export default function ComparisonGrid({
                       (row.analyses[base] !== "done" || row.analyses[c] !== "done");
                     return (
                       <td key={`c-${c}`} className="py-3 pr-3 text-center">
-                        <StatusMark
+                        <StatusCell
                           status={status}
                           blockedTitle={blocked ? "상대국 분석이 없어 불가" : undefined}
                         />
@@ -206,7 +223,7 @@ export default function ComparisonGrid({
                         status !== "done" && countries.some((c) => row.analyses[c] !== "done");
                       return (
                         <td className="py-3 text-center">
-                          <StatusMark
+                          <StatusCell
                             status={status}
                             blockedTitle={blocked ? "상대국 분석이 없어 불가" : undefined}
                           />
