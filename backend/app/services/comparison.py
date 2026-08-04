@@ -232,8 +232,10 @@ async def process_comparison(db: Session, row: CountryComparison) -> None:
 
     2개국이면 종합을 건너뛴다 — 쌍이 하나뿐이라 그것이 곧 보고서다(현행 비용 유지).
 
-    한 틱 안에서 순차로 콜을 던진다. 콜 단위로 쪼개면 4개국 1건에 2분, 110건이면
-    55시간이라 일괄이 성립하지 않는다. 순차라 동시성은 늘지 않는다.
+    한 틱 안에서 순차로 콜을 던진다. 콜 단위로 쪼개 콜마다 한 틱을 쓰면 110건 ×
+    (평균 4콜) = 440콜 × 30초 ≈ 3.7시간이다. 현재처럼 비교 1건(쌍별+종합 전부)을
+    한 틱에 묶으면 110건 × 30초 ≈ 55분으로 끝난다 — 이쪽을 택한 이유. 순차라
+    동시성은 늘지 않는다.
     """
     codes = row.countries.split(",")
     pairs = collect_country_analyses(db, row.subfield_id, row.year, codes)
@@ -247,6 +249,13 @@ async def process_comparison(db: Session, row: CountryComparison) -> None:
     full_table = build_comparison_table(all_stats)
 
     sections: list[dict] = []
+    # 종합 입력용 원문(표 삽입 전). sections["body"]에는 화면 표시를 위해 표를 끼우지만,
+    # 그 표를 그대로 종합 콜에 다시 먹이면 3개국에서 표가 3장(쌍별 2장 + full_table)
+    # 들어간다 — 쌍별 표는 "근거로만 쓰라"는 프레이밍 없이 실려 모델이 베낄 유인이
+    # 남는다(표 삽입을 코드로 옮긴 이유와 같은 문제: 실측으로 재서식·누락 두 번 실패).
+    # body(원문)를 한 번만 만들고 sections/raw_bodies 양쪽에 그대로 쓴다 — 한쪽에서
+    # 문자열을 오려 다른 쪽을 만들지 않는다.
+    raw_bodies: list[str] = []
     for base, other in pair_countries(codes):
         stats_rows = [(base, by_code[base].stats_json or {}),
                       (other, by_code[other].stats_json or {})]
@@ -264,17 +273,16 @@ async def process_comparison(db: Session, row: CountryComparison) -> None:
         body = await gemini_sync.generate(
             compare_instruction(stats_rows), payload, thinking=settings.thinking_reduce
         )
-        sections.append({
-            "name": f"{country_name(base)} vs {country_name(other)}",
-            "body": _with_table(body, table),
-        })
+        section_name = f"{country_name(base)} vs {country_name(other)}"
+        sections.append({"name": section_name, "body": _with_table(body, table)})
+        raw_bodies.append(f"## {section_name}\n{body}")
 
     if len(sections) == 1:
         # 쌍이 하나뿐 — 그것이 곧 보고서다. 펼칠 것이 없으므로 sections는 비운다.
         row.report_md = sections[0]["body"]
         row.sections_json = []
     else:
-        joined = "\n\n".join(f"## {s['name']}\n{s['body']}" for s in sections)
+        joined = "\n\n".join(raw_bodies)
         payload = (
             f"[세부기술: {name} / {row.year}년 / 비교 국가: "
             f"{', '.join(country_name(c) for c in codes)}]\n\n"

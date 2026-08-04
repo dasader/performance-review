@@ -514,6 +514,38 @@ async def test_three_countries_produce_pairwise_sections_and_a_synthesis(monkeyp
     # 종합 입력에는 쌍별 결과가 들어간다
     assert "결과 1" in calls[-1] and "결과 2" in calls[-1]
     assert row.status == "done"
+    # 최종 본문은 종합(마지막 콜) 결과여야 한다 — sections[-1]을 잘못 대입해도
+    # 위 어설션들은 통과하므로 report_md를 직접 봐야 그 오배선을 잡는다.
+    assert "결과 3" in row.report_md
+    # 코드가 끼운 표는 3개국 대조표(full_table) 하나뿐이어야 한다.
+    assert "| 항목 | 중국 | 한국 | 미국 |" in row.report_md
+
+
+async def test_synthesis_payload_excludes_pairwise_tables(monkeypatch):
+    """종합 콜에는 쌍별 표가 실리면 안 된다 — 실린 표는 '근거로만 쓰라'는 프레이밍이
+    없어 모델이 그대로 베낄 유인이 남는다(표 삽입을 코드로 옮긴 이유와 같은 함정).
+    쌍별 본문은 화면용으로 표가 끼워지지만(sections_json), 종합 입력은 표 삽입 전
+    원문이어야 한다."""
+    from app.services import comparison as comp
+
+    db = _session()
+    sid = _seed(db, ("KR", "US", "CN"))
+
+    calls = []
+
+    async def fake_generate(system, user, *, thinking=None, **kw):
+        calls.append(user)
+        return f"# 결과 {len(calls)}"
+
+    monkeypatch.setattr(comp.gemini_sync, "generate", fake_generate)
+    row = comp.enqueue_comparison(db, sid, 2026, ["KR", "US", "CN"])
+    await comp.process_comparison(db, row)
+
+    synthesis_payload = calls[-1]
+    # 쌍별 본문(모델 출력)은 들어간다
+    assert "결과 1" in synthesis_payload and "결과 2" in synthesis_payload
+    # 그룹 헤더는 full_table 한 번만 — 쌍별 표 2장이 섞이면 3번 나온다
+    assert synthesis_payload.count("| **모집단과 표본** |") == 1
 
 
 async def test_two_countries_skip_the_synthesis(monkeypatch):
