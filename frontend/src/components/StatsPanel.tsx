@@ -1,5 +1,3 @@
-import { useEffect } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { Stats } from "../api";
 
 // I10: source는 openalex/kci 단일 소스뿐 아니라 "both"(양쪽 모두에서 발견됨)도 가진다.
@@ -10,23 +8,16 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 export default function StatsPanel({ stats }: { stats: Stats | Record<string, never> }) {
-  // ResponsiveContainer는 마운트 시점 DOM 크기만 측정한다. 인쇄 시 @page margin으로
-  // 레이아웃 폭이 바뀌므로 beforeprint/afterprint에서 resize를 발생시켜 재측정을 유도한다.
-  useEffect(() => {
-    const triggerResize = () => window.dispatchEvent(new Event("resize"));
-    window.addEventListener("beforeprint", triggerResize);
-    window.addEventListener("afterprint", triggerResize);
-    return () => {
-      window.removeEventListener("beforeprint", triggerResize);
-      window.removeEventListener("afterprint", triggerResize);
-    };
-  }, []);
-
   if (!stats.searched_count) return null;
 
   const byYear = Object.entries(stats.by_year)
     .map(([year, count]) => ({ year, count }))
     .sort((a, b) => a.year.localeCompare(b.year));
+
+  // 축 상한은 실제 최대값 그대로다. "예쁜 눈금"으로 올림하면 여백만 생기고, 정확한
+  // 수치는 바로 아래 표에 이미 있다 — 이 그림이 말하는 건 연도 간 비율이다.
+  // 가장 높은 막대가 위 격자선에 닿는 것이 정상이다.
+  const yMax = Math.max(1, ...byYear.map((d) => d.count));
 
   const missing = [
     { label: "abstract 없음", count: stats.no_abstract_count },
@@ -75,31 +66,44 @@ export default function StatsPanel({ stats }: { stats: Stats | Record<string, ne
             {/* 격자는 뒤로 물러나고(--hair) 축은 --rule-strong, 축 라벨은 --ink-3(11px 하한).
                 막대는 데이터 계열 1번 슬롯. 계열이 하나뿐이라 범례는 두지 않는다 —
                 제목("연도별 검색 논문 수")이 이미 계열을 말한다. */}
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={byYear} margin={{ left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} />
-                <XAxis
-                  dataKey="year"
-                  tick={{ fontSize: 11, fill: "#71717a" }}
-                  axisLine={{ stroke: "#a1a1aa" }}
-                  tickLine={false}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  tick={{ fontSize: 11, fill: "#71717a" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={36}
-                />
-                <Tooltip
-                  cursor={{ fill: "#f4f4f5" }}
-                  contentStyle={{ borderRadius: 0, borderColor: "#d4d4d8", fontSize: 12 }}
-                  formatter={(v) => [`${Number(v).toLocaleString()}건`, "검색 논문"]}
-                />
-                {/* 막대는 데이터 끝만 둥글게, 기준선 쪽은 각지게 둔다 */}
-                <Bar dataKey="count" fill="#2a78d6" radius={[4, 4, 0, 0]} maxBarSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="flex h-[220px]">
+              {/* Y축 눈금 — 상한과 0 둘뿐이다. 중간 눈금은 라벨이 없으면 값을 되묻게 만들고,
+                  정확한 수치는 아래 표에 있다. */}
+              <div className="flex w-10 shrink-0 flex-col justify-between pr-1 text-right text-[11px] tabular-nums text-muted">
+                <span>{yMax.toLocaleString()}</span>
+                <span>0</span>
+              </div>
+
+              {/* 플롯 영역. 기준선(축)만 --rule-strong이고 격자는 --hair로 물러난다. */}
+              <div className="relative flex-1 border-b border-border-strong">
+                <div className="absolute inset-x-0 top-0 border-t border-border-light" />
+
+                <div className="absolute inset-0 flex items-end">
+                  {byYear.map((d) => (
+                    <div key={d.year} className="flex flex-1 justify-center">
+                      {/* title이 네이티브 툴팁을 준다 — 라이브러리 Tooltip을 쓸 이유가 없다. */}
+                      {/* min-height: 실측상 다년도 분석은 한쪽이 1건인 경우가 많아
+                          (5건 전부 0.2~2%) 비율 그대로면 1px 미만으로 사라진다 —
+                          "1건"과 "0건"이 눈으로 구별되어야 한다. */}
+                      <div
+                        title={`${d.year}년 ${d.count.toLocaleString()}건`}
+                        style={{ height: `${(d.count / yMax) * 100}%` }}
+                        className={`w-full max-w-[40px] bg-d1 ${d.count > 0 ? "min-h-[2px]" : ""}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* X축 라벨. 막대와 같은 flex-1 구조라 열이 정확히 맞는다. */}
+            <div className="ml-10 flex text-[11px] tabular-nums text-muted">
+              {byYear.map((d) => (
+                <span key={d.year} className="flex-1 text-center">
+                  {d.year}
+                </span>
+              ))}
+            </div>
           </div>
           {/* 차트의 텍스트 대안. 스크린리더가 읽을 수 있고, 인쇄 시에도 그대로 보여 유용하다. */}
           <table className="mt-3 w-full max-w-xs border-collapse text-xs">
