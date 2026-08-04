@@ -92,7 +92,8 @@ def test_comparison_table_includes_achievement_types():
     table = comparison.build_comparison_table(rows)
 
     assert "아키텍처" in table and "공정" in table
-    lines = [l for l in table.splitlines() if l.startswith("| 아키텍처")]
+    # 하위 항목이라 · 가 붙는다
+    lines = [l for l in table.splitlines() if l.startswith("| · 아키텍처")]
     assert len(lines) == 1
     assert "| 0 |" in lines[0]   # KR엔 없으므로 0
 
@@ -336,3 +337,59 @@ def test_compare_instruction_separates_missing_abstracts_from_volume():
     assert "수집" in COMPARE_INSTRUCTION and "모집단" in COMPARE_INSTRUCTION
     # 결측이 설명하는 구간이 명시돼야 한다
     assert "구간" in COMPARE_INSTRUCTION
+
+
+def test_comparison_table_groups_every_row_under_a_header():
+    """모든 행이 그룹 아래에 놓이고, 하위 항목은 기호로 구분된다.
+
+    사용자 신고: 귀속·성과유형에는 굵은 제목이 있는데 첫 블록(모집단·수집·표본율…)만
+    제목이 없어 무엇의 묶음인지 알 수 없었다. 또 그룹 제목과 하위 항목이 같은 모양이라
+    계층이 보이지 않았다.
+    """
+    rows = [("KR", _stats()), ("CN", _stats())]
+    table = comparison.build_comparison_table(rows)
+    body = [l for l in table.splitlines()[2:]]
+
+    headers = [l for l in body if l.startswith("| **")]
+    items = [l for l in body if l.startswith("| · ")]
+
+    # 그룹은 넷: 모집단과 표본 · 연구 귀속 · 인용 · 성과유형
+    assert len(headers) == 4
+    assert any("모집단" in h for h in headers)
+    # 그룹 제목이 아닌 행은 전부 하위 항목 기호를 단다 — 계층이 한눈에 보여야 한다
+    assert len(headers) + len(items) == len(body)
+
+
+def test_comparison_table_marks_the_base_on_the_group_not_the_item():
+    """(수집 기준)·(분석 기준)은 그룹 제목에 붙는다 — 항목마다 반복하면 표가 시끄럽다."""
+    table = comparison.build_comparison_table([("KR", _stats()), ("CN", _stats())])
+    header_line = next(l for l in table.splitlines() if "귀속" in l)
+    assert "수집 기준" in header_line
+    assert "· 단독" in table and "수집 기준" not in table.split("· 단독")[1].split("\n")[0]
+
+
+def test_compare_instruction_demands_coverage_of_every_achievement_type():
+    """§3이 성과유형을 빠짐없이 다루도록 강제해야 한다.
+
+    사용자 신고 + 실측(차세대 메모리반도체 2025 KR+CN): 대조표에 성과유형이 9개인데
+    §3 서술에는 3개(공정·신소자·아키텍처)만 등장했다. 로드맵 전수 점검과 같은 부류로,
+    개수를 못박지 않으면 모델이 대표 몇 개로 뭉갠다.
+    """
+    from app.prompts import COMPARE_INSTRUCTION
+
+    assert "{type_count}" in COMPARE_INSTRUCTION
+    assert "{type_list}" in COMPARE_INSTRUCTION
+
+
+def test_payload_injects_the_achievement_types():
+    """개수·목록을 코드가 세어 프롬프트에 박는다 — 모델에게 세라고 시키지 않는다."""
+    rows = [
+        ("KR", _stats(by_achievement_type={"신소자": 60, "공정": 29})),
+        ("CN", _stats(by_achievement_type={"아키텍처": 300, "신소자": 96})),
+    ]
+    instruction = comparison.compare_instruction(rows)
+
+    assert "3개" in instruction          # 합집합 3종
+    for t in ("공정", "신소자", "아키텍처"):
+        assert t in instruction
+    assert "{type_count}" not in instruction and "{type_list}" not in instruction

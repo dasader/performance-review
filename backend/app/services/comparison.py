@@ -69,12 +69,21 @@ def build_comparison_table(rows: list[tuple[str, dict]]) -> str:
     sep = "|---|" + "---:|" * len(rows)
 
     def line(label: str, fn) -> str:
-        return f"| {label} | " + " | ".join(str(fn(s)) for _, s in rows) + " |"
+        """하위 항목 한 줄. 앞의 · 가 그룹 제목과 계층을 가른다 — 굵기만으로는
+        표에서 제목과 항목이 같은 모양으로 읽힌다(사용자 신고)."""
+        return f"| · {label} | " + " | ".join(str(fn(s)) for _, s in rows) + " |"
+
+    def group(label: str) -> str:
+        """그룹 제목. 모수 표기((수집 기준)·(분석 기준))는 여기 한 번만 붙인다 —
+        항목마다 반복하면 표가 시끄럽다."""
+        return f"| **{label}** |" + " |" * len(rows)
 
     def _population(s: dict) -> int:
         return s.get("population_total") or s.get("searched_count", 0)
 
     body = [
+        # 첫 블록에도 제목을 준다 — 없으면 무엇의 묶음인지 알 수 없다(사용자 신고).
+        group("모집단과 표본"),
         line("모집단(전체)", lambda s: f"{_population(s):,}"),
         line("수집", lambda s: f"{s.get('searched_count', 0):,}"),
         line("표본율", lambda s: _pct(s.get("searched_count", 0), _population(s))),
@@ -84,14 +93,15 @@ def build_comparison_table(rows: list[tuple[str, dict]]) -> str:
         # 수집(820)과 같고 성과유형 합계는 분석(731)과 같다. 국가 정보는 초록이 없어도
         # 메타데이터에 있지만 성과유형은 추출 결과라서다. 기준을 표에 적지 않으면
         # "단독+주도+참여가 분석 건수와 안 맞는다"로 읽혀 숫자 전체가 불신받는다.
-        "| **귀속(수집 기준)** |" + " |" * len(rows),
+        group("연구 귀속 (수집 기준)"),
         line("단독", lambda s: f"{s.get('attribution', {}).get('단독', 0):,}"),
         line("주도", lambda s: f"{s.get('attribution', {}).get('주도', 0):,}"),
         line("참여", lambda s: f"{s.get('attribution', {}).get('참여', 0):,}"),
         line("주도 미상", lambda s: f"{s.get('attribution', {}).get('주도 미상', 0):,}"),
         line("국제공동 비율", lambda s: f"{round(s.get('intl_collab_ratio', 0) * 100)}%"),
-        line("인용 중앙값", lambda s: s.get("citations", {}).get("median", 0)),
-        line("인용 p90", lambda s: s.get("citations", {}).get("p90", 0)),
+        group("인용"),
+        line("중앙값", lambda s: s.get("citations", {}).get("median", 0)),
+        line("p90", lambda s: s.get("citations", {}).get("p90", 0)),
     ]
 
     # 성과유형은 국가마다 키가 달라 합집합을 만들고 없는 곳은 0으로 채운다. 빠뜨리면
@@ -102,17 +112,33 @@ def build_comparison_table(rows: list[tuple[str, dict]]) -> str:
             if t not in types:
                 types.append(t)
     if types:
-        body.append("| **성과유형(분석 기준)** |" + " |" * len(rows))
+        body.append(group("성과유형 (분석 기준)"))
         for t in sorted(types):
             body.append(
-                f"| {t} | "
-                + " | ".join(
-                    str(s.get("by_achievement_type", {}).get(t, 0)) for _, s in rows
-                )
-                + " |"
+                line(t, lambda s, t=t: s.get("by_achievement_type", {}).get(t, 0))
             )
 
     return "\n".join([header, sep, *body])
+
+
+def compare_instruction(rows: list[tuple[str, dict]]) -> str:
+    """성과유형 개수·목록을 세어 COMPARE_INSTRUCTION에 박는다.
+
+    로드맵 전수 점검(count_goal_rows → {goal_count})과 같은 방식이다. 개수를 못박지
+    않으면 모델이 대표 몇 개로 뭉갠다 — 실측(차세대 메모리반도체 2025 KR+CN): 대조표에
+    성과유형이 9개인데 §3 서술에는 3개(공정·신소자·아키텍처)만 등장했다.
+
+    세는 일을 모델에게 시키지 않는 것도 같은 이유다(stats.py의 원칙).
+    """
+    types: list[str] = []
+    for _, s in rows:
+        for t in s.get("by_achievement_type", {}):
+            if t not in types:
+                types.append(t)
+    types.sort()
+    return COMPARE_INSTRUCTION.replace("{type_count}", f"{len(types)}개").replace(
+        "{type_list}", ", ".join(types) if types else "(집계된 성과유형 없음)"
+    )
 
 
 def enqueue_comparison(
@@ -179,7 +205,8 @@ async def process_comparison(db: Session, row: CountryComparison) -> None:
 
     # stats_json은 JSON 컬럼이라 SQLAlchemy가 이미 dict로 준다 — json.loads를 부르면
     # TypeError가 난다(실측: 첫 실행이 여기서 failed).
-    table = build_comparison_table([(code, a.stats_json or {}) for code, a in pairs])
+    stats_rows = [(code, a.stats_json or {}) for code, a in pairs]
+    table = build_comparison_table(stats_rows)
     bodies = "\n\n".join(
         f"## {country_name(code)} 보고서\n{a.report_md}" for code, a in pairs
     )
@@ -193,7 +220,7 @@ async def process_comparison(db: Session, row: CountryComparison) -> None:
         "[비교] %s %d년 %s — 보고서 %d건 합성", name, row.year, row.countries, len(pairs)
     )
     row.report_md = await gemini_sync.generate(
-        COMPARE_INSTRUCTION, payload, thinking=settings.thinking_reduce
+        compare_instruction(stats_rows), payload, thinking=settings.thinking_reduce
     )
     row.generated_at = _time.utcnow()
     row.source_count = len(pairs)
