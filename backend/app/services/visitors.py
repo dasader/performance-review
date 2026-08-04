@@ -1,15 +1,14 @@
 import hashlib
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.services import _time
 from app.config import settings
 from app.models.visit import Visit
 
 
-def _today() -> date:
-    return datetime.now(timezone.utc).date()
 
 
 def _client_hash(ip: str, user_agent: str, day: date) -> str:
@@ -23,7 +22,7 @@ def record_visit(db: Session, ip: str, user_agent: str) -> None:
     같은 (날짜, 해시) 조합은 unique 제약에 걸린다 — budget.py::_row와 같은 패턴으로
     IntegrityError를 잡아 롤백하고 조용히 무시한다(이미 기록된 방문자).
     """
-    day = _today()
+    day = _time.today()
     db.add(Visit(usage_date=day, visitor_hash=_client_hash(ip, user_agent, day)))
     try:
         db.commit()
@@ -37,7 +36,7 @@ def week_start(day: date) -> date:
 
 
 def visitor_stats(db: Session) -> dict:
-    today = _today()
+    today = _time.today()
     start = week_start(today)
 
     rows = (

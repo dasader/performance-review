@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.services import _time
 from app.config import settings
 from app.database import Base, get_db
 from app.main import app
@@ -52,9 +53,9 @@ def test_record_visit_counts_separately_across_days(db_session, monkeypatch):
     day1 = date(2026, 7, 13)
     day2 = date(2026, 7, 14)
 
-    monkeypatch.setattr(visitors_service, "_today", lambda: day1)
+    monkeypatch.setattr(_time, "today", lambda: day1)
     visitors_service.record_visit(db, "1.2.3.4", "ua-a")
-    monkeypatch.setattr(visitors_service, "_today", lambda: day2)
+    monkeypatch.setattr(_time, "today", lambda: day2)
     visitors_service.record_visit(db, "1.2.3.4", "ua-a")
 
     assert db.query(Visit).count() == 2
@@ -73,7 +74,7 @@ def test_visitor_stats_today_and_week(db_session, monkeypatch):
     db.add(Visit(usage_date=today, visitor_hash="c"))
     db.commit()
 
-    monkeypatch.setattr(visitors_service, "_today", lambda: today)
+    monkeypatch.setattr(_time, "today", lambda: today)
     stats = visitors_service.visitor_stats(db)
 
     assert stats["today"] == 1
