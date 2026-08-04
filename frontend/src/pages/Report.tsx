@@ -323,15 +323,63 @@ function PrintHeader({ data }: { data: Analysis }) {
   );
 }
 
+// 목록이 길어(중국 보고서 147건) 기본은 접어 둔다. 세부 보고서 토글과 같은 규약으로
+// URL 쿼리(?withRefs=1)에 실어 공유·북마크가 되게 한다.
+//
+// ★ 각주 [12]는 #ref-12로 점프한다. 접혀 있으면 대상이 DOM에 없어 링크가 죽으므로,
+//   해시가 #ref-로 시작하면 자동으로 펼치고 한 프레임 뒤에 다시 스크롤한다.
+//   (브라우저는 이미 스크롤을 시도했다가 실패한 상태다.)
+// ★ 인쇄에는 접힘과 무관하게 항상 싣는다 — [12]가 있는데 참고문헌이 없는 PDF는
+//   그 자체로 결함이다.
 function References({ references }: { references: Reference[] }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const open = searchParams.get("withRefs") === "1";
+
+  useEffect(() => {
+    const openIfTargeted = () => {
+      if (!window.location.hash.startsWith("#ref-")) return;
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("withRefs", "1");
+          return next;
+        },
+        { replace: true },
+      );
+      // 펼쳐진 뒤에야 대상이 레이아웃에 잡힌다.
+      requestAnimationFrame(() =>
+        document.getElementById(window.location.hash.slice(1))?.scrollIntoView(),
+      );
+    };
+    openIfTargeted();
+    window.addEventListener("hashchange", openIfTargeted);
+    return () => window.removeEventListener("hashchange", openIfTargeted);
+  }, [setSearchParams]);
+
   if (references.length === 0) return null;
+
+  const toggle = () => {
+    const next = new URLSearchParams(searchParams);
+    if (open) next.delete("withRefs");
+    else next.set("withRefs", "1");
+    setSearchParams(next);
+  };
 
   return (
     <>
       <SectionDivider />
       <section className="avoid-break">
-        <h2 className="text-xl font-bold tracking-tight text-accent">참고문헌</h2>
-        <ol className="mt-4 space-y-2 text-sm text-ink-light">
+        <div className="flex flex-wrap items-center gap-4">
+          <h2 className="text-xl font-bold tracking-tight text-accent">
+            참고문헌 <span className="text-faint">{references.length}</span>
+          </h2>
+          <span className="print:hidden">
+            <Switch checked={open} onChange={toggle} label="목록 펼치기" />
+          </span>
+        </div>
+        <ol
+          className={`mt-4 space-y-2 text-sm text-ink-light print:block ${open ? "" : "hidden"}`}
+        >
           {references.map((r) => (
             <li key={r.n} id={`ref-${r.n}`} className={`flex gap-2 ${SCROLL_TARGET_CLASS}`}>
               <span className="shrink-0 font-mono text-xs text-muted">

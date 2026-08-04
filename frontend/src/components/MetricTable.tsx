@@ -99,31 +99,38 @@ export default function MetricTable({
                     <p className="text-xs text-muted">해당 논문을 찾지 못했습니다.</p>
                   )}
                   {papers && papers.length > 0 && (
-                    <ul className="text-xs text-muted">
+                    /* 값 · 측정 대상 · 논문을 한 줄에 이어 붙이면 셋이 뭉쳐 읽히지
+                       않는다(사용자 신고). 값은 오른쪽 정렬 고정폭 열로 빼 세로로
+                       비교되게 하고, 대상을 본문 밝기로 올리고, 논문 제목은 한 단
+                       내려 보조 밝기로 둔다 — 이 화면의 목적은 "이 값이 무엇을 잰
+                       것인가"를 5초에 판별하는 것이라 대상이 제목보다 앞선다. */
+                    <ul className="space-y-2">
                       {papers.map((p, i) => (
-                        <li key={`${p.doi ?? p.title}-${i}`} className="py-1">
-                          <span className="tabular-nums text-ink-light">
+                        <li key={`${p.doi ?? p.title}-${i}`} className="flex gap-3">
+                          <span className="w-16 shrink-0 text-right text-xs font-semibold tabular-nums text-ink">
                             {p.raw ?? p.value}
                           </span>
-                          {/* target이 "왜 이 값이 여기 있는가"의 답을 대개 담는다. */}
-                          {p.target && <span> · {p.target}</span>}
-                          {p.title && (
-                            <span>
-                              {" · "}
-                              {p.doi ? (
-                                <a
-                                  href={`https://doi.org/${p.doi}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="underline"
-                                >
-                                  {p.title}
-                                </a>
-                              ) : (
-                                p.title
-                              )}
+                          <span className="min-w-0">
+                            <span className="block text-xs text-ink-light">
+                              {p.target || <span className="text-faint">대상 미상</span>}
                             </span>
-                          )}
+                            {p.title && (
+                              <span className="block text-[11px] leading-snug text-muted">
+                                {p.doi ? (
+                                  <a
+                                    href={`https://doi.org/${p.doi}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="underline decoration-border-strong underline-offset-2 hover:decoration-ink"
+                                  >
+                                    {p.title}
+                                  </a>
+                                ) : (
+                                  p.title
+                                )}
+                              </span>
+                            )}
+                          </span>
                         </li>
                       ))}
                     </ul>
