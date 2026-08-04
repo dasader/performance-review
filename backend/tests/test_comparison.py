@@ -567,3 +567,41 @@ async def test_two_countries_skip_the_synthesis(monkeypatch):
     assert len(calls) == 1
     assert row.sections_json == []          # 펼칠 것이 없다
     assert "쌍별 결과" in row.report_md
+
+
+def test_with_table_strips_a_table_the_model_drew_itself():
+    """모델이 대조표를 직접 그렸으면 걷어내고 코드가 만든 것만 남긴다.
+
+    사용자 신고 + 실측(차세대 메모리반도체 2025 4개국): 쌍별 3건 중 2건에서 '| 항목 |'
+    머리행이 두 번 나왔다. 프롬프트가 "표를 그리지 마세요"라고 하는데도 모델이 그린다 —
+    같은 날 세 번째 실패다(형식 변형 → 통째 생략 → 중복). 프롬프트에 맡기지 않는다.
+    """
+    table = comparison.build_comparison_table([("KR", _stats()), ("CN", _stats())])
+    drawn = (
+        "## 1. 비교 개요\n"
+        "서술입니다.\n\n"
+        "| 항목 | 한국 | 중국 |\n"
+        "|---|---:|---:|\n"
+        "| · 수집 | 300 | 820 |\n\n"
+        "이어지는 서술.\n\n"
+        "## 2. 연구 규모와 구조\n본문."
+    )
+    out = comparison._with_table(drawn, table)
+
+    assert out.count("| 항목 |") == 1          # 코드가 넣은 것 하나만
+    assert "| · 수집 | 300 | 820 |" not in out  # 모델이 그린 본문 행도 사라진다
+    assert "서술입니다." in out and "이어지는 서술." in out  # 서술은 보존
+    assert "## 2. 연구 규모와 구조" in out
+
+
+def test_with_table_leaves_unrelated_tables_alone():
+    """대조표가 아닌 표는 건드리지 않는다 — 걷어내는 것은 '| 항목 |'로 시작하는 것뿐이다."""
+    table = comparison.build_comparison_table([("KR", _stats()), ("CN", _stats())])
+    md = (
+        "## 1. 비교 개요\n본문.\n\n"
+        "| 연도 | 건수 |\n|---|---:|\n| 2025 | 10 |\n"
+    )
+    out = comparison._with_table(md, table)
+
+    assert "| 연도 | 건수 |" in out
+    assert out.count("| 항목 |") == 1
