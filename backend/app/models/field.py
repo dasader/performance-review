@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     ForeignKey,
@@ -147,3 +148,7 @@ class CountryComparison(Base):
     generated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     # 합성에 실제로 들어간 국가 수.
     source_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # 쌍별 비교 보고서. analyses.sections_json과 같은 모양이고 화면도 같은 펼침
+    # 패턴을 쓴다. 3개국 이상에서 국가별 내용이 축약되지 않게 하는 장치다 —
+    # 종합 1콜만 두면 국가가 늘수록 각 나라 몫이 줄어든다(2단계 이중 압축과 같은 문제).
+    sections_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)

@@ -440,3 +440,27 @@ async def test_table_is_prepended_when_the_model_omits_the_heading(monkeypatch):
     await comp.process_comparison(db, row)
 
     assert "| **모집단과 표본** |" in row.report_md
+
+
+def test_comparison_holds_pairwise_sections():
+    """쌍별 보고서를 보관한다. analyses.sections_json과 같은 모양이다."""
+    db = _session()
+    row = CountryComparison(
+        subfield_id=1, year=2026, countries="CN,KR,US",
+        generated_at=datetime(2026, 8, 4),
+        sections_json=[{"name": "한국 vs 미국", "body": "본문"}],
+    )
+    db.add(row)
+    db.commit()
+
+    saved = db.query(CountryComparison).one()
+    assert saved.sections_json[0]["name"] == "한국 vs 미국"
+
+
+def test_sections_default_is_empty_list():
+    """기본값이 None이면 화면이 length를 읽다 터진다."""
+    db = _session()
+    db.add(CountryComparison(subfield_id=1, year=2026, countries="CN,KR",
+                             generated_at=datetime(2026, 8, 4)))
+    db.commit()
+    assert db.query(CountryComparison).one().sections_json == []
