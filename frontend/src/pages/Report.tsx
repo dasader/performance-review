@@ -3,13 +3,21 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkCjkFriendly from "remark-cjk-friendly";
-import { ACTIVE_STATUSES, get, type Analysis, type Reference } from "../api";
+import {
+  ACTIVE_STATUSES,
+  get,
+  getAvailability,
+  type Analysis,
+  type Availability,
+  type Reference,
+} from "../api";
 import Switch from "../components/Switch";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import StatusBadge from "../components/StatusBadge";
 import StatsPanel from "../components/StatsPanel";
 import MetricTable from "../components/MetricTable";
+import CountryBar from "../components/CountryBar";
 import { firstCiteOffsets } from "../lib/citeAnchors";
 import { stripLeadingH1 } from "../lib/reportMarkdown";
 import { MARKDOWN_COMPONENTS, PROSE_CLASSES } from "../lib/prose";
@@ -74,6 +82,9 @@ export default function Report() {
   const country = searchParams.get("country") ?? "KR";
   const [data, setData] = useState<Analysis | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 국가 줄은 본문과 무관한 이동 수단이라 실패해도 보고서 자체는 그대로 보여준다 —
+  // catch에서 null로 두면 CountryBar가 그냥 안 그려질 뿐이다.
+  const [avail, setAvail] = useState<Availability | null>(null);
 
   useEffect(() => {
     setData(null);
@@ -86,13 +97,23 @@ export default function Report() {
       .catch((e) => setError(e.message));
   }, [analysisId, subfieldId, year, country]);
 
+  useEffect(() => {
+    if (!data) return;
+    getAvailability(data.subfield_id, data.year)
+      .then(setAvail)
+      .catch(() => setAvail(null));
+    // data 전체를 넣으면 응답이 바뀔 때마다(같은 subfield_id·year라도 참조가 새로
+    // 만들어짐) 불필요하게 재요청한다 — 실제로 값이 바뀌는 두 필드만 본다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.subfield_id, data?.year]);
+
   return (
     <div className="min-h-screen">
       <TopBar />
       <article className="mx-auto max-w-4xl px-6 pb-10 pt-6">
         {error && <p className="text-sm text-danger">{error}</p>}
         {!data && !error && <p className="text-sm text-muted">불러오는 중…</p>}
-        {data && <ReportBody data={data} />}
+        {data && <ReportBody data={data} avail={avail} />}
       </article>
       <Footer />
     </div>
@@ -154,7 +175,7 @@ function SectionSummaries({ sections }: { sections?: { name: string; body_md: st
 }
 
 
-function ReportBody({ data }: { data: Analysis }) {
+function ReportBody({ data, avail }: { data: Analysis; avail: Availability | null }) {
   const excluded = data.searched_count - data.analyzed_count;
   // 이웃 연도는 실제로 분석 행이 있는 연도 중에서만 고른다 — year±1로 링크하면
   // 건너뛴 연도에서 404 화면이 뜬다.
@@ -198,6 +219,18 @@ function ReportBody({ data }: { data: Analysis }) {
           )}
         </div>
       </div>
+
+      {avail && (
+        <div className="mt-4">
+          <CountryBar
+            subfieldId={data.subfield_id}
+            year={data.year}
+            current={data.country}
+            countries={avail.countries}
+            comparisons={avail.comparisons}
+          />
+        </div>
+      )}
 
       <header className="mb-6" style={{ animation: "fadeUp 0.3s ease-out both" }}>
         <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">

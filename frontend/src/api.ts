@@ -129,6 +129,20 @@ export interface SummarySubfield {
   status_label: string;
   searched_count: number;
   analyzed_count: number;
+  // 이 세부기술·연도에 완료된 분석이 있는 국가 코드들. 비어 있으면 아직 아무 나라도
+  // 완료되지 않은 것 — 표는 결측 기호(—)로 표시한다.
+  countries: string[];
+}
+
+// 보고서 상단 국가 줄용 — 이 세부기술·연도에 실제로 완료된 국가·비교만 담겨 온다
+// (없는 조합은 백엔드가 아예 뺀다. 공개 화면은 미보유를 드러내지 않는다).
+export interface Availability {
+  countries: string[];
+  comparisons: { countries: string[]; label: string }[];
+}
+
+export function getAvailability(subfieldId: number, year: number) {
+  return get<Availability>(`/subfields/${subfieldId}/availability?year=${year}`);
 }
 
 export interface FieldSummary {
