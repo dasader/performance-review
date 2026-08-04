@@ -1196,6 +1196,41 @@ def test_admin_schedule_rejects_malformed_country_list(client):
     assert r.status_code == 422
 
 
+def test_comparison_grid_shows_configured_countries_only(client):
+    """열은 schedule_settings.countries에 설정된 국가만 — 안 쓰는 나라 열이 늘어붙지 않게."""
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR", "CN"), year=2026)
+    db.close()
+    client.put("/api/admin/schedule",
+               json={"enabled": True, "day": 10, "hour": 3, "years_back": 1,
+                     "countries": "KR,CN"},
+               headers={"X-Admin-Key": settings.admin_key})
+
+    got = client.get("/api/admin/comparison-grid", params={"year": 2026},
+                     headers={"X-Admin-Key": settings.admin_key}).json()
+    assert got["countries"] == ["KR", "CN"]
+    row = got["rows"][0]
+    assert row["analyses"]["KR"] == "done"
+    assert row["comparisons"] == {}          # 아직 만든 비교가 없다
+
+
+def test_run_all_comparisons_skips_subfields_missing_a_country(client):
+    """상대국 분석이 없는 세부기술은 조용히 건너뛴다(field-reports/run-all과 같은 규약)."""
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR",), year=2026)      # CN 없음
+    db.close()
+    client.put("/api/admin/schedule",
+               json={"enabled": True, "day": 10, "hour": 3, "years_back": 1,
+                     "countries": "KR,CN"},
+               headers={"X-Admin-Key": settings.admin_key})
+
+    r = client.post("/api/admin/comparisons/run-all",
+                    params={"year": 2026, "mode": "pairs"},
+                    headers={"X-Admin-Key": settings.admin_key})
+    assert r.status_code == 200
+    assert r.json() == {"queued": 0, "skipped": 1}
+
+
 def _seed_countries(db, countries=("KR", "US"), *, year=2026, subfield_id=1):
     """비교 API 테스트용 — 지정 국가의 done 분석을 심는다.
 

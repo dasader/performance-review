@@ -17,7 +17,7 @@ from app.config import settings
 from app.database import get_db
 from app.deps import require_admin
 from app.models.analysis import Analysis, AnalysisPaper
-from app.models.field import Field, FieldReport, Roadmap, RoadmapCheck, Subfield
+from app.models.field import CountryComparison, Field, FieldReport, Roadmap, RoadmapCheck, Subfield
 from app.models.schedule import AnalysisRun
 from app.services import budget, comparison, mapper, reducer, runner, search
 
@@ -261,7 +261,7 @@ def dashboard(db: Session = Depends(get_db)):
     for a in db.query(
         Analysis.id, Analysis.subfield_id, Analysis.year, Analysis.status,
         Analysis.searched_count, Analysis.analyzed_count, Analysis.snapshot_at,
-        Analysis.error, Analysis.query_hash,
+        Analysis.error, Analysis.query_hash, Analysis.country,
     ).all():
         by_subfield.setdefault(a.subfield_id, []).append(a)
 
@@ -283,6 +283,7 @@ def dashboard(db: Session = Depends(get_db)):
                     "snapshot_at": a.snapshot_at.isoformat() if a.snapshot_at else None,
                     "stale": a.query_hash != search.query_hash(subfield, a.year, a.year),
                     "error": a.error,
+                    "country": a.country,
                 }
                 for a in sorted(analyses, key=lambda x: x.year, reverse=True)
             ],
@@ -478,6 +479,93 @@ def run_all_field_reports(year: int, kind: str = "report", db: Session = Depends
         except (LookupError, ValueError):
             skipped += 1
     return {"kind": kind, "year": year, "queued": queued, "skipped": skipped}
+
+
+@router.get("/comparison-grid")
+def comparison_grid(year: int, db: Session = Depends(get_db)):
+    """세부기술 × (국가 분석 · 비교 보고서) 현황.
+
+    열은 schedule_settings.countries에 설정된 국가만 — 안 쓰는 나라 열이 늘어붙으면
+    격자가 읽히지 않는다. 세부기술마다 질의하면 55번 나가므로 두 테이블을 각각
+    한 번에 읽어 subfield_id로 묶는다(field_reports_overview와 같은 방식).
+    """
+    cfg = runner.get_schedule_settings(db)
+    countries = [c.strip().upper() for c in (cfg.countries or "KR").split(",") if c.strip()]
+    subfields = db.query(Subfield).filter(Subfield.active.is_(True)).order_by(
+        Subfield.field_id, Subfield.name
+    ).all()
+    ids = [s.id for s in subfields]
+
+    analyses: dict[int, dict[str, str]] = {}
+    for a in db.query(Analysis.subfield_id, Analysis.country, Analysis.status).filter(
+        Analysis.subfield_id.in_(ids), Analysis.year == year
+    ):
+        analyses.setdefault(a.subfield_id, {})[a.country] = a.status
+
+    comparisons: dict[int, dict[str, str]] = {}
+    for c in db.query(
+        CountryComparison.subfield_id, CountryComparison.countries, CountryComparison.status
+    ).filter(CountryComparison.subfield_id.in_(ids), CountryComparison.year == year):
+        comparisons.setdefault(c.subfield_id, {})[c.countries] = c.status
+
+    return {
+        "year": year,
+        "countries": countries,
+        "rows": [
+            {
+                "subfield_id": s.id,
+                "subfield_name": s.name,
+                "field_id": s.field_id,
+                "analyses": analyses.get(s.id, {}),
+                "comparisons": comparisons.get(s.id, {}),
+            }
+            for s in subfields
+        ],
+    }
+
+
+@router.post("/comparisons/run-all")
+def run_all_comparisons(year: int, mode: str = "pairs", db: Session = Depends(get_db)):
+    """당해연도 전체 세부기술의 비교를 일괄 큐잉한다.
+
+    mode=pairs — 기준국과 각 상대국의 1:1 비교를 각각 만든다(KR,US / KR,CN).
+    mode=all   — 설정된 국가 전체를 한 보고서로(KR,US,CN).
+
+    대상이 안 되는 세부기술(상대국 분석 없음)은 조용히 건너뛴다 —
+    하나가 막혀 전체가 실패하면 안 된다(field-reports/run-all과 같은 규약).
+    """
+    if mode not in ("pairs", "all"):
+        raise HTTPException(status_code=422, detail="mode는 pairs 또는 all이어야 합니다.")
+
+    cfg = runner.get_schedule_settings(db)
+    countries = sorted({c.strip().upper() for c in (cfg.countries or "KR").split(",") if c.strip()})
+    if len(countries) < 2:
+        raise HTTPException(
+            status_code=409,
+            detail="스케줄의 대상 국가가 2개 이상이어야 비교를 만들 수 있습니다.",
+        )
+
+    combos = (
+        [sorted(pair) for pair in comparison.pair_countries(countries)]
+        if mode == "pairs"
+        else [countries]
+    )
+
+    queued = skipped = 0
+    for subfield in db.query(Subfield).filter(Subfield.active.is_(True)):
+        for combo in combos:
+            try:
+                comparison.enqueue_comparison(db, subfield.id, year, combo)
+                queued += 1
+            except (LookupError, ValueError):
+                # enqueue_comparison은 검증(세부기술 존재·국가 2개 이상·상대국 분석
+                # 존재)을 db.add() 이전에 전부 마치므로 실패 시 세션에 남는 미결
+                # 변경이 없다 — 그래도 이전 반복에서 쌓였을 수 있는 커밋되지 않은
+                # 상태를 확실히 비워, 이 세부기술을 건너뛴 것이 다음 세부기술의
+                # 질의(analyses.filter 등)에 영향을 주지 않게 한다.
+                db.rollback()
+                skipped += 1
+    return {"queued": queued, "skipped": skipped}
 
 
 @router.delete("/analyses/{analysis_id}")
