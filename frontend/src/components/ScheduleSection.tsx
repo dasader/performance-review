@@ -215,6 +215,13 @@ export default function ScheduleSection({
                 <p className="mt-1 text-xs text-muted">
                   국가마다 검색·추출이 따로 돌아 비용이 곱해집니다. 기본은 KR입니다.
                 </p>
+                {/* 세부기술 국가별 일괄 실행은 이미 동작하지만, 어디서 켜는지가
+                    이 필드 하나뿐이라 안내가 없으면 아무도 못 찾는다(그래서 안 쓰인다). */}
+                <p className="mt-1 text-xs text-muted">
+                  세부기술 분석의 국가별 일괄 실행은 여기서 합니다 — 이 목록에 국가를 넣고
+                  "지금 실행"을 누르면 전체 세부기술 × 대상 연도 × 각 국가가 한 번에
+                  큐잉됩니다.
+                </p>
               </div>
 
               <div>

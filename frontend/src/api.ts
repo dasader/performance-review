@@ -456,6 +456,9 @@ export interface Comparison {
   // 합성에 들어간 국가 수.
   source_count: number;
   generated_at: string | null;
+  // 3개국 이상 비교일 때의 쌍별(기준국 vs 각 상대국) 원본 보고서. 2개국 비교는
+  // 그 자체가 유일한 쌍이라 report_md와 중복이므로 빈 배열로 온다.
+  sections: { name: string; body: string }[];
 }
 
 export function getComparison(subfieldId: number, year: number, countries: string[]) {
@@ -473,6 +476,46 @@ export function enqueueComparison(
   return post<{ subfield_id: number; year: number; countries: string[]; status: string }>(
     `/admin/subfields/${subfieldId}/comparison?year=${year}&countries=${countries.join(",")}`,
     {},
+    adminKey,
+  );
+}
+
+// 관리자 "국가 현황" 격자 — 세부기술 × (국가 분석 · 비교 보고서) 현황.
+// countries는 schedule_settings에 설정된 국가 목록(순서는 입력 그대로) —
+// 국가를 늘리면 열도 그만큼 늘어난다.
+export interface ComparisonGridRow {
+  subfield_id: number;
+  subfield_name: string;
+  field_id: number;
+  // 국가 코드 → 그 국가·연도 분석 상태.
+  analyses: Record<string, string>;
+  // "CN,KR"처럼 정렬된 콤마 구분 국가 조합 → 비교 보고서 상태.
+  comparisons: Record<string, string>;
+}
+
+export interface ComparisonGridResponse {
+  year: number;
+  countries: string[];
+  rows: ComparisonGridRow[];
+}
+
+export function getComparisonGrid(year: number, adminKey: string) {
+  return get<ComparisonGridResponse>(`/admin/comparison-grid?year=${year}`, adminKey);
+}
+
+export interface ComparisonRunAllResponse {
+  queued: number;
+  skipped: number;
+}
+
+export function runAllComparisons(
+  year: number,
+  mode: "pairs" | "all",
+  adminKey: string,
+) {
+  return post<ComparisonRunAllResponse>(
+    `/admin/comparisons/run-all?year=${year}&mode=${mode}`,
+    null,
     adminKey,
   );
 }

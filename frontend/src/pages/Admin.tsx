@@ -20,6 +20,7 @@ import ScheduleSection from "../components/ScheduleSection";
 import RoadmapEditor from "../components/RoadmapEditor";
 import FieldReportsPanel from "../components/FieldReportsPanel";
 import ComparisonPanel from "../components/ComparisonPanel";
+import ComparisonGrid from "../components/ComparisonGrid";
 
 // 관리자 화면이 세로로 길어져 스크롤로만 탐색하게 됐다. 작업 단위로 묶는다.
 // "분석 실행"과 "실행 상태"는 한 탭에 둔다 — 실행한 뒤 바로 상태를 보는 흐름이라
@@ -31,6 +32,7 @@ const TABS = [
   { id: "roadmap", label: "전략기술로드맵" },
   { id: "field-reports", label: "분야 보고서" },
   { id: "comparison", label: "국가 비교" },
+  { id: "comparison-grid", label: "국가 현황" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -267,6 +269,10 @@ className="btn btn-toggle btn-sm"
 
         {tab === "comparison" && (
           <ComparisonPanel adminKey={key} onUnauthorized={onUnauthorized} />
+        )}
+
+        {tab === "comparison-grid" && (
+          <ComparisonGrid adminKey={key} onUnauthorized={onUnauthorized} />
         )}
 
         {/* 세부기술·검색식 / 분석 실행 섹션과 같은 카드로 묶어 시각적 단위를 맞춘다. */}

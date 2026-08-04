@@ -6,9 +6,63 @@ import remarkCjkFriendly from "remark-cjk-friendly";
 import { getComparison, type Comparison } from "../api";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
+import Switch from "../components/Switch";
 import { MARKDOWN_COMPONENTS, PROSE_CLASSES } from "../lib/prose";
 import { formatGeneratedAt } from "../lib/format";
 import { stripLeadingH1 } from "../lib/reportMarkdown";
+
+// 3개국 이상 비교의 쌍별(기준국 vs 각 상대국) 원본 보고서. 종합(report_md)은 국가를
+// 가로질러 보이는 것만 다루므로, 개별 대조는 접어서 따로 보여준다. Report.tsx의
+// SectionSummaries와 같은 규약(?withSections=1 + Switch) — 2개국 비교는 sections가
+// 비어 있어(그 자체가 유일한 쌍) 아무것도 렌더링하지 않는다.
+function PairwiseSections({ sections }: { sections?: { name: string; body: string }[] }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const open = searchParams.get("withSections") === "1";
+
+  if (!sections?.length) return null;
+
+  const toggle = () => {
+    const next = new URLSearchParams(searchParams);
+    if (open) next.delete("withSections");
+    else next.set("withSections", "1");
+    setSearchParams(next);
+  };
+
+  return (
+    <>
+      <hr className="my-10 border-t border-border" />
+      <section>
+        <div className="mb-2 flex flex-wrap items-center gap-4">
+          <h2 className="text-xl font-bold tracking-tight text-accent">쌍별 대조</h2>
+          <Switch checked={open} onChange={toggle} label="국가별 1:1 대조 포함" />
+        </div>
+        <p className="mb-4 text-sm text-muted">
+          국가가 셋 이상이면 한국과 각 나라를 1:1로 대조한 뒤 종합합니다. 위 종합은 국가를
+          가로질러 보이는 것만 다루므로, 개별 대조는 여기서 봅니다.
+        </p>
+        {open &&
+          sections.map((s, i) => (
+            <article key={s.name} className="mt-10 break-before-page">
+              <div className="mb-4 border-l-4 border-accent bg-sunken px-4 py-3">
+                <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">
+                  국가 비교 {i + 1} / {sections.length}
+                </p>
+                <h3 className="text-xl font-bold text-ink">{s.name}</h3>
+              </div>
+              <div className={`report-prose ${PROSE_CLASSES}`}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkCjkFriendly]}
+                  components={MARKDOWN_COMPONENTS}
+                >
+                  {stripLeadingH1(s.body)}
+                </ReactMarkdown>
+              </div>
+            </article>
+          ))}
+      </section>
+    </>
+  );
+}
 
 // 국가 비교 보고서 전용 페이지. 분야 보고서(FieldReportPage)와 같은 규약 —
 // 생성은 큐잉이라 pending이면 폴링하고, PDF는 브라우저 인쇄에 맡긴다.
@@ -129,6 +183,8 @@ export default function ComparisonPage() {
                 </ReactMarkdown>
               </div>
             )}
+
+            <PairwiseSections sections={data.sections} />
           </>
         )}
       </main>
