@@ -278,7 +278,9 @@ async def test_process_sends_table_and_bodies_only(monkeypatch):
     assert "세부내용-누출감지용" not in p               # sections_json이 새어들지 않았다
     assert row.status == "done"
     assert row.source_count == 2
-    assert row.report_md == "# 비교 보고서"
+    # 저장된 본문 = 코드가 끼운 대조표 + 모델 출력(_with_table).
+    assert "# 비교 보고서" in row.report_md
+    assert "| **모집단과 표본** |" in row.report_md
 
 
 async def test_job_loop_processes_pending_comparison(monkeypatch):
@@ -393,3 +395,48 @@ def test_payload_injects_the_achievement_types():
     for t in ("공정", "신소자", "아키텍처"):
         assert t in instruction
     assert "{type_count}" not in instruction and "{type_list}" not in instruction
+
+
+async def test_table_is_inserted_by_code_not_the_model(monkeypatch):
+    """대조표는 코드가 본문에 끼워 넣는다 — 모델에게 베끼게 하지 않는다.
+
+    실측으로 두 번 실패했다: 처음엔 모델이 형식을 바꿔 실었고(그룹 제목·계층 기호가
+    사라짐), 프롬프트를 고치자 이번엔 표를 통째로 빼고 서술만 했다. 코드가 이미 갖고
+    있는 것을 모델에게 왕복시킬 이유가 없다.
+    """
+    from app.services import comparison as comp
+
+    db = _session()
+    sid = _seed(db, ("KR", "US"))
+
+    async def fake_generate(system, user, *, thinking=None, **kw):
+        # 모델은 표 없이 절만 쓴다
+        return "## 1. 비교 개요\n서술입니다.\n\n## 2. 연구 규모와 구조\n본문."
+
+    monkeypatch.setattr(comp.gemini_sync, "generate", fake_generate)
+    row = comp.enqueue_comparison(db, sid, 2026, ["KR", "US"])
+    await comp.process_comparison(db, row)
+
+    md = row.report_md
+    assert "| **모집단과 표본** |" in md          # 표가 들어갔다
+    assert "| · 표본율 |" in md                   # 계층 기호도 그대로
+    # 표는 1절 제목 바로 뒤에 온다 — 서술보다 앞이라 조건을 먼저 보게 된다
+    first, rest = md.split("## 1. 비교 개요", 1)
+    assert rest.index("| **모집단과 표본** |") < rest.index("서술입니다")
+
+
+async def test_table_is_prepended_when_the_model_omits_the_heading(monkeypatch):
+    """1절 제목을 못 찾으면 맨 앞에 붙인다 — 표가 사라지는 경우는 없어야 한다."""
+    from app.services import comparison as comp
+
+    db = _session()
+    sid = _seed(db, ("KR", "US"))
+
+    async def fake_generate(system, user, *, thinking=None, **kw):
+        return "제목 없이 그냥 서술만 한 보고서."
+
+    monkeypatch.setattr(comp.gemini_sync, "generate", fake_generate)
+    row = comp.enqueue_comparison(db, sid, 2026, ["KR", "US"])
+    await comp.process_comparison(db, row)
+
+    assert "| **모집단과 표본** |" in row.report_md

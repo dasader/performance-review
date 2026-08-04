@@ -11,6 +11,7 @@ reducer.py에 넣지 않은 이유: reducer는 이미 세부기술 reduce·분�
 from __future__ import annotations
 
 import logging
+import re
 
 from sqlalchemy.orm import Session
 
@@ -121,6 +122,26 @@ def build_comparison_table(rows: list[tuple[str, dict]]) -> str:
     return "\n".join([header, sep, *body])
 
 
+# 1절 제목. 모델이 번호·공백을 조금씩 다르게 쓰므로 느슨하게 잡는다.
+_FIRST_SECTION_RE = re.compile(r"^##\s*1\..*$", re.M)
+
+
+def _with_table(report_md: str, table: str) -> str:
+    """코드가 만든 대조표를 1절 제목 바로 뒤에 끼워 넣는다.
+
+    모델에게 베끼게 하지 않는 이유 — 실측으로 두 번 실패했다: 처음엔 형식을 바꿔
+    실어 그룹 제목·계층 기호가 사라졌고, 프롬프트를 고치자 이번엔 표를 통째로 빼고
+    서술만 했다. 코드가 이미 갖고 있는 것을 모델에게 왕복시킬 이유가 없다.
+
+    제목을 못 찾으면 맨 앞에 붙인다 — 표가 사라지는 경우는 없어야 한다.
+    """
+    block = f"\n\n{table}\n"
+    m = _FIRST_SECTION_RE.search(report_md or "")
+    if m is None:
+        return f"{table}\n\n{report_md or ''}"
+    return report_md[: m.end()] + block + report_md[m.end():]
+
+
 def compare_instruction(rows: list[tuple[str, dict]]) -> str:
     """성과유형 개수·목록을 세어 COMPARE_INSTRUCTION에 박는다.
 
@@ -213,15 +234,18 @@ async def process_comparison(db: Session, row: CountryComparison) -> None:
     payload = (
         f"[세부기술: {name} / {row.year}년 / 비교 국가: "
         f"{', '.join(country_name(c) for c in codes)}]\n\n"
-        f"### 대조표(코드 집계 — 다시 계산하지 마세요)\n{table}\n\n{bodies}"
+        # 표는 근거로 주되 보고서에 다시 그리라고 하지 않는다 — 삽입은 _with_table이 한다.
+        f"### 대조표(코드 집계 — 근거로만 쓰세요. 보고서에는 시스템이 넣습니다)\n"
+        f"{table}\n\n{bodies}"
     )
 
     logger.info(
         "[비교] %s %d년 %s — 보고서 %d건 합성", name, row.year, row.countries, len(pairs)
     )
-    row.report_md = await gemini_sync.generate(
+    generated = await gemini_sync.generate(
         compare_instruction(stats_rows), payload, thinking=settings.thinking_reduce
     )
+    row.report_md = _with_table(generated, table)
     row.generated_at = _time.utcnow()
     row.source_count = len(pairs)
     row.status = "done"
