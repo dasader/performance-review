@@ -213,6 +213,25 @@ body {
     @apply opacity-45;
   }
 
+  /* 모달 — <dialog>의 UA 기본값(margin·border·padding·max-width)을 걷어내고 규격으로
+     다시 세운다. 열기·포커스 트랩·Esc·포커스 복원은 브라우저가 한다(직접 구현하던
+     것을 걷어낸 이유는 SubfieldEditor의 Modal 주석 참고).
+
+     배경 클릭으로는 닫히지 않는다 — <dialog>의 기본 동작이 마침 그렇고, 검색식을
+     길게 입력하다 실수로 바깥을 눌러 입력이 날아가는 사고를 막아야 한다. */
+  .modal {
+    @apply m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-lg flex-col border border-border bg-surface p-0;
+  }
+
+  .modal[open] {
+    @apply flex;
+  }
+
+  /* ::backdrop은 @apply 대상이 아니라 값으로 쓴다 — --ink 50%(bg-ink/50과 같은 값). */
+  .modal::backdrop {
+    background: rgb(24 24 27 / 0.5);
+  }
+
   /* 표 가로 스크롤 컨테이너.
      좁아지면 표는 눌러 담지 않고 옆으로 민다 — 셀이 세로로 쪼개지면 열 정렬이 무너져
      숫자 비교가 불가능해진다. 다만 그 스크롤이 문서 전체로 새면 안 된다.
@@ -269,7 +288,6 @@ body {
      제목만 남은 빈 페이지가 생긴다. 표는 쪼개되 행 단위로만 끊고, 머리행은
      페이지마다 반복시킨다. */
   figure,
-  .recharts-wrapper,
   .avoid-break {
     break-inside: avoid;
   }

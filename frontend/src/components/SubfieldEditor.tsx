@@ -512,18 +512,18 @@ function QueryLintFeedback({ result, valueTrimmed }: { result: LintResult; value
   );
 }
 
-// 세부기술 추가/편집 공용 모달. 라이브러리 없이 직접 구현:
-// - Esc·명시적 취소/닫기 버튼으로만 닫힘(저장 중에는 무시). 배경(오버레이) 클릭으로는
-//   닫히지 않는다 — 검색식을 길게 입력하다 실수로 바깥을 클릭하면 입력이 통째로 날아가는
-//   사고를 막기 위함이다.
-// - 열릴 때 initialFocusRef로 포커스, 닫힐 때(언마운트) 트리거였던 요소로 포커스 복귀
-//   (모달을 연 순간의 document.activeElement가 곧 그 트리거 버튼이므로 별도로 전달받지 않는다)
-// - role=dialog + aria-modal + aria-labelledby, 열려 있는 동안 배경 스크롤 잠금
-// - 내용이 길면 모달 내부만 스크롤(max-h)
-// ponytail: 포커스 트랩은 없다 — aria-modal="true"는 어떤 브라우저에서도 포커스를
-// 가두지 않으므로, Tab을 계속 누르면 오버레이 뒤의 편집/삭제 버튼으로 빠져나간다.
-// 고치려면 <dialog>+showModal()로 바꾸는 쪽이 맞다(브라우저가 트랩·Esc·스크롤 잠금을
-// 다 해주므로 위 수동 구현 대부분이 삭제된다). 실제 브라우저에서 확인할 수 있을 때 하자.
+// 세부기술 추가/편집 공용 모달. <dialog> + showModal()에 얹는다 —
+// 포커스 트랩·Esc·포커스 복원·배경(::backdrop)을 브라우저가 준다.
+//
+// 직접 구현하던 시절엔 포커스 트랩이 없어(aria-modal="true"는 어떤 브라우저에서도
+// 포커스를 가두지 않는다) Tab을 계속 누르면 오버레이 뒤의 편집/삭제 버튼으로
+// 빠져나갔다. 네이티브로 옮기면서 그 결함이 함께 사라졌다.
+//
+// - **배경 클릭으로는 닫히지 않는다** — <dialog>의 기본 동작이 마침 그렇다. 검색식을
+//   길게 입력하다 실수로 바깥을 눌러 입력이 통째로 날아가는 사고를 막아야 한다.
+// - 저장 중에는 Esc도 무시한다(cancel에서 판단).
+// - 배경 스크롤 잠금만은 dialog가 해주지 않아 그대로 남긴다.
+// - 내용이 길면 모달 내부만 스크롤(max-h는 .modal 계약에 있다).
 function Modal({
   titleId,
   title,
@@ -539,8 +539,15 @@ function Modal({
   initialFocusRef: RefObject<HTMLElement | null>;
   children: ReactNode;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
   useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const el = dialogRef.current;
+    if (!el) return;
+    // showModal이 top layer로 올리고 포커스 트랩을 건다. open 속성만 붙이면(=<dialog open>)
+    // 그 셋 다 없는 평범한 블록이 되므로 반드시 이 메서드로 열어야 한다.
+    el.showModal();
+    // 배경 스크롤만은 dialog가 막아주지 않는다.
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     // rAF로 한 프레임 미뤄야 방금 마운트된 select에 포커스가 안정적으로 잡힌다.
@@ -548,44 +555,41 @@ function Modal({
     return () => {
       cancelAnimationFrame(frame);
       document.body.style.overflow = prevOverflow;
-      previouslyFocused?.focus();
+      // close()를 불러야 브라우저가 트리거였던 요소로 포커스를 되돌린다 —
+      // DOM에서 그냥 떼면 포커스가 <body>로 떨어진다.
+      if (el.open) el.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !closeDisabled) onClose();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [closeDisabled, onClose]);
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="flex max-h-[85vh] w-full max-w-lg flex-col border border-border bg-surface"
-      >
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-          <h2 id={titleId} className="text-base font-semibold text-ink">
-            {title}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={closeDisabled}
-            aria-label="닫기"
-            className="text-lg leading-none text-muted hover:text-ink disabled:opacity-40"
-          >
-            ×
-          </button>
-        </div>
-        <div className="overflow-y-auto px-4 py-4">{children}</div>
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={titleId}
+      // Esc는 cancel로 온다. 기본 동작(브라우저가 즉시 닫기)을 막고 React 상태를 단일
+      // 출처로 유지한다 — 상태를 안 거치고 닫히면 화면과 어긋난다.
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!closeDisabled) onClose();
+      }}
+      className="modal"
+    >
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+        <h2 id={titleId} className="text-base font-semibold text-ink">
+          {title}
+        </h2>
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={closeDisabled}
+          aria-label="닫기"
+          className="text-lg leading-none text-muted hover:text-ink disabled:opacity-40"
+        >
+          ×
+        </button>
       </div>
-    </div>
+      <div className="overflow-y-auto px-4 py-4">{children}</div>
+    </dialog>
   );
 }
 
