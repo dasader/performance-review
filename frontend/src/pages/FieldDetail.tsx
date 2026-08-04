@@ -13,6 +13,7 @@ import Footer from "../components/Footer";
 import StatusBadge from "../components/StatusBadge";
 import GeneratedReportSection from "../components/GeneratedReportSection";
 import { formatGeneratedAt } from "../lib/format";
+import { COUNTRY_NAMES } from "../lib/countries";
 import { useAdminKey } from "../useAdminKey";
 
 export default function FieldDetail() {
@@ -181,6 +182,7 @@ export default function FieldDetail() {
                         <th>세부기술</th>
                         <th>상태</th>
                         <th className="n">검색 / 분석</th>
+                        <th>보고서</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -207,6 +209,23 @@ export default function FieldDetail() {
                             {s.searched_count > 0
                               ? `${s.searched_count.toLocaleString()} / ${s.analyzed_count.toLocaleString()}`
                               : "—"}
+                          </td>
+                          <td className="px-3 py-2">
+                            {s.countries.length === 0 ? (
+                              <span className="text-faint">—</span>
+                            ) : (
+                              <span className="flex flex-wrap gap-1">
+                                {s.countries.map((c) => (
+                                  <Link
+                                    key={c}
+                                    to={`/subfields/${s.subfield_id}/${year}?country=${c}`}
+                                    className="btn btn-toggle btn-sm"
+                                  >
+                                    {COUNTRY_NAMES[c] ?? c}
+                                  </Link>
+                                ))}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}

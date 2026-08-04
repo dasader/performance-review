@@ -26,6 +26,14 @@ from app.services.runner import STEP_LABELS
 
 router = APIRouter(prefix="/api", tags=["public"])
 
+# 이 라우터의 목록·요약 집계(list_fields의 current_year_done, field_years,
+# field_summary)는 한국어 보고서를 훑어보는 경로다 — 다른 국가는 국가 줄·비교
+# 격자로 따로 들어간다. 국가 필터 없이 Analysis를 세면 같은 세부기술의 KR·US
+# 행이 섞여 상태·건수가 뒤바뀐다(리뷰 지적: KR 링크인데 US의 상태·건수가 뜸,
+# 6개 세부기술 × 2개국이 "12"로 세어짐). 리터럴을 여기저기 흩뿌리지 않도록
+# 상수 하나로 고정한다.
+_KOREA = "KR"
+
 # 인용 형식 두 가지를 함께 잡는다.
 #
 # ① 괄호 — 한 단계 중첩까지 허용한다: 인용문 안에 "TrioN (3N0C)"처럼 논문 제목 자체가
@@ -290,6 +298,9 @@ def list_fields(db: Session = Depends(get_db)):
             # 파이의 분모가 활성 세부기술 수이므로 분자도 같은 모집단이어야 한다 —
             # 분석을 마친 세부기술을 나중에 비활성화하면 done이 분모를 넘어선다.
             Subfield.active.is_(True),
+            # 국가 필터 없으면 US 분석까지 세어져 done이 분모(활성 세부기술 수)를
+            # 넘어설 수 있다(리뷰 지적).
+            Analysis.country == _KOREA,
         )
         .group_by(Subfield.field_id)
         .all()
@@ -319,7 +330,10 @@ def field_years(field_id: int, db: Session = Depends(get_db)):
     rows = db.query(Analysis.year, Analysis.status).filter(
         Analysis.subfield_id.in_(
             db.query(Subfield.id).filter(Subfield.field_id == field_id)
-        )
+        ),
+        # 국가 필터 없으면 세부기술마다 국가 수만큼 중복 집계된다(리뷰 지적:
+        # 6개 세부기술 × 2개국이 "(12/24)"로 뜸).
+        Analysis.country == _KOREA,
     ).all()
 
     by_year: dict[int, dict] = {}
@@ -351,7 +365,12 @@ def field_summary(field_id: int, year: int, db: Session = Depends(get_db)):
             Analysis.id, Analysis.subfield_id, Analysis.status,
             Analysis.searched_count, Analysis.analyzed_count,
         ).filter(
-            Analysis.subfield_id.in_([s.id for s in subfields]), Analysis.year == year
+            Analysis.subfield_id.in_([s.id for s in subfields]),
+            Analysis.year == year,
+            # 국가 필터 없으면 {subfield_id: analysis} 맵이 국가 무관 "아무 분석"이
+            # 되어, 행의 상태·검색/분석 건수가 US 것인데 링크는 KR 보고서로 여는
+            # 어긋남이 생긴다(리뷰 지적). 이 화면은 한국어 보고서 목록이다.
+            Analysis.country == _KOREA,
         )
     }
     # 국가 목록은 세부기술마다 질의하면 55번 나간다 — 한 번에 모아 읽어 붙인다.
