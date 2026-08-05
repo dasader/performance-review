@@ -37,7 +37,8 @@ def _ranked(counter: Counter, n: int) -> list[tuple[str, int]]:
 # 괄호 안에는 약어(PCE)나 조건(85°C)이 들어와 같은 지표를 쪼갠다 — 묶음 키에서는 떼어낸다.
 _PAREN_RE = re.compile(r"\([^)]*\)")
 _SEP_RE = re.compile(r"[\s_/·,]+")
-_NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
+# ".5"처럼 정수부가 없는 값도 있다(실측).
+_NUM_RE = re.compile(r"-?(?:\d+(?:\.\d+)?|\.\d+)")
 
 
 def _metric_key(name: str) -> str:
@@ -63,9 +64,25 @@ _POWER10_RE = re.compile(r"10\s*\^\s*(-?\d+)")
 _E_NOTATION_RE = re.compile(r"-?\d+(?:\.\d+)?[eE][-+]?\d+")
 
 
+# 값이 숫자로 시작하는가. 아니면 집계에서 뺀다.
+#
+# 첫 숫자를 집는 규칙은 "12.5 %"처럼 단위가 붙은 값을 위한 것인데, 값 자리에 수식이나
+# 서술이 들어오면 엉뚱한 수를 집는다 — 실측(v3 추출 44,225개 값): 숫자로도 부호로도
+# 시작하지 않는 값이 104건(0.24%)이고 그 대부분이 그런 형태다:
+#   "DOE 2025 목표 상회"        → 2025
+#   "SS316L > N10003 > C-276"  → 316
+#   "log2(n)" · "O(2^n)"        → 2
+#   "(nd)^{1/4}/sqrt(ε)"        → 1
+#
+# 허용하는 선두: 공백, "약", 부호·근사·부등호(-+~<>≤≥≈), 그리고 숫자(또는 .5).
+# ±는 넣지 않았다 — "±0.15"는 값이 아니라 폭이라 위치가 없고, 분포에 넣으면 그 지표의
+# 수준을 잘못 말한다(실측 42건). 되돌리려면 이 문자열에 ±를 더하면 된다.
+_NUMERIC_START_RE = re.compile(r"^\s*(?:약\s*)?[-+~<>≤≥≈]?\s*(?:\d|\.\d)")
+
+
 def _metric_value(raw: object) -> float | None:
-    """값 문자열에서 대표 숫자를 뽑는다. 숫자가 없으면 None — 집계에서 빠지되
-    metrics_total에는 남는다.
+    """값 문자열에서 대표 숫자를 뽑는다. 숫자가 없거나 값이 숫자로 시작하지 않으면
+    None — 집계에서 빠지되 metrics_total에는 남아 분모를 속이지 않는다.
 
     **가장 앞에 나오는 표기를 쓴다.** 지수를 이해하되 "앞의 수를 쓴다"는 기존 규칙을
     뒤집지 않기 위해서다 — "2.5 GHz, 10^3 cycles"는 2.5다. 각 표기의 위치를 재서
@@ -78,6 +95,8 @@ def _metric_value(raw: object) -> float | None:
     """
     text = raw if isinstance(raw, str) else str(raw or "")
     text = text.replace(",", "")
+    if not _NUMERIC_START_RE.match(text):
+        return None
 
     # 지수 표기부터. 위치가 가장 앞선 것을 고른다.
     candidates: list[tuple[int, float]] = []

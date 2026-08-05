@@ -430,8 +430,47 @@ def test_garbage_with_caret_does_not_crash():
         {"name": "지수", "value": "5", "unit": ""},
     ])]
     agg = stats.aggregate_metrics(ext)
-    # 예전부터 "{1/4}"의 1을 첫 숫자로 읽어 왔다. 지수 파싱이 그 동작을 바꾸지
-    # 않는다는 것이 여기서 확인하려는 것이다 — 터지지 않고, 지수로 오해하지도 않는다.
+    # 예전에는 "{1/4}"의 1을 첫 숫자로 읽었다. 이제는 값이 숫자로 시작하지 않으므로
+    # 집계에서 빠진다 — 터지지 않고, 분모(metrics_total)에는 남는다.
     assert agg["metrics_total"] == 2
-    assert agg["metrics_parsed"] == 2
-    assert agg["top_metrics"][0]["min"] == 1.0
+    assert agg["metrics_parsed"] == 1
+    assert agg["top_metrics"] == []   # 남은 값이 하나뿐이라 분포가 없다
+
+
+def test_formulas_and_prose_are_excluded_from_aggregation():
+    """값이 수식·서술이면 집계에서 뺀다. 첫 숫자를 집으면 엉뚱한 값이 들어간다.
+
+    실측(v3 추출 44,225개 값): 숫자로도 부호로도 시작하지 않는 값이 104건(0.24%)
+    있고, 그 대부분이 이런 형태다 — 'DOE 2025 목표 상회' → 2025,
+    'SS316L > N10003 > C-276' → 316, 'log2(n)' → 2, 'O(2^n)' → 2.
+    """
+    ext = [_e("a", [
+        {"name": "성능", "value": "DOE 2025 목표 상회", "unit": ""},
+        {"name": "성능", "value": "SS316L > N10003 > C-276", "unit": ""},
+        {"name": "성능", "value": "log2(n)", "unit": ""},
+        {"name": "성능", "value": "(nd)^{1/4}/sqrt(ε)", "unit": ""},
+        {"name": "성능", "value": "12.5", "unit": ""},
+        {"name": "성능", "value": "13.5", "unit": ""},
+    ])]
+    agg = stats.aggregate_metrics(ext)
+    assert agg["metrics_total"] == 6      # 분모는 속이지 않는다
+    assert agg["metrics_parsed"] == 2     # 숫자로 시작하는 둘만
+    row = agg["top_metrics"][0]
+    assert row["count"] == 2
+    assert row["min"] == 12.5 and row["max"] == 13.5
+
+
+def test_leading_sign_and_approximation_markers_still_count():
+    """부호·물결·부등호·'약'으로 시작하는 값은 정상이다 — 실측 787건."""
+    for raw, want in [
+        ("~14", 14.0), (">10", 10.0), ("<0.5", 0.5), ("≈3.2", 3.2),
+        ("-1.57E-03", -0.00157), ("약 7", 7.0), (".5", 0.5),
+    ]:
+        assert stats._metric_value(raw) == want, raw
+
+
+def test_tolerance_only_values_are_excluded():
+    """'±0.15'는 값이 아니라 폭이다 — 위치가 없는 것을 분포에 넣을 수 없다.
+    실측 42건. 되돌리려면 허용 문자에 ±를 넣으면 된다."""
+    assert stats._metric_value("±0.15") is None
+    assert stats._metric_value("± 10") is None
