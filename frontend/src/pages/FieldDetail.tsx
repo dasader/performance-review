@@ -13,7 +13,7 @@ import Footer from "../components/Footer";
 import StatusBadge from "../components/StatusBadge";
 import GeneratedReportSection from "../components/GeneratedReportSection";
 import { formatGeneratedAt } from "../lib/format";
-import { COUNTRY_NAMES } from "../lib/countries";
+import { COUNTRY_NAMES, sortCountries } from "../lib/countries";
 import { useAdminKey } from "../useAdminKey";
 
 export default function FieldDetail() {
@@ -229,7 +229,7 @@ export default function FieldDetail() {
                               <span className="text-faint">—</span>
                             ) : (
                               <span className="flex flex-wrap gap-1">
-                                {s.countries.map((c) => (
+                                {sortCountries(s.countries).map((c) => (
                                   <Link
                                     key={c}
                                     to={`/subfields/${s.subfield_id}/${year}?country=${c}`}
