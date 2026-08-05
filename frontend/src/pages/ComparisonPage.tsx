@@ -138,14 +138,16 @@ export default function ComparisonPage() {
               <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">
                 국가 비교 보고서
               </p>
+              {/* 세부기술 보고서와 같은 규칙 — "무엇을 · 어느 나라 · 언제". 어느
+                  나라들을 보고 있는지가 제목에서 바로 읽혀야 한다. */}
               <h1 className="mt-1 text-3xl font-bold tracking-tight text-ink">
-                {data.subfield_name} 국가 비교{" "}
-                <span className="text-faint">{data.year}</span>
+                {data.subfield_name}{" "}
+                <span className="text-muted">{data.country_names.join(" · ")} </span>
+                <span className="tabular-nums text-muted">{data.year}</span>
               </h1>
 
               <p className="mt-3 text-xs text-muted">
-                {data.country_names.join(" · ")} {data.source_count}개국 기준
-                {" · "}
+                {data.source_count}개국 기준{" · "}
                 {formatGeneratedAt(data.generated_at)} 생성
               </p>
 

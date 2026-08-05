@@ -227,13 +227,20 @@ function ReportBody({ data, avail }: { data: Analysis; avail: Availability | nul
         <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">
           {data.field_name}
         </p>
+        {/* 제목이 "무엇을 · 어느 나라 · 언제"를 한 줄로 말한다. 한국은 기준국이라
+            넣지 않는다 — 대다수 화면에 늘 붙으면 그 표시가 신호 노릇을 못한다.
+            국가·연도는 muted로 낮춰 세부기술명이 계속 주인공이게 둔다. */}
         <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-ink">
-          {data.subfield_name} <span className="tabular-nums text-muted">{data.year}</span>
+          {data.subfield_name}{" "}
+          {data.country !== "KR" && (
+            <span className="text-muted">{data.country_name} </span>
+          )}
+          <span className="tabular-nums text-muted">{data.year}</span>
         </h1>
         {/* eyebrow는 한 덩어리에 하나만 쓴다 — 제목 위아래로 두 줄이 같은 대문자 라벨
             모양이면 어느 쪽이 상위 분류인지 읽히지 않는다. 아래는 평범한 캡션으로 둔다. */}
         <p className="mt-1 text-xs text-muted">
-          분석 대상 기간 {data.year}년 · 대상 국가 {data.country_name}
+          분석 대상 기간 {data.year}년
         </p>
 
         <div className="mt-3">
@@ -283,8 +290,8 @@ function ReportBody({ data, avail }: { data: Analysis; avail: Availability | nul
 
       {data.status === "done" && (
         <>
-          <SectionDivider />
-
+          {/* 국가 줄 바로 아래에는 구분선을 두지 않는다 — 줄 자체가 이미 헤더와
+              본문을 가르므로 선을 더 그으면 두 겹으로 갈린다(사용자 지적). */}
           {/* 서술(주요 기술적 성과)을 통계보다 먼저 — 독자는 정책·기획 담당자이며 숫자보다
               무엇을 달성했는지를 먼저 읽는다. */}
           <div className={`report-prose ${PROSE_CLASSES}`}>

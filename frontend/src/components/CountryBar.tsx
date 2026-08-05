@@ -52,12 +52,17 @@ export default function CountryBar({
   return (
     // 여백은 이 컴포넌트가 스스로 진다 — 바깥에서 감싸면 null을 반환하는 흔한
     // 단일 국가 경우에도 빈 줄이 남는다(리뷰 지적).
-    <div className="mt-4 print:hidden">
+    //
+    // 한 줄에 인라인으로 둔다. 국가와 비교는 머리말(국가 / 한국과 비교)로 갈리고,
+    // 조작물 자체는 명도로 갈린다 — 국가는 눌린 상태를 가진 토글(btn-toggle),
+    // 비교는 눌림이 없는 이동 버튼(btn-neutral). 둘 다 버튼이라 손으로 누르는
+    // 물건이라는 신호는 같다.
+    <div className="mt-4 flex flex-wrap items-center gap-2 print:hidden">
       {countries.length > 1 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {/* eyebrow 모양을 쓰지 않는다 — 이 줄은 제목 블록 바로 아래에 놓이는데,
-              같은 대문자 라벨이 화면에 셋이면 어느 쪽이 상위 분류인지 읽히지 않는다
-              (Report.tsx 헤더 주석의 규칙). 평범한 캡션으로 둔다. */}
+        <>
+          {/* eyebrow 모양을 쓰지 않는다 — 제목 블록에 이미 하나 있고, 같은 대문자
+              라벨이 화면에 둘이면 어느 쪽이 상위 분류인지 읽히지 않는다
+              (Report.tsx 헤더 주석의 규칙). */}
           <span className="text-xs text-muted">국가</span>
           {ordered.map((c) => (
             <Link
@@ -69,24 +74,25 @@ export default function CountryBar({
               {name(c)}
             </Link>
           ))}
-        </div>
+        </>
       )}
 
       {comparisons.length > 0 && (
-        // 비교는 버튼이 아니라 밑줄 링크다. 같은 모양의 버튼을 여덟 개 늘어놓는 대신
-        // 위계를 명도로 나눈다 — 이 체계는 색이 아니라 명도 계단으로 위계를 만든다.
-        <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-xs text-muted">{allWithBase ? "한국과 비교" : "비교"}</span>
+        <>
+          {/* 국가 버튼들과 붙어 보이지 않게 머리말 앞에만 여백을 준다. */}
+          <span className="ml-2 text-xs text-muted">
+            {allWithBase ? "한국과 비교" : "비교"}
+          </span>
           {comparisons.map((cmp) => (
             <Link
               key={cmp.countries.join(",")}
               to={`/subfields/${subfieldId}/compare/${year}?countries=${cmp.countries.join(",")}`}
-              className="text-ink-light underline decoration-border-strong underline-offset-2 hover:decoration-ink"
+              className="btn btn-neutral btn-sm"
             >
               {comparisonLabel(cmp.countries)}
             </Link>
           ))}
-        </p>
+        </>
       )}
     </div>
   );
