@@ -1,5 +1,6 @@
 import { Fragment, useState } from "react";
 import { getMetricPapers, type MetricPaper, type MetricStat } from "../api";
+import DoiLink from "./DoiLink";
 
 // 정량 지표 분포 — 추출된 수치를 (지표명, 단위)로 묶어 코드가 집계한 표다.
 // StatsPanel("기본 통계")이 아니라 **보고서 본문 쪽**에 둔다: 이것은 논문 간 통계
@@ -117,14 +118,7 @@ export default function MetricTable({
                             {p.title && (
                               <span className="block text-[11px] leading-snug text-muted">
                                 {p.doi ? (
-                                  <a
-                                    href={`https://doi.org/${p.doi}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="underline decoration-border-strong underline-offset-2 hover:decoration-ink"
-                                  >
-                                    {p.title}
-                                  </a>
+                                  <DoiLink doi={p.doi}>{p.title}</DoiLink>
                                 ) : (
                                   p.title
                                 )}

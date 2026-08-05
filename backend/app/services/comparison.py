@@ -16,6 +16,7 @@ import re
 from sqlalchemy.orm import Session
 
 from app.services import _time
+from app.services._countries import parse_countries
 from app.clients import gemini_sync
 from app.config import settings
 from app.models import Analysis, CountryComparison, Subfield
@@ -73,6 +74,15 @@ def _pct(part: int, whole: int) -> str:
     return f"{round(part / whole * 100)}%"
 
 
+def _achievement_types(rows: list[tuple[str, dict]]) -> list[str]:
+    """모든 국가에 등장한 성과유형의 합집합(정렬).
+
+    대조표와 §3 지시문이 **같은 집합**을 봐야 한다 — 지시문은 "성과유형이 N개"라고
+    못박고 표는 그 N행을 그리므로, 두 곳이 각자 세면 숫자와 표가 어긋난다.
+    """
+    return sorted({t for _, s in rows for t in s.get("by_achievement_type", {})})
+
+
 def build_comparison_table(rows: list[tuple[str, dict]]) -> str:
     """국가별 stats_json에서 대조표(마크다운)를 만든다.
 
@@ -121,14 +131,10 @@ def build_comparison_table(rows: list[tuple[str, dict]]) -> str:
 
     # 성과유형은 국가마다 키가 달라 합집합을 만들고 없는 곳은 0으로 채운다. 빠뜨리면
     # "그 국가엔 그 유형이 없다"와 "집계에서 누락됐다"가 구별되지 않는다.
-    types: list[str] = []
-    for _, s in rows:
-        for t in s.get("by_achievement_type", {}):
-            if t not in types:
-                types.append(t)
+    types = _achievement_types(rows)
     if types:
         body.append(group("성과유형 (분석 기준)"))
-        for t in sorted(types):
+        for t in types:
             body.append(
                 line(t, lambda s, t=t: s.get("by_achievement_type", {}).get(t, 0))
             )
@@ -180,12 +186,7 @@ def compare_instruction(rows: list[tuple[str, dict]]) -> str:
 
     세는 일을 모델에게 시키지 않는 것도 같은 이유다(stats.py의 원칙).
     """
-    types: list[str] = []
-    for _, s in rows:
-        for t in s.get("by_achievement_type", {}):
-            if t not in types:
-                types.append(t)
-    types.sort()
+    types = _achievement_types(rows)
     return COMPARE_INSTRUCTION.replace("{type_count}", f"{len(types)}개").replace(
         "{type_list}", ", ".join(types) if types else "(집계된 성과유형 없음)"
     )
@@ -208,7 +209,7 @@ def enqueue_comparison(
     if db.get(Subfield, subfield_id) is None:
         raise LookupError(f"세부기술 {subfield_id}를 찾을 수 없습니다.")
 
-    codes = sorted({c.strip().upper() for c in countries if c.strip()})
+    codes = sorted(parse_countries(countries))
     if len(codes) < 2:
         raise ValueError("비교하려면 국가가 2개 이상이어야 합니다.")
 

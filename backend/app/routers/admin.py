@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from typing import Annotated
 
 import httpx
@@ -20,6 +19,8 @@ from app.models.analysis import Analysis, AnalysisPaper
 from app.models.field import CountryComparison, Field, FieldReport, Roadmap, RoadmapCheck, Subfield
 from app.models.schedule import AnalysisRun
 from app.services import budget, comparison, mapper, reducer, runner, search
+from app.services._countries import invalid_countries, parse_countries
+from app.services._time import utcnow
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -76,10 +77,10 @@ class ScheduleIn(BaseModel):
     def _check_countries(cls, v: str) -> str:
         """형식이 어긋난 코드를 막는다 — 잘못 저장되면 스케줄러가 조용히 존재하지 않는
         국가로 검색을 돌려 0건을 받는다(오류도 안 난다)."""
-        codes = [c.strip().upper() for c in (v or "").split(",") if c.strip()]
+        codes = parse_countries(v)
         if not codes:
             raise ValueError("국가를 최소 하나 지정해야 합니다.")
-        bad = [c for c in codes if len(c) != 2 or not c.isalpha()]
+        bad = invalid_countries(codes)
         if bad:
             raise ValueError(f"국가 코드는 두 글자 알파벳이어야 합니다: {', '.join(bad)}")
         return ",".join(codes)
@@ -281,7 +282,9 @@ def dashboard(db: Session = Depends(get_db)):
                     "searched_count": a.searched_count,
                     "analyzed_count": a.analyzed_count,
                     "snapshot_at": a.snapshot_at.isoformat() if a.snapshot_at else None,
-                    "stale": a.query_hash != search.query_hash(subfield, a.year, a.year),
+                    # country를 빼면 KR 해시와 비교돼 비KR 분석이 영원히 "갱신 필요"로
+                    # 뜬다 — enqueue()가 해시를 만들 때와 같은 인자를 줘야 한다.
+                    "stale": a.query_hash != search.query_hash(subfield, a.year, a.year, a.country),
                     "error": a.error,
                     "country": a.country,
                 }
@@ -377,7 +380,7 @@ def put_roadmap(field_id: int, payload: RoadmapIn, db: Session = Depends(get_db)
         db.add(row)
     row.version_label = payload.version_label
     row.content_md = payload.content_md
-    row.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    row.updated_at = utcnow()
     db.commit()
     return {"goal_count": goal_count}
 
@@ -490,7 +493,7 @@ def comparison_grid(year: int, db: Session = Depends(get_db)):
     한 번에 읽어 subfield_id로 묶는다(field_reports_overview와 같은 방식).
     """
     cfg = runner.get_schedule_settings(db)
-    countries = [c.strip().upper() for c in (cfg.countries or "KR").split(",") if c.strip()]
+    countries = parse_countries(cfg.countries or "KR")
     subfields = db.query(Subfield).filter(Subfield.active.is_(True)).order_by(
         Subfield.field_id, Subfield.name
     ).all()
@@ -538,7 +541,7 @@ def run_all_comparisons(year: int, mode: str = "pairs", db: Session = Depends(ge
         raise HTTPException(status_code=422, detail="mode는 pairs 또는 all이어야 합니다.")
 
     cfg = runner.get_schedule_settings(db)
-    countries = sorted({c.strip().upper() for c in (cfg.countries or "KR").split(",") if c.strip()})
+    countries = sorted(parse_countries(cfg.countries or "KR"))
     if len(countries) < 2:
         raise HTTPException(
             status_code=409,
@@ -625,17 +628,18 @@ def enqueue_comparison(
     국가 코드 형식을 여기서 막는 이유는 스케줄 countries와 같다 — 잘못 저장되면
     존재하지 않는 국가로 조회가 돌아 조용히 404가 되고 원인을 찾기 어렵다.
     """
-    codes = [c.strip().upper() for c in countries.split(",") if c.strip()]
-    if any(len(c) != 2 or not c.isalpha() for c in codes):
+    codes = parse_countries(countries)
+    if invalid_countries(codes):
         raise HTTPException(status_code=422, detail="국가 코드는 두 글자 알파벳이어야 합니다.")
+    # 국가 2개 미만은 요청 형식 문제(422)라 여기서 직접 판정한다 — 예전에는 아래 ValueError의
+    # 한국어 메시지에 "2개"가 들어 있는지로 갈랐고, 그 문구를 다듬으면 상태 코드가 조용히 바뀌었다.
+    if len(codes) < 2:
+        raise HTTPException(status_code=422, detail="비교하려면 국가가 2개 이상이어야 합니다.")
     try:
         row = comparison.enqueue_comparison(db, subfield_id, year, codes)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
-        # 국가 2개 미만은 요청 형식 문제(422), 분석 부재는 상태 충돌(409)로 나눈다.
-        if "2개" in str(e):
-            raise HTTPException(status_code=422, detail=str(e))
         raise HTTPException(status_code=409, detail=str(e))
     return {
         "subfield_id": row.subfield_id,

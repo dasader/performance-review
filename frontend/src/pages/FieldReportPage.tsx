@@ -1,8 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkCjkFriendly from "remark-cjk-friendly";
+import { Link, useParams } from "react-router-dom";
 import {
   get,
   type Field,
@@ -13,7 +10,8 @@ import {
 } from "../api";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
-import { MARKDOWN_COMPONENTS, PROSE_CLASSES } from "../lib/prose";
+import Prose from "../components/Prose";
+import { useQueryFlag } from "../lib/hooks";
 import { formatGeneratedAt } from "../lib/format";
 import { stripLeadingH1 } from "../lib/reportMarkdown";
 
@@ -40,8 +38,8 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
   // 세부기술 보고서 첨부 토글. URL 쿼리(?withSub=1)에 실어 상태를 공유·북마크 가능하게
   // 하고, 켜져 있으면 그대로 PDF로 저장하면 통짜로 출력된다. 분야 종합에만 있다 —
   // 로드맵 점검 결과에 세부기술 원문을 붙이는 건 성격이 안 맞는다.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const withSub = kind === "report" && searchParams.get("withSub") === "1";
+  const [subFlag, toggleSub] = useQueryFlag("withSub");
+  const withSub = kind === "report" && subFlag;
   const [subReports, setSubReports] = useState<SubfieldReportBody[] | null>(null);
 
   useEffect(() => {
@@ -66,13 +64,6 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
       stale = true;
     };
   }, [withSub, fieldId, year]);
-
-  const toggleSub = () => {
-    const next = new URLSearchParams(searchParams);
-    if (withSub) next.delete("withSub");
-    else next.set("withSub", "1");
-    setSearchParams(next);
-  };
 
   const check = kind === "roadmap-check" ? (data as RoadmapCheck | null) : null;
 
@@ -145,11 +136,7 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
 
             <hr className="my-10 border-t border-border" />
 
-            <div className={`report-prose ${PROSE_CLASSES}`}>
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]} components={MARKDOWN_COMPONENTS}>
-                {stripLeadingH1(data.report_md)}
-              </ReactMarkdown>
-            </div>
+            <Prose md={stripLeadingH1(data.report_md)} />
 
             {/* 세부기술 보고서 첨부 — 종합보고서 뒤에 각 세부기술 원문을 이어붙인다.
                 부록 배너는 종합보고서와 분리되게 새 페이지에서 시작하고(section의
@@ -179,11 +166,7 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
                         {s.name}
                       </h3>
                     </div>
-                    <div className={`report-prose mt-4 ${PROSE_CLASSES}`}>
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]} components={MARKDOWN_COMPONENTS}>
-                        {stripLeadingH1(s.report_md)}
-                      </ReactMarkdown>
-                    </div>
+                    <Prose className="mt-4" md={stripLeadingH1(s.report_md)} />
                     {/* 본문의 [n] 각주가 가리키는 참고문헌. 세부기술별로 번호가 새로
                         시작하므로 각 보고서 바로 아래에 둔다(여러 세부기술을 한 페이지에
                         올리면 #ref-n 앵커는 겹치지만, 인쇄물에서 필요한 건 번호-제목

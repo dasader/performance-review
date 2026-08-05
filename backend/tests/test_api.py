@@ -16,6 +16,7 @@ from app.models.field import CountryComparison, Field, Subfield
 from app.models.paper import Paper, PaperExtraction
 from app.models.schedule import AnalysisRun
 from app.routers import admin as admin_module
+from app.services import search
 
 
 @pytest.fixture
@@ -55,6 +56,25 @@ def test_admin_requires_key(client):
 def test_admin_accepts_correct_key(client):
     r = client.get("/api/admin/dashboard", headers={"X-Admin-Key": settings.admin_key})
     assert r.status_code == 200
+
+
+def test_dashboard_stale_flag_accounts_for_country(client):
+    """비KR 분석의 '갱신 필요' 판정.
+
+    query_hash에 country를 넘기지 않으면 US 분석의 해시가 KR 해시와 비교돼 영원히
+    stale로 뜨고, 관리자가 비용을 들여 무의미한 재실행을 누르게 된다.
+    """
+    db = app.dependency_overrides[get_db]()
+    subfield = db.get(Subfield, 1)
+    db.add(Analysis(subfield_id=1, year=2026, country="US", status="done",
+                    query_hash=search.query_hash(subfield, 2026, 2026, "US"),
+                    report_md="x", stats_json={}))
+    db.commit()
+    db.close()
+
+    got = client.get("/api/admin/dashboard", headers={"X-Admin-Key": settings.admin_key}).json()
+    cells = [c for r in got["rows"] for c in r["years"] if c["country"] == "US"]
+    assert cells and all(c["stale"] is False for c in cells)
 
 
 def test_schedule_requires_admin_key(client):
@@ -1370,7 +1390,8 @@ def test_availability_lists_done_comparisons(client):
     db.close()
 
     got = client.get("/api/subfields/1/availability", params={"year": 2026}).json()
-    assert got["comparisons"] == [{"countries": ["CN", "KR"], "label": "중국 vs 한국"}]
+    # 이름표는 내려보내지 않는다 — CountryBar가 기준국을 빼고 자체 규칙으로 만든다.
+    assert got["comparisons"] == [{"countries": ["CN", "KR"]}]
 
 
 def test_field_summary_rows_carry_countries(client):

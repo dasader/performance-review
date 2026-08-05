@@ -2,12 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ACTIVE_STATUSES,
   ApiError,
+  STATUS_LABEL,
   getComparisonGrid,
   runAllComparisons,
   type ComparisonGridRow,
 } from "../api";
 import { COUNTRY_NAMES } from "../lib/countries";
 import StatusBadge from "./StatusBadge";
+import { usePolling } from "../lib/hooks";
+import YearInput from "./YearInput";
 
 // 관리자 "국가 현황" 격자 — 세부기술 × (국가 분석 · 비교 보고서) 한눈에 보기 +
 // 일괄 생성. FieldReportsPanel과 같은 규약(연도 입력 · 일괄 버튼 · busy 상태)을 쓴다.
@@ -20,20 +23,6 @@ import StatusBadge from "./StatusBadge";
 function comboKey(countries: string[]): string {
   return [...countries].sort().join(",");
 }
-
-// runner.py::STEP_LABELS와 같은 한글 라벨 — 이 엔드포인트(comparison-grid)는
-// status_label을 함께 내려주지 않으므로(다른 admin 엔드포인트와 다르게 원시 상태
-// 문자열만 옴) 프론트에서 짝을 맞춘다. 백엔드를 건드리지 않는 것이 이번 수정의
-// 제약이라 여기서 고정한다.
-const STATUS_LABEL: Record<string, string> = {
-  pending: "대기 중",
-  searching: "논문 검색 중",
-  extracting: "성과 추출 중",
-  reducing: "보고서 작성 중",
-  done: "완료",
-  failed: "실패",
-  paused: "일시중지",
-};
 
 // 이전에는 ●/○/— 세 기호로 done·(그 외 전부)·불가만 구분했는데, "그 외 전부"에
 // 실패·진행 중·대기가 모두 뭉개져 실패한 생성이 화면에서 안 보이는 문제가 있었다
@@ -97,11 +86,7 @@ export default function ComparisonGrid({
         Object.values(r.analyses).some((s) => ACTIVE_STATUSES.has(s)) ||
         Object.values(r.comparisons).some((s) => s === "pending"),
     ) ?? false;
-  useEffect(() => {
-    if (!hasPending) return;
-    const timer = setInterval(load, 5000);
-    return () => clearInterval(timer);
-  }, [hasPending, load]);
+  usePolling(hasPending, load);
 
   // 열은 설정된 국가만으로 만들면 설정에 없는 국가의 기존 분석·비교가 화면에서
   // 사라진다(리뷰 지적 — 예: 설정은 KR뿐인데 CN 분석·KR-CN 비교가 이미 있는 경우).
@@ -166,15 +151,7 @@ export default function ComparisonGrid({
     <section className="mt-6 border border-border bg-surface p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-accent">국가 현황</h2>
-        <label className="text-sm text-muted">
-          대상 연도{" "}
-          <input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            className="input ml-1 w-24"
-          />
-        </label>
+        <YearInput year={year} onChange={setYear} />
       </div>
 
       <p className="mt-2 text-xs text-muted">

@@ -66,4 +66,3 @@ export const MARKDOWN_COMPONENTS: Components = {
     );
   },
 };
-
