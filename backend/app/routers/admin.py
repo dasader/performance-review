@@ -329,6 +329,14 @@ def queue(payload: QueueIn, db: Session = Depends(get_db)):
         )
         queued["analyses"] += len(rows)
 
+    for item in payload.comparisons:
+        try:
+            comparison.enqueue_comparison(db, item.subfield_id, payload.year, item.countries)
+            queued["comparisons"] += 1
+        except (LookupError, ValueError) as e:
+            skipped.append({"kind": "comparison", "subfield_id": item.subfield_id,
+                            "reason": str(e)})
+
     return {"queued": queued, "skipped": skipped}
 
 

@@ -1809,6 +1809,64 @@ def test_queue_skips_a_missing_subfield_with_a_reason(client):
     ]
 
 
+def test_queue_enqueues_a_multi_country_comparison(client):
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR", "US", "CN"), year=2026)
+    db.close()
+
+    r = client.post(
+        "/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+        json={"year": 2026,
+              "comparisons": [{"subfield_id": 1, "countries": ["KR", "US", "CN"]}]},
+    )
+    assert r.json()["queued"]["comparisons"] == 1
+
+    db = app.dependency_overrides[get_db]()
+    row = db.query(CountryComparison).one()
+    assert row.countries == "CN,KR,US"      # 정렬 저장
+    assert row.status == "pending"
+    db.close()
+
+
+def test_queue_reports_why_a_comparison_was_skipped(client):
+    """상대국 분석이 없으면 만들 수 없다. 그 사실이 화면에 문장으로 나와야 한다."""
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR",), year=2026)     # US 없음
+    db.close()
+
+    r = client.post(
+        "/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+        json={"year": 2026, "comparisons": [{"subfield_id": 1, "countries": ["KR", "US"]}]},
+    )
+    body = r.json()
+    assert body["queued"]["comparisons"] == 0
+    assert body["skipped"][0]["kind"] == "comparison"
+    assert body["skipped"][0]["subfield_id"] == 1
+    assert "US" in body["skipped"][0]["reason"]
+
+
+def test_queue_keeps_going_after_one_item_fails(client):
+    """한 건이 막혀도 나머지는 큐잉한다 — run-all이 세운 규약."""
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR", "US"), year=2026)
+    sf2 = Subfield(field_id=1, name="두 번째", query="q")
+    db.add(sf2)
+    db.commit()
+    sf2_id = sf2.id
+    db.close()
+
+    r = client.post(
+        "/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+        json={"year": 2026, "comparisons": [
+            {"subfield_id": sf2_id, "countries": ["KR", "US"]},   # 분석 없음 → skip
+            {"subfield_id": 1, "countries": ["KR", "US"]},        # 정상
+        ]},
+    )
+    body = r.json()
+    assert body["queued"]["comparisons"] == 1
+    assert len(body["skipped"]) == 1
+
+
 def test_queue_skips_analyses_when_the_openalex_budget_is_exhausted(client):
     """예산이 소진된 채 분석을 큐잉하면 잡 루프가 건마다 count_only(건당 $0.001)를
     한 번 쓰고 paused로 내려간다 — search.collect가 예산 게이트보다 먼저 부르기
