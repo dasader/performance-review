@@ -235,7 +235,7 @@ def test_preview_includes_llm_cost_estimate(client, monkeypatch):
     async def fake_count_only(query, year_from, year_to, *, client):
         return 42, 0.001
 
-    async def fake_oa_search(query, year_from, year_to, *, client, limit):
+    async def fake_oa_search(query, year_from, year_to, *, client, limit, country="KR"):
         return OpenAlexResult(papers=[], cost_usd=0.001, remaining="9", total_count=42)
 
     async def fake_kci_search(query, year_from, year_to, *, client, limit):
@@ -257,6 +257,73 @@ def test_preview_includes_llm_cost_estimate(client, monkeypatch):
     assert body["estimated_total_cost_usd"] == pytest.approx(
         body["estimated_cost_usd"] + body["estimated_llm_cost_usd"]
     )
+
+
+def test_preview_uses_the_requested_country_and_skips_kci_for_non_kr(client, monkeypatch):
+    """국가를 빼면 미리보기가 늘 KR 기준으로 나와 다른 국가를 실행하려는 사람에게
+    틀린 견적을 준다. KCI는 한국학술지 전용이라 타국에서는 부르지 않는다
+    (search.collect와 같은 규약 — 표본에 국내지가 섞이면 실제 실행과 어긋난다)."""
+    seen = {}
+
+    async def fake_oa_search(query, year_from, year_to, *, client, limit, country="KR"):
+        seen["country"] = country
+        return OpenAlexResult(papers=[], cost_usd=0.001, remaining="9", total_count=7)
+
+    async def fake_kci_search(query, year_from, year_to, *, client, limit):
+        seen["kci_called"] = True
+        return []
+
+    monkeypatch.setattr(admin_module.openalex, "search", fake_oa_search)
+    monkeypatch.setattr(admin_module.kci, "search", fake_kci_search)
+
+    r = client.post(
+        "/api/admin/preview",
+        headers={"X-Admin-Key": settings.admin_key},
+        json={"subfield_id": 1, "year_from": 2025, "year_to": 2025, "country": "US"},
+    )
+    assert r.status_code == 200
+    assert seen["country"] == "US"
+    assert "kci_called" not in seen
+    assert r.json()["kci_sample_count"] == 0
+
+
+def test_preview_defaults_to_korea(client, monkeypatch):
+    """country를 안 보내던 기존 호출은 그대로 KR로 동작해야 한다."""
+    seen = {}
+
+    async def fake_oa_search(query, year_from, year_to, *, client, limit, country="KR"):
+        seen["country"] = country
+        return OpenAlexResult(papers=[], cost_usd=0.001, remaining="9", total_count=1)
+
+    async def fake_kci_search(query, year_from, year_to, *, client, limit):
+        seen["kci_called"] = True
+        return []
+
+    monkeypatch.setattr(admin_module.openalex, "search", fake_oa_search)
+    monkeypatch.setattr(admin_module.kci, "search", fake_kci_search)
+
+    client.post(
+        "/api/admin/preview",
+        headers={"X-Admin-Key": settings.admin_key},
+        json={"subfield_id": 1, "year_from": 2025, "year_to": 2025},
+    )
+    assert seen["country"] == "KR"
+    assert seen["kci_called"] is True
+
+
+def test_run_queues_the_requested_country(client):
+    """단계적 확장의 핵심 — 화면에서 한 국가만 골라 돌릴 수 있어야 한다."""
+    r = client.post(
+        "/api/admin/run",
+        headers={"X-Admin-Key": settings.admin_key},
+        json={"subfield_ids": [1], "year_from": 2025, "year_to": 2025, "country": "JP"},
+    )
+    assert r.status_code == 200
+
+    db = app.dependency_overrides[get_db]()
+    rows = db.query(Analysis).filter(Analysis.year == 2025).all()
+    assert [a.country for a in rows] == ["JP"]
+    db.close()
 
 
 def test_create_subfield_rejects_blank_query(client):

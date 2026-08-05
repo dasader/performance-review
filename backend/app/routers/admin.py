@@ -55,6 +55,9 @@ class RoadmapIn(BaseModel):
 
 class PreviewIn(_YearRangeMixin):
     subfield_id: int
+    # 국가마다 모집단이 다르다(같은 검색식으로 CN이 KR의 2~3배). 국가를 빼면
+    # 미리보기가 늘 KR 기준으로 나와, 다른 국가를 실행하려는 사람에게 틀린 견적을 준다.
+    country: str = "KR"
 
 
 class RunIn(_YearRangeMixin):
@@ -174,7 +177,8 @@ async def preview(payload: PreviewIn, db: Session = Depends(get_db)):
         # 요청 건당(반환 수와 무관하게) 과금하므로 미리보기 클릭마다 값이 두 배가 된다.
         try:
             sample = await openalex.search(
-                subfield.query, payload.year_from, payload.year_to, client=client, limit=20
+                subfield.query, payload.year_from, payload.year_to,
+                client=client, limit=20, country=payload.country,
             )
         except Exception as e:
             # 페이지 도중 실패해도 이미 과금된 몫은 예산에 남겨야 한다(search.collect와
@@ -182,9 +186,13 @@ async def preview(payload: PreviewIn, db: Session = Depends(get_db)):
             # 지점이라, 여기서 놓치면 실패한 미리보기의 비용이 통째로 누락된다.
             budget.record_usage(db, getattr(e, "cost_usd", 0.0), None)
             raise
-        kci_papers = await kci.search(
-            subfield.kci_query(), payload.year_from, payload.year_to, client=client, limit=20
-        )
+        # KCI는 한국학술지 전용이라 KR에서만 부른다 — search.collect와 같은 규약.
+        # 타국 미리보기에 국내지 표본이 섞이면 실제 실행 결과와 어긋난다.
+        kci_papers = []
+        if payload.country == "KR":
+            kci_papers = await kci.search(
+                subfield.kci_query(), payload.year_from, payload.year_to, client=client, limit=20
+            )
 
     count = sample.total_count
     budget.record_usage(db, sample.cost_usd, sample.remaining)

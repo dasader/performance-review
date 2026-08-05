@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, post, type PreviewResponse, type RunResponse } from "../api";
+import { COUNTRY_NAMES, sortCountries } from "../lib/countries";
 
 // 미리보기와 실행은 항상 같은 (subfieldId, yearFrom, yearTo, force) 조합을 가리켜야 한다.
 // 값이 하나라도 바뀌면 이전 미리보기는 더 이상 실행 근거가 될 수 없으므로 즉시 버린다 —
@@ -26,6 +27,10 @@ export default function RunDialog({
   const [subfieldId, setSubfieldId] = useState<number | "">("");
   const [yearFrom, setYearFrom] = useState(defaultYearFrom);
   const [yearTo, setYearTo] = useState(defaultYearTo);
+  // 같은 세부기술·연도라도 국가가 다르면 다른 분석이다(analyses의 유일키에 country가 있다).
+  // 대상 국가를 늘릴 때 전체를 한꺼번에 큐잉하지 않고 한 국가씩 시험해 볼 수 있어야 한다 —
+  // 자동 스케줄의 "지금 실행"은 전체 세부기술 × 연도 × 국가를 한 번에 건다.
+  const [country, setCountry] = useState("KR");
   const [force, setForce] = useState(false);
 
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
@@ -77,7 +82,7 @@ export default function RunDialog({
       setPreview(
         await post<PreviewResponse>(
           "/admin/preview",
-          { subfield_id: subfieldId, year_from: yearFrom, year_to: yearTo },
+          { subfield_id: subfieldId, year_from: yearFrom, year_to: yearTo, country },
           adminKey,
         ),
       );
@@ -92,7 +97,7 @@ export default function RunDialog({
   const handleRun = async () => {
     if (!preview || preview.over_limit || subfieldId === "") return;
     const ok = confirm(
-      `'${selectedName}' ${yearFrom}–${yearTo}년 분석을 실행합니다.\n` +
+      `'${selectedName}' ${yearFrom}–${yearTo}년 · ${COUNTRY_NAMES[country] ?? country} 분석을 실행합니다.\n` +
         `예상 총비용 약 $${preview.estimated_total_cost_usd.toFixed(4)} ` +
         `(OpenAlex $${preview.estimated_cost_usd.toFixed(4)} + LLM 추정 $${preview.estimated_llm_cost_usd.toFixed(4)}).\n` +
         `LLM 비용은 논문당 평균 토큰 근사치 기반 추정치입니다. 이 작업은 취소할 수 없습니다. 계속할까요?`,
@@ -103,7 +108,7 @@ export default function RunDialog({
     try {
       const res = await post<RunResponse>(
         "/admin/run",
-        { subfield_ids: [subfieldId], year_from: yearFrom, year_to: yearTo, force },
+        { subfield_ids: [subfieldId], year_from: yearFrom, year_to: yearTo, force, country },
         adminKey,
       );
       setRunResult(res);
@@ -181,6 +186,26 @@ export default function RunDialog({
             className="w-24 input"
           />
         </div>
+        <div>
+          <label htmlFor="run-country" className="mb-1 block text-xs font-medium text-ink-light">
+            대상 국가
+          </label>
+          <select
+            id="run-country"
+            value={country}
+            onChange={(e) => {
+              setCountry(e.target.value);
+              invalidate();
+            }}
+            className="input"
+          >
+            {sortCountries(Object.keys(COUNTRY_NAMES)).map((c) => (
+              <option key={c} value={c}>
+                {COUNTRY_NAMES[c]} ({c})
+              </option>
+            ))}
+          </select>
+        </div>
         <label className="flex items-center gap-2 pb-2 text-sm text-ink-light">
           <input
             type="checkbox"
@@ -208,13 +233,21 @@ export default function RunDialog({
         <div className="mt-4 border border-border-light bg-paper p-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <PreviewTile label="OpenAlex 전체 건수" value={preview.openalex_count.toLocaleString()} />
+            {/* KCI는 한국학술지 전용이라 KR에서만 검색한다(search.collect와 같은 규약).
+                타국에서 0을 그냥 보이면 "국내지가 안 잡혔다"로 오독된다 — 이유를 밝힌다. */}
             <PreviewTile
               label="KCI 표본 건수"
-              value={`${preview.kci_sample_count.toLocaleString()}${preview.kci_sample_truncated ? "+" : ""}`}
+              value={
+                country === "KR"
+                  ? `${preview.kci_sample_count.toLocaleString()}${preview.kci_sample_truncated ? "+" : ""}`
+                  : "—"
+              }
               caption={
-                preview.kci_sample_truncated
-                  ? "표본 상한 20건에 도달 — 실제 건수는 더 많을 수 있음"
-                  : "표본 상한 20건 이내 전수"
+                country !== "KR"
+                  ? "KCI는 한국학술지 전용 — 이 국가에서는 검색하지 않습니다"
+                  : preview.kci_sample_truncated
+                    ? "표본 상한 20건에 도달 — 실제 건수는 더 많을 수 있음"
+                    : "표본 상한 20건 이내 전수"
               }
             />
             <PreviewTile label="예상 호출" value={`${preview.estimated_pages.toLocaleString()}콜`} />
