@@ -3,7 +3,9 @@ import {
   ACTIVE_STATUSES,
   ApiError,
   STATUS_LABEL,
+  del,
   get,
+  post,
   queueAll,
   type DashboardResponse,
   type DashboardRow,
@@ -263,7 +265,6 @@ export default function SubfieldTab({
                   <ExpandableRow
                     key={row.subfield_id}
                     row={row}
-                    year={year}
                     countries={countries}
                     open={open}
                     rowState={rowState}
@@ -284,6 +285,10 @@ export default function SubfieldTab({
                       })
                     }
                     cellOf={cellOf}
+                    adminKey={adminKey}
+                    onUnauthorized={onUnauthorized}
+                    onError={setError}
+                    onReload={load}
                   />
                 );
               })}
@@ -298,11 +303,11 @@ export default function SubfieldTab({
 // 행 하나 + 펼쳤을 때의 연도 이력. 개별 분석 동작(재실행·삭제)은 여기 둔다 —
 // 표의 셀은 "선택해서 만드는 것"이라는 한 가지 뜻만 갖게 한다.
 function ExpandableRow({
-  row, year, countries, open, rowState, selected, showComparison,
+  row, countries, open, rowState, selected, showComparison,
   comparisonStatus, comparisonBlocked, onToggleRow, onToggleCell, onToggleExpand, cellOf,
+  adminKey, onUnauthorized, onError, onReload,
 }: {
   row: DashboardRow;
-  year: number;
   countries: string[];
   open: boolean;
   rowState: "none" | "some" | "all";
@@ -314,8 +319,49 @@ function ExpandableRow({
   onToggleCell: (key: string) => void;
   onToggleExpand: () => void;
   cellOf: (row: DashboardRow, country: string) => { status: string; status_label: string; stale: boolean } | undefined;
+  adminKey: string;
+  onUnauthorized: () => void;
+  onError: (message: string) => void;
+  onReload: () => void;
 }) {
-  const history = row.years.filter((c) => c.year !== year).sort((a, b) => b.year - a.year);
+  // 이 연도를 포함한 전체 연도 이력 — 재실행/삭제 대상이 되는 유일한 곳이라
+  // 현재 연도를 빼면 실패한 당해 연도 분석에 손댈 방법이 없어진다.
+  const history = [...row.years].sort((a, b) => b.year - a.year);
+  const [retryingId, setRetryingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const handleRetry = async (analysisId: number) => {
+    setRetryingId(analysisId);
+    try {
+      await post(`/admin/analyses/${analysisId}/retry`, {}, adminKey);
+      onReload();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) return onUnauthorized();
+      onError(e instanceof Error ? e.message : "재실행 요청에 실패했습니다.");
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
+  const handleDelete = async (analysisId: number, analysisYear: number) => {
+    const ok = confirm(
+      `'${row.subfield_name}' ${analysisYear}년 분석을 삭제할까요?\n\n` +
+        `지워지는 것: 보고서·통계·실행 이력\n` +
+        `남는 것: 수집한 논문과 추출 결과(캐시) — 재실행 시 추출 비용 없이 다시 만들어집니다.\n\n` +
+        `이 작업은 취소할 수 없습니다. 계속할까요?`,
+    );
+    if (!ok) return;
+    setDeletingId(analysisId);
+    try {
+      await del(`/admin/analyses/${analysisId}`, adminKey);
+      onReload();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) return onUnauthorized();
+      onError(e instanceof Error ? e.message : "삭제 요청에 실패했습니다.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
   return (
     <>
       <tr className="border-b border-border-light">
@@ -388,15 +434,39 @@ function ExpandableRow({
         <tr className="border-b border-border-light bg-sunken">
           <td colSpan={countries.length + (showComparison ? 2 : 1)} className="py-3 pr-3">
             {history.length === 0 ? (
-              <p className="text-xs text-muted">다른 연도의 분석이 없습니다.</p>
+              <p className="text-xs text-muted">아직 분석이 없습니다.</p>
             ) : (
               <ul className="space-y-1">
                 {history.map((c) => (
-                  <li key={c.analysis_id} className="text-xs text-muted">
-                    {c.year} · {COUNTRY_NAMES[c.country] ?? c.country} ·{" "}
-                    {STATUS_LABEL[c.status] ?? c.status} · 검색 {c.searched_count.toLocaleString()} /
-                    분석 {c.analyzed_count.toLocaleString()}
-                    {c.stale && <span className="ml-2 text-warning">갱신 필요</span>}
+                  <li key={c.analysis_id} className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                    <span>
+                      {c.year} · {COUNTRY_NAMES[c.country] ?? c.country} ·{" "}
+                      {STATUS_LABEL[c.status] ?? c.status} · 검색 {c.searched_count.toLocaleString()} /
+                      분석 {c.analyzed_count.toLocaleString()}
+                      {c.stale && <span className="ml-2 text-warning">갱신 필요</span>}
+                    </span>
+                    {(c.status === "failed" || c.status === "paused") && (
+                      <button
+                        type="button"
+                        disabled={retryingId === c.analysis_id}
+                        onClick={() => handleRetry(c.analysis_id)}
+                        className="btn btn-neutral btn-sm"
+                      >
+                        {retryingId === c.analysis_id ? "요청 중…" : "재실행"}
+                      </button>
+                    )}
+                    {/* 진행 중(ACTIVE_STATUSES)에는 숨긴다 — batch가 이미 제출됐을 수 있어
+                        중간에 지우면 고아 상태가 된다(백엔드도 409로 같은 판단을 한다). */}
+                    {!ACTIVE_STATUSES.has(c.status) && (
+                      <button
+                        type="button"
+                        disabled={deletingId === c.analysis_id}
+                        onClick={() => handleDelete(c.analysis_id, c.year)}
+                        className="btn btn-danger-quiet btn-sm"
+                      >
+                        {deletingId === c.analysis_id ? "삭제 중…" : "삭제"}
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
