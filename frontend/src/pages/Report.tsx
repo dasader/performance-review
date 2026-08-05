@@ -369,7 +369,12 @@ function References({ references }: { references: Reference[] }) {
 
   useEffect(() => {
     const openIfTargeted = () => {
-      if (!window.location.hash.startsWith("#ref-")) return;
+      // 대상 id를 **먼저** 붙잡는다. setSearchParams는 `navigate("?" + params)`로
+      // 검색문자열만 있는 경로를 이동하는데, react-router의 resolvePath가 지정되지
+      // 않은 hash를 ""로 채워 URL에서 #ref-n이 사라진다 — 아래 rAF에서 다시 읽으면
+      // 빈 문자열이라 getElementById가 null을 주고 점프가 조용히 죽는다.
+      const id = window.location.hash.slice(1);
+      if (!id.startsWith("ref-")) return;
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -379,9 +384,7 @@ function References({ references }: { references: Reference[] }) {
         { replace: true },
       );
       // 펼쳐진 뒤에야 대상이 레이아웃에 잡힌다.
-      requestAnimationFrame(() =>
-        document.getElementById(window.location.hash.slice(1))?.scrollIntoView(),
-      );
+      requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView());
     };
     openIfTargeted();
     window.addEventListener("hashchange", openIfTargeted);
