@@ -64,3 +64,43 @@ export function toggleAll(
   }
   return next;
 }
+
+// POST /admin/queue의 요청 본문. 백엔드 QueueIn과 같은 모양이어야 한다.
+export interface QueueRequestBody {
+  year: number;
+  analyses: { subfield_id: number; country: string; force: boolean }[];
+  comparisons: { subfield_id: number; countries: string[] }[];
+  field_reports: number[];
+  roadmap_checks: number[];
+}
+
+// 체크한 셀들을 요청 하나로 바꾼다. 세부기술 탭은 분야 산출물을 다루지 않으므로
+// field_reports·roadmap_checks는 항상 빈 배열이다(분야 탭이 3단계에서 채운다).
+//
+// 키를 정렬해 순회하는 이유: Set의 순회 순서는 삽입 순서라 같은 선택도 클릭 순서에
+// 따라 다른 본문이 된다. 확인 문구와 결과 목록을 대조할 때 흔들리면 읽기 어렵다.
+export function toQueuePayload(
+  selected: Set<string>,
+  opts: { year: number; countries: string[]; force: boolean },
+): QueueRequestBody {
+  const body: QueueRequestBody = {
+    year: opts.year,
+    analyses: [],
+    comparisons: [],
+    field_reports: [],
+    roadmap_checks: [],
+  };
+  for (const key of [...selected].sort()) {
+    const cell = parseCellKey(key);
+    if (cell.kind === "analysis") {
+      body.analyses.push({
+        subfield_id: cell.subfieldId,
+        country: cell.country as string,
+        force: opts.force,
+      });
+    } else {
+      body.comparisons.push({ subfield_id: cell.subfieldId, countries: opts.countries });
+    }
+  }
+  return body;
+}

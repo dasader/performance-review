@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { cellKey, parseCellKey, rowCells, headerState, toggleAll } from "./selection";
+import {
+  cellKey,
+  parseCellKey,
+  rowCells,
+  headerState,
+  toggleAll,
+  toQueuePayload,
+} from "./selection";
 
 describe("셀 키", () => {
   it("분석 셀은 기술과 국가로 식별된다 — 같은 기술이라도 국가가 다르면 다른 대상이다", () => {
@@ -67,5 +74,44 @@ describe("일괄 토글", () => {
   it("끄면 후보만 빼고 나머지는 남긴다", () => {
     const next = toggleAll(new Set(["analysis:1:KR", "comparison:9"]), ["analysis:1:KR"], false);
     expect([...next]).toEqual(["comparison:9"]);
+  });
+});
+
+describe("요청 본문 조립", () => {
+  const opts = { year: 2026, countries: ["KR", "US", "CN"], force: false };
+
+  it("분석은 기술·국가별 항목으로, 비교는 설정된 국가 전체로 나간다", () => {
+    const selected = new Set(["analysis:3:US", "analysis:7:KR", "comparison:3"]);
+    expect(toQueuePayload(selected, opts)).toEqual({
+      year: 2026,
+      analyses: [
+        { subfield_id: 3, country: "US", force: false },
+        { subfield_id: 7, country: "KR", force: false },
+      ],
+      comparisons: [{ subfield_id: 3, countries: ["KR", "US", "CN"] }],
+      field_reports: [],
+      roadmap_checks: [],
+    });
+  });
+
+  it("아무것도 안 골랐으면 빈 목록만 담는다 — 연도는 그대로 실린다", () => {
+    expect(toQueuePayload(new Set(), opts)).toEqual({
+      year: 2026,
+      analyses: [],
+      comparisons: [],
+      field_reports: [],
+      roadmap_checks: [],
+    });
+  });
+
+  it("force는 모든 분석 항목에 실린다 — 완료된 것을 다시 만드는 유일한 수단이다", () => {
+    const payload = toQueuePayload(new Set(["analysis:3:KR"]), { ...opts, force: true });
+    expect(payload.analyses).toEqual([{ subfield_id: 3, country: "KR", force: true }]);
+  });
+
+  it("항목 순서가 안정적이다 — 확인 문구와 결과 대조가 실행마다 흔들리면 안 된다", () => {
+    const a = toQueuePayload(new Set(["analysis:7:KR", "analysis:3:US"]), opts);
+    const b = toQueuePayload(new Set(["analysis:3:US", "analysis:7:KR"]), opts);
+    expect(a).toEqual(b);
   });
 });
