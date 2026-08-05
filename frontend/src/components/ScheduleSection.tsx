@@ -47,6 +47,7 @@ export default function ScheduleSection({
         hour: info.hour,
         years_back: info.years_back,
         countries: info.countries,
+        auto_comparison: info.auto_comparison,
       });
       setLoadError(null);
     } catch (e) {
@@ -105,7 +106,8 @@ export default function ScheduleSection({
       draft.day !== data.day ||
       draft.hour !== data.hour ||
       draft.years_back !== data.years_back ||
-      draft.countries !== data.countries);
+      draft.countries !== data.countries ||
+      draft.auto_comparison !== data.auto_comparison);
 
   const visibleHistory = data
     ? historyExpanded
@@ -221,6 +223,34 @@ export default function ScheduleSection({
                   세부기술 분석의 국가별 일괄 실행은 여기서 합니다 — 이 목록에 국가를 넣고
                   "지금 실행"을 누르면 전체 세부기술 × 대상 연도 × 각 국가가 한 번에
                   큐잉됩니다.
+                </p>
+              </div>
+
+              <div>
+                <span className="mb-1 block text-xs font-medium text-ink-light">
+                  국가 비교 자동 생성
+                </span>
+                <div className="flex h-8 items-center">
+                  <Switch
+                    checked={draft.auto_comparison}
+                    onChange={() =>
+                      setDraft((d) => d && { ...d, auto_comparison: !d.auto_comparison })
+                    }
+                    label={draft.auto_comparison ? "켜짐" : "꺼짐"}
+                    ariaLabel="국가 비교 자동 생성"
+                  />
+                </div>
+                {/* 분석과 같은 시점에 만들 수 없다는 점을 밝힌다 — 안 그러면 "켰는데 왜
+                    바로 안 생기지"로 읽힌다. 비용도 미리 말한다(LLM 여러 콜). */}
+                <p className="mt-1 text-xs text-muted">
+                  위 대상 국가의 분석이 <strong className="text-ink">전부 완료된 뒤</strong>{" "}
+                  비교 보고서를 자동으로 큐잉합니다. 분석이 끝나기까지 시간이 걸리므로
+                  즉시 생기지 않습니다.
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  만드는 것은 <strong className="text-ink">다국 비교 하나</strong>입니다 —
+                  그 안에 한국 vs 각 나라 1:1 대조가 함께 들어가므로 1:1을 따로 만들지
+                  않습니다(같은 내용을 두 번 만들지 않기 위해서입니다).
                 </p>
               </div>
 

@@ -19,7 +19,7 @@ from app.models.field import (
     Subfield,
 )
 from app.models.paper import Paper, PaperExtraction
-from app.services import mapper, stats
+from app.services import comparison, mapper, stats
 from app.services import visitors as visitors_service
 from app.prompts import country_name
 from app.services._countries import parse_countries
@@ -573,7 +573,8 @@ def get_comparison(
     pending/failed도 그대로 내려준다. 화면이 status로 폴링·경고를 판단한다
     (분야 보고서와 같은 규약).
     """
-    key = ",".join(sorted(parse_countries(countries)))
+    wanted = sorted(parse_countries(countries))
+    key = ",".join(wanted)
     row = (
         db.query(CountryComparison)
         .filter(
@@ -583,11 +584,17 @@ def get_comparison(
         )
         .one_or_none()
     )
-    if row is None:
-        raise HTTPException(status_code=404, detail="비교 보고서가 아직 생성되지 않았습니다.")
 
     subfield = db.get(Subfield, subfield_id)
-    codes = row.countries.split(",")
+    if row is not None:
+        codes = row.countries.split(",")
+        body, sections = row.report_md, row.sections_json
+    else:
+        found = _pair_inside_multi(db, subfield_id, year, wanted)
+        if found is None:
+            raise HTTPException(status_code=404, detail="비교 보고서가 아직 생성되지 않았습니다.")
+        row, codes, body, sections = *found, []
+
     return {
         "subfield_id": row.subfield_id,
         "subfield_name": subfield.name if subfield else None,
@@ -596,11 +603,46 @@ def get_comparison(
         "country_names": [country_name(c) for c in codes],
         "status": row.status,
         "error": row.error,
-        "report_md": row.report_md,
-        "source_count": row.source_count,
+        "report_md": body,
+        "source_count": len(codes),
         "generated_at": row.generated_at.isoformat() if row.generated_at else None,
-        "sections": row.sections_json,
+        "sections": sections,
     }
+
+
+def _pair_inside_multi(
+    db: Session, subfield_id: int, year: int, wanted: list[str]
+) -> tuple[CountryComparison, list[str], str] | None:
+    """1:1 비교 요청을 이미 만들어진 다국 비교 안의 쌍별 섹션으로 넘긴다.
+
+    3개국 이상 비교는 쌍별 1:1을 각각 독립된 LLM 콜로 만들어 sections_json에 담고
+    그것을 종합한다(process_comparison). 그 섹션 본문은 2개국 전용 비교의 report_md와
+    **같은 방식으로 만들어진 같은 값**이다 — 두 나라 통계만으로 대조표를 만들고 그
+    둘만 넣어 생성한다. 그래서 1:1을 따로 생성하는 것은 이미 있는 것을 돈 주고 다시
+    만드는 일이고, 대신 여기서 찾아 준다.
+
+    쌍이 기준국(base_country)을 포함할 때만 성립한다 — "중국 vs 일본"처럼 기준국이
+    빠진 쌍은 애초에 생성되지 않았으므로 폴백할 대상이 없다.
+    """
+    if len(wanted) != 2:
+        return None
+    for row in db.query(CountryComparison).filter(
+        CountryComparison.subfield_id == subfield_id,
+        CountryComparison.year == year,
+        CountryComparison.status == "done",
+    ):
+        codes = row.countries.split(",")
+        if len(codes) <= 2 or not set(wanted) <= set(codes):
+            continue
+        base = comparison.base_country(codes)
+        if base not in wanted:
+            continue
+        other = next(c for c in wanted if c != base)
+        name = f"{country_name(base)} vs {country_name(other)}"
+        for section in row.sections_json or []:
+            if section.get("name") == name:
+                return row, [base, other], section.get("body") or ""
+    return None
 
 
 @router.get("/subfields/{subfield_id}/availability")
@@ -619,7 +661,9 @@ def subfield_availability(subfield_id: int, year: int, db: Session = Depends(get
             Analysis.status == "done",
         )
     )
-    comparisons = []
+    # 이름표는 내려보내지 않는다 — CountryBar가 기준국(한국)을 빼고 자체 규칙으로
+    # 만들기 때문에 서버가 만든 문자열은 화면에 한 번도 쓰이지 않았다.
+    seen: list[list[str]] = []
     for c in (
         db.query(CountryComparison)
         .filter(
@@ -629,10 +673,19 @@ def subfield_availability(subfield_id: int, year: int, db: Session = Depends(get
         )
         .order_by(CountryComparison.countries)
     ):
-        # 이름표는 내려보내지 않는다 — CountryBar가 기준국(한국)을 빼고 자체 규칙으로
-        # 만들기 때문에 서버가 만든 문자열은 화면에 한 번도 쓰이지 않았다.
-        comparisons.append({"countries": c.countries.split(",")})
-    return {"countries": countries, "comparisons": comparisons}
+        codes = c.countries.split(",")
+        if codes not in seen:
+            seen.append(codes)
+        # 다국 비교 안의 쌍별 1:1도 링크로 낸다. 본문은 이미 sections_json에 있고
+        # 조회는 _pair_inside_multi가 넘겨주므로 별도 생성 없이 읽을 수 있다 —
+        # 여기서 내주지 않으면 그 폴백으로 갈 길이 화면에 없다.
+        if len(codes) > 2:
+            base = comparison.base_country(codes)
+            for other in codes:
+                pair = sorted((base, other))
+                if other != base and pair not in seen:
+                    seen.append(pair)
+    return {"countries": countries, "comparisons": [{"countries": c} for c in seen]}
 
 
 @router.get("/analyses/{analysis_id}/metrics")

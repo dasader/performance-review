@@ -235,7 +235,7 @@ def test_preview_includes_llm_cost_estimate(client, monkeypatch):
     async def fake_count_only(query, year_from, year_to, *, client):
         return 42, 0.001
 
-    async def fake_oa_search(query, year_from, year_to, *, client, limit):
+    async def fake_oa_search(query, year_from, year_to, *, client, limit, country="KR"):
         return OpenAlexResult(papers=[], cost_usd=0.001, remaining="9", total_count=42)
 
     async def fake_kci_search(query, year_from, year_to, *, client, limit):
@@ -257,6 +257,73 @@ def test_preview_includes_llm_cost_estimate(client, monkeypatch):
     assert body["estimated_total_cost_usd"] == pytest.approx(
         body["estimated_cost_usd"] + body["estimated_llm_cost_usd"]
     )
+
+
+def test_preview_uses_the_requested_country_and_skips_kci_for_non_kr(client, monkeypatch):
+    """국가를 빼면 미리보기가 늘 KR 기준으로 나와 다른 국가를 실행하려는 사람에게
+    틀린 견적을 준다. KCI는 한국학술지 전용이라 타국에서는 부르지 않는다
+    (search.collect와 같은 규약 — 표본에 국내지가 섞이면 실제 실행과 어긋난다)."""
+    seen = {}
+
+    async def fake_oa_search(query, year_from, year_to, *, client, limit, country="KR"):
+        seen["country"] = country
+        return OpenAlexResult(papers=[], cost_usd=0.001, remaining="9", total_count=7)
+
+    async def fake_kci_search(query, year_from, year_to, *, client, limit):
+        seen["kci_called"] = True
+        return []
+
+    monkeypatch.setattr(admin_module.openalex, "search", fake_oa_search)
+    monkeypatch.setattr(admin_module.kci, "search", fake_kci_search)
+
+    r = client.post(
+        "/api/admin/preview",
+        headers={"X-Admin-Key": settings.admin_key},
+        json={"subfield_id": 1, "year_from": 2025, "year_to": 2025, "country": "US"},
+    )
+    assert r.status_code == 200
+    assert seen["country"] == "US"
+    assert "kci_called" not in seen
+    assert r.json()["kci_sample_count"] == 0
+
+
+def test_preview_defaults_to_korea(client, monkeypatch):
+    """country를 안 보내던 기존 호출은 그대로 KR로 동작해야 한다."""
+    seen = {}
+
+    async def fake_oa_search(query, year_from, year_to, *, client, limit, country="KR"):
+        seen["country"] = country
+        return OpenAlexResult(papers=[], cost_usd=0.001, remaining="9", total_count=1)
+
+    async def fake_kci_search(query, year_from, year_to, *, client, limit):
+        seen["kci_called"] = True
+        return []
+
+    monkeypatch.setattr(admin_module.openalex, "search", fake_oa_search)
+    monkeypatch.setattr(admin_module.kci, "search", fake_kci_search)
+
+    client.post(
+        "/api/admin/preview",
+        headers={"X-Admin-Key": settings.admin_key},
+        json={"subfield_id": 1, "year_from": 2025, "year_to": 2025},
+    )
+    assert seen["country"] == "KR"
+    assert seen["kci_called"] is True
+
+
+def test_run_queues_the_requested_country(client):
+    """단계적 확장의 핵심 — 화면에서 한 국가만 골라 돌릴 수 있어야 한다."""
+    r = client.post(
+        "/api/admin/run",
+        headers={"X-Admin-Key": settings.admin_key},
+        json={"subfield_ids": [1], "year_from": 2025, "year_to": 2025, "country": "JP"},
+    )
+    assert r.status_code == 200
+
+    db = app.dependency_overrides[get_db]()
+    rows = db.query(Analysis).filter(Analysis.year == 2025).all()
+    assert [a.country for a in rows] == ["JP"]
+    db.close()
 
 
 def test_create_subfield_rejects_blank_query(client):
@@ -1402,6 +1469,89 @@ def test_availability_lists_done_comparisons(client):
     got = client.get("/api/subfields/1/availability", params={"year": 2026}).json()
     # 이름표는 내려보내지 않는다 — CountryBar가 기준국을 빼고 자체 규칙으로 만든다.
     assert got["comparisons"] == [{"countries": ["CN", "KR"]}]
+
+
+def _multi(db, *, sections=True):
+    """3개국 비교 1건 — 쌍별 1:1이 sections_json 안에 들어 있는 실제 형태."""
+    _seed_countries(db, ("KR", "CN", "JP"), year=2026)
+    db.add(CountryComparison(
+        subfield_id=1, year=2026, countries="CN,JP,KR", status="done",
+        report_md="종합 본문", source_count=3, generated_at=datetime(2026, 8, 4),
+        sections_json=[{"name": "한국 vs 중국", "body": "KR-CN 대조 본문"},
+                       {"name": "한국 vs 일본", "body": "KR-JP 대조 본문"}] if sections else [],
+    ))
+    db.commit()
+
+
+def test_pair_comparison_falls_back_to_the_section_inside_a_multi_report(client):
+    """1:1을 따로 생성하지 않는 근거. 다국 비교가 쌍별을 이미 만들어 두므로
+    KR,CN 요청은 그 섹션으로 넘긴다 — 없으면 이미 있는 내용을 다시 만들어야 한다."""
+    db = app.dependency_overrides[get_db]()
+    _multi(db)
+    db.close()
+
+    got = client.get("/api/subfields/1/comparison",
+                     params={"year": 2026, "countries": "KR,CN"})
+    assert got.status_code == 200
+    assert got.json()["countries"] == ["KR", "CN"]        # 기준국이 앞
+    assert got.json()["report_md"] == "KR-CN 대조 본문"
+    assert got.json()["sections"] == []                   # 쌍은 더 펼칠 것이 없다
+
+
+def test_pair_comparison_has_no_fallback_when_the_base_country_is_absent(client):
+    """'중국 vs 일본'은 애초에 생성되지 않는다 — 쌍은 기준국을 한쪽에 고정한다."""
+    db = app.dependency_overrides[get_db]()
+    _multi(db)
+    db.close()
+
+    got = client.get("/api/subfields/1/comparison",
+                     params={"year": 2026, "countries": "CN,JP"})
+    assert got.status_code == 404
+
+
+def test_exact_pair_row_wins_over_the_multi_fallback(client):
+    """전용 1:1 행이 따로 있으면 그것을 그대로 준다(수동 큐잉 경로가 살아 있어야 한다)."""
+    db = app.dependency_overrides[get_db]()
+    _multi(db)
+    db.add(CountryComparison(subfield_id=1, year=2026, countries="CN,KR", status="done",
+                             report_md="전용 1:1 본문", generated_at=datetime(2026, 8, 4)))
+    db.commit()
+    db.close()
+
+    got = client.get("/api/subfields/1/comparison",
+                     params={"year": 2026, "countries": "KR,CN"}).json()
+    assert got["report_md"] == "전용 1:1 본문"
+
+
+def test_availability_surfaces_pairs_contained_in_a_multi_report(client):
+    """폴백으로 갈 링크가 화면에 있어야 한다 — 없으면 조회 경로가 도달 불가능해진다."""
+    db = app.dependency_overrides[get_db]()
+    _multi(db)
+    db.close()
+
+    got = client.get("/api/subfields/1/availability", params={"year": 2026}).json()
+    combos = [c["countries"] for c in got["comparisons"]]
+    assert ["CN", "JP", "KR"] in combos      # 다국 자체
+    assert ["CN", "KR"] in combos            # 안에 든 쌍
+    assert ["JP", "KR"] in combos
+
+
+def test_comparison_grid_marks_pairs_included_in_a_multi_report(client):
+    """격자가 'CN,KR' 행만 찾아 미생성으로 표시하면, 이미 있는 1:1을 다시 만들게 된다."""
+    db = app.dependency_overrides[get_db]()
+    _multi(db)
+    db.close()
+    client.put("/api/admin/schedule",
+               json={"enabled": True, "day": 10, "hour": 3, "years_back": 1,
+                     "countries": "KR,CN,JP", "auto_comparison": False},
+               headers={"X-Admin-Key": settings.admin_key})
+
+    got = client.get("/api/admin/comparison-grid", params={"year": 2026},
+                     headers={"X-Admin-Key": settings.admin_key}).json()
+    cells = got["rows"][0]["comparisons"]
+    assert cells["CN,JP,KR"] == "done"
+    assert cells["CN,KR"] == "in_multi"
+    assert cells["JP,KR"] == "in_multi"
 
 
 def test_field_summary_rows_carry_countries(client):

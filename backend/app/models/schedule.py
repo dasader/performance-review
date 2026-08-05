@@ -27,6 +27,17 @@ class ScheduleSetting(Base):
     years_back: Mapped[int] = mapped_column(Integer, nullable=False)
     # 스케줄러가 돌 국가. 콤마 구분("KR,US,CN"). 기본 KR이라 켜기 전에는 현행과 같다.
     countries: Mapped[str] = mapped_column(String(100), nullable=False, default="KR")
+    # 대상 국가 분석이 전부 done이 되면 국가 비교를 자동으로 큐잉한다.
+    #
+    # 분석과 같은 시점에 큐잉할 수 없다 — 비교는 모든 대상국 분석이 done이어야 만들 수
+    # 있는데(collect_country_analyses), 스케줄이 큐잉한 수백 건이 끝나기까지 시간이
+    # 걸리므로 그 시점에 같이 큐잉하면 전부 "상대국 분석 없음"으로 건너뛰어진다.
+    # 그래서 잡 루프가 매 틱마다 "준비된 것"을 찾는 방식이다(runner.enqueue_due_comparisons).
+    #
+    # 만드는 것은 **다국 비교 하나뿐**이다. 3개국 이상이면 process_comparison이 쌍별
+    # 1:1을 먼저 만들어 sections_json에 넣고 그것을 종합하므로, 1:1을 따로 큐잉하면
+    # 같은 결과물을 다시 만드는 셈이다(세부기술·연도당 국가수-1콜 중복).
+    auto_comparison: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class AnalysisRun(Base):

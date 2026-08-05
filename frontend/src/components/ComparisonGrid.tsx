@@ -24,6 +24,10 @@ function comboKey(countries: string[]): string {
   return [...countries].sort().join(",");
 }
 
+// 백엔드(comparison_grid)가 쌍 칸에 넣는 값. 실행 상태가 아니라 "다국 비교 안에 이미
+// 들어 있다"는 표시라 STATUS_LABEL에 넣지 않는다 — 넣으면 진행 상태와 섞여 읽힌다.
+const IN_MULTI = "in_multi";
+
 // 이전에는 ●/○/— 세 기호로 done·(그 외 전부)·불가만 구분했는데, "그 외 전부"에
 // 실패·진행 중·대기가 모두 뭉개져 실패한 생성이 화면에서 안 보이는 문제가 있었다
 // (리뷰 지적). StatusBadge(FieldReportsPanel과 같은 부품)로 바꿔 done/진행 중/실패/
@@ -37,6 +41,17 @@ function StatusCell({
   status: string | undefined;
   blockedTitle?: string;
 }) {
+  // 실행 상태가 아니라 "이미 다국 비교 안에 들어 있다"는 사실이라 점 배지를 쓰지 않는다.
+  // 3개국 이상 비교는 한국 vs 각 나라 1:1을 먼저 만들어 담고 그것을 종합하므로,
+  // 이 칸을 "미생성"으로 두면 이미 있는 내용을 다시 만들게 된다.
+  if (status === IN_MULTI) {
+    const title = "다국 비교 안에 1:1 대조로 들어 있습니다 — 따로 만들 필요가 없습니다.";
+    return (
+      <span className="text-xs text-muted" title={title}>
+        다국에 포함
+      </span>
+    );
+  }
   if (status) {
     return <StatusBadge status={status} label={STATUS_LABEL[status] ?? status} />;
   }
@@ -163,7 +178,9 @@ export default function ComparisonGrid({
       </p>
       <p className="mt-1 text-xs text-muted">
         점 배지는 실행 상태(완료·진행 중·실패·일시중지), "미생성"은 아직 큐잉되지 않음,
-        —는 상대국 분석이 없어 지금은 만들 수 없음을 뜻합니다.
+        —는 상대국 분석이 없어 지금은 만들 수 없음을 뜻합니다.{" "}
+        <strong className="text-ink">"다국에 포함"</strong>은 그 1:1 대조가 다국 비교
+        안에 이미 들어 있다는 뜻으로, 따로 만들면 같은 내용을 다시 만드는 것입니다.
       </p>
 
       {countries.length < 2 && rows && (
