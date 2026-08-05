@@ -176,13 +176,27 @@ export default function FieldDetail() {
                 {/* 좁아지면 셀을 눌러 담지 않고 가로로 스크롤한다 — 셀이 세로로 쪼개지면
                     열 정렬이 무너져 숫자 비교가 불가능해진다. */}
                 <div className="mt-4 table-scroll">
-                  <table className="w-full min-w-[560px] border-collapse text-sm">
+                  {/* 뒤 세 열에 최소 폭을 준다. 주지 않으면 열 너비가 그 해의 내용으로만
+                      정해져(table-layout: auto) 연도를 바꿀 때 표가 통째로 재배치된다 —
+                      실측: 보고서 열이 2025년엔 버튼 4개(중국·일본·한국·미국), 2026년엔
+                      1개라 앞 열들이 좌우로 밀렸다(사용자 지적). 연도 토글은 "같은 것을
+                      시점만 바꿔 보는" 조작이라 그때 열이 움직이면 눈이 열을 다시 찾는다.
+
+                      table-fixed가 아니라 min-w를 쓰는 이유: 상태 라벨이 최대
+                      "일시중지 (예산 소진)"까지 가고 국가도 더 늘 수 있어, 넘칠 때는
+                      잘리지 않고 늘어나는 편이 안전하다. 최소 폭만 정하면 흔한 경우가
+                      고정되고 드문 경우는 그래도 읽힌다.
+
+                      min-w-[640px]: 뒤 세 열 최소(104+112+200=416)에 세부기술명이
+                      두 줄로 접히지 않을 정도(약 224px)를 더한 값. 좁은 화면에서는
+                      아래 주석대로 눌러 담지 않고 가로로 스크롤한다. */}
+                  <table className="w-full min-w-[640px] border-collapse text-sm">
                     <thead className="tbl-head">
                       <tr className="border-b border-border">
                         <th>세부기술</th>
-                        <th>상태</th>
-                        <th className="n">검색 / 분석</th>
-                        <th>보고서</th>
+                        <th className="min-w-[104px]">상태</th>
+                        <th className="n min-w-[112px]">검색 / 분석</th>
+                        <th className="min-w-[200px]">보고서</th>
                       </tr>
                     </thead>
                     <tbody>
