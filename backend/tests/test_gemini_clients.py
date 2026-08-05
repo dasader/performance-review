@@ -203,3 +203,58 @@ def test_download_results_defaults_approach_and_improvement_when_absent(monkeypa
 
     assert results[0]["approach"] == ""
     assert results[0]["improvement"] == ""
+
+
+# ── 보고서 합성 전용 모델 (gemini_model_reduce) ──
+
+def _settings(**kw):
+    base = dict(gemini_api_key="k", openalex_api_key="k", admin_key="k",
+                database_url="postgresql://t/t")
+    return Settings(**{**base, **kw})
+
+
+def test_reduce_model_defaults_to_the_extraction_model():
+    """설정을 추가해도 기존 동작이 그대로여야 한다 — 비워 두면 추출과 같은 모델."""
+    s = _settings(gemini_model="gemini-3.1-flash-lite")
+    assert s.gemini_model_reduce == ""
+    assert s.reduce_model == "gemini-3.1-flash-lite"
+
+
+def test_reduce_model_overrides_only_report_synthesis():
+    s = _settings(gemini_model="gemini-3.1-flash-lite", gemini_model_reduce="gemini-3.6-flash")
+    assert s.reduce_model == "gemini-3.6-flash"
+    assert s.gemini_model == "gemini-3.1-flash-lite"   # 추출 모델은 그대로
+
+
+def test_reduce_model_is_not_part_of_the_extraction_cache_key(monkeypatch):
+    """이 분리의 존재 이유. reduce 모델을 바꿨다고 추출 캐시가 무효화되면
+    "보고서만 다른 모델로" 판단에 매번 전량 재추출 비용(22,000여 건, 약 $6)이 붙는다."""
+    from app.config import settings as live
+    from app.services import mapper
+
+    before = mapper.model_ver()
+    monkeypatch.setattr(live, "gemini_model_reduce", "gemini-3.6-flash")
+    assert mapper.model_ver() == before
+
+
+def test_generate_uses_the_reduce_model(monkeypatch):
+    """gemini_sync.generate는 추출용 모델이 아니라 reduce 모델로 쏴야 한다."""
+    from app.clients import gemini_sync
+
+    seen = {}
+
+    class _FakeModels:
+        def generate_content(self, *, model, contents, config):
+            seen["model"] = model
+            return type("R", (), {"text": "ok"})()
+
+    monkeypatch.setattr(gemini_sync, "_get_client",
+                        lambda: type("C", (), {"models": _FakeModels()})())
+    # app.config.settings가 아니라 이 모듈이 실제로 들고 있는 객체를 고친다 —
+    # 위 test_import_succeeds_without_gemini_api_key가 gemini_sync를 sys.modules에서
+    # 지우고 재import하므로, 그 뒤로 둘은 서로 다른 Settings 인스턴스다.
+    monkeypatch.setattr(gemini_sync.settings, "gemini_model", "gemini-3.1-flash-lite")
+    monkeypatch.setattr(gemini_sync.settings, "gemini_model_reduce", "gemini-3.6-flash")
+
+    assert asyncio.run(gemini_sync.generate("sys", "user", thinking="high")) == "ok"
+    assert seen["model"] == "gemini-3.6-flash"

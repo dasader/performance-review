@@ -70,7 +70,7 @@ async def generate(system: str, user: str, *, thinking: str, max_retries: int = 
 
     def _call():
         return _get_client().models.generate_content(
-            model=settings.gemini_model, contents=user, config=config
+            model=settings.reduce_model, contents=user, config=config
         )
 
     for attempt in range(max_retries + 1):
