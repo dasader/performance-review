@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import ReactMarkdown, { type Components } from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkCjkFriendly from "remark-cjk-friendly";
+import { type Components } from "react-markdown";
 import {
   ACTIVE_STATUSES,
   get,
@@ -15,12 +13,15 @@ import Switch from "../components/Switch";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import StatusBadge from "../components/StatusBadge";
+import DoiLink from "../components/DoiLink";
 import StatsPanel from "../components/StatsPanel";
 import MetricTable from "../components/MetricTable";
 import CountryBar from "../components/CountryBar";
 import { firstCiteOffsets } from "../lib/citeAnchors";
+import { useQueryFlag } from "../lib/hooks";
 import { stripLeadingH1 } from "../lib/reportMarkdown";
-import { MARKDOWN_COMPONENTS, PROSE_CLASSES } from "../lib/prose";
+import Prose from "../components/Prose";
+import { MARKDOWN_COMPONENTS } from "../lib/prose";
 
 // 연도 이동 링크가 국가를 잃으면 KR로 되돌아간다 — 다른 국가를 보다가 연도를 옮기면
 // 조용히 다른 나라 보고서로 넘어간다.
@@ -62,15 +63,7 @@ function ReportMarkdown({ md }: { md: string }) {
     };
   }, [md]);
 
-  // remarkCjkFriendly는 remarkGfm 뒤에 온다 — 패키지 README의 권장 순서(parse -> gfm ->
-  // cjk-friendly -> rehype)를 따른다. CommonMark는 닫는 `**` 바로 뒤에 공백 없이 한글
-  // 등 CJK 글자가 붙으면 강조로 인식하지 않는데(한국어는 조사를 띄어쓰지 않으므로 report_md에서
-  // 구조적으로 계속 발생), 이 플러그인이 그 경우를 강조로 인식하도록 판정을 완화한다.
-  return (
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]} components={components}>
-      {md}
-    </ReactMarkdown>
-  );
+  return <Prose md={md} components={components} />;
 }
 
 export default function Report() {
@@ -128,17 +121,9 @@ export default function Report() {
 // 토글 상태를 URL 쿼리(?withSections=1)에 실어 공유·북마크가 되게 한다 —
 // FieldReportPage의 withSub과 같은 패턴.
 function SectionSummaries({ sections }: { sections?: { name: string; body_md: string }[] }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const open = searchParams.get("withSections") === "1";
+  const [open, toggle] = useQueryFlag("withSections");
 
   if (!sections?.length) return null;
-
-  const toggle = () => {
-    const next = new URLSearchParams(searchParams);
-    if (open) next.delete("withSections");
-    else next.set("withSections", "1");
-    setSearchParams(next);
-  };
 
   // 비교 화면과 같은 규칙 — 토글이 꺼져 있으면 인쇄에서 구획을 통째로 숨긴다.
   // 내용은 조건부라 안 나오지만 제목·설명·스위치가 남아 본문 없는 제목만 찍힌다.
@@ -176,9 +161,7 @@ function SectionSummaries({ sections }: { sections?: { name: string; body_md: st
                 </p>
                 <h3 className="text-xl font-bold text-ink">{s.name}</h3>
               </div>
-              <div className={`report-prose ${PROSE_CLASSES}`}>
-                <ReportMarkdown md={stripLeadingH1(s.body_md)} />
-              </div>
+              <ReportMarkdown md={stripLeadingH1(s.body_md)} />
             </article>
           ))}
       </section>
@@ -303,9 +286,7 @@ function ReportBody({ data, avail }: { data: Analysis; avail: Availability | nul
               본문을 가르므로 선을 더 그으면 두 겹으로 갈린다(사용자 지적). */}
           {/* 서술(주요 기술적 성과)을 통계보다 먼저 — 독자는 정책·기획 담당자이며 숫자보다
               무엇을 달성했는지를 먼저 읽는다. */}
-          <div className={`report-prose ${PROSE_CLASSES}`}>
-            <ReportMarkdown md={stripLeadingH1(data.report_md ?? "")} />
-          </div>
+          <ReportMarkdown md={stripLeadingH1(data.report_md ?? "")} />
 
           {/* 정량 지표 분포는 논문 간 통계(기관·저널·인용수)가 아니라 연구 내용 자체의
               결과값이다 — 서술을 읽은 직후 "그래서 어느 수준인가"를 잇는 자리가 맞아
@@ -382,12 +363,18 @@ function PrintHeader({ data }: { data: Analysis }) {
 // ★ 인쇄에는 접힘과 무관하게 항상 싣는다 — [12]가 있는데 참고문헌이 없는 PDF는
 //   그 자체로 결함이다.
 function References({ references }: { references: Reference[] }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const open = searchParams.get("withRefs") === "1";
+  const [open, toggle] = useQueryFlag("withRefs");
+  // 아래 해시 효과만 setSearchParams가 필요하다(펼침을 강제하는 쪽).
+  const [, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     const openIfTargeted = () => {
-      if (!window.location.hash.startsWith("#ref-")) return;
+      // 대상 id를 **먼저** 붙잡는다. setSearchParams는 `navigate("?" + params)`로
+      // 검색문자열만 있는 경로를 이동하는데, react-router의 resolvePath가 지정되지
+      // 않은 hash를 ""로 채워 URL에서 #ref-n이 사라진다 — 아래 rAF에서 다시 읽으면
+      // 빈 문자열이라 getElementById가 null을 주고 점프가 조용히 죽는다.
+      const id = window.location.hash.slice(1);
+      if (!id.startsWith("ref-")) return;
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -397,9 +384,7 @@ function References({ references }: { references: Reference[] }) {
         { replace: true },
       );
       // 펼쳐진 뒤에야 대상이 레이아웃에 잡힌다.
-      requestAnimationFrame(() =>
-        document.getElementById(window.location.hash.slice(1))?.scrollIntoView(),
-      );
+      requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView());
     };
     openIfTargeted();
     window.addEventListener("hashchange", openIfTargeted);
@@ -407,13 +392,6 @@ function References({ references }: { references: Reference[] }) {
   }, [setSearchParams]);
 
   if (references.length === 0) return null;
-
-  const toggle = () => {
-    const next = new URLSearchParams(searchParams);
-    if (open) next.delete("withRefs");
-    else next.set("withRefs", "1");
-    setSearchParams(next);
-  };
 
   return (
     <>
@@ -450,14 +428,9 @@ function References({ references }: { references: Reference[] }) {
                 {r.doi && (
                   <>
                     {" "}
-                    <a
-                      href={`https://doi.org/${r.doi}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="break-all text-ink underline decoration-border-strong underline-offset-2 hover:decoration-ink"
-                    >
+                    <DoiLink doi={r.doi} className="break-all">
                       doi.org/{r.doi}
-                    </a>
+                    </DoiLink>
                   </>
                 )}
               </span>

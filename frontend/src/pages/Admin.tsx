@@ -55,9 +55,6 @@ export default function Admin() {
   // /admin/subfields (active 포함) 결과 — 탭이 나뉜 뒤로는 Admin이 직접 읽는다.
   // SubfieldEditor가 끌어올려 주던 값에 의존하면, 사용자가 "분석 실행" 탭으로 바로
   // 들어갔을 때 SubfieldEditor가 마운트되지 않아 실행 폼이 영영 뜨지 않는다.
-  // 아래 주석은 그 시절의 설명이다:
-  // (구) SubfieldEditor가 이미 불러온 것을 끌어올려
-  // RunDialog의 실행 대상 목록에서 비활성 세부기술을 제외하는 데 재사용한다.
   const [subfields, setSubfields] = useState<AdminSubfield[] | null>(null);
   // SubfieldEditor에서 검색식이 바뀔 때마다 증가하는 세대 카운터. RunDialog는 이 값이
   // 바뀌면 확인했던 미리보기 숫자가 더 이상 유효하지 않다고 보고 폐기한다.
@@ -261,7 +258,9 @@ className="btn btn-toggle btn-sm"
 
         {tab === "schedule" && <ScheduleSection adminKey={key} onUnauthorized={onUnauthorized} />}
 
-        {tab === "roadmap" && fields && <RoadmapEditor adminKey={key} fields={fields} />}
+        {tab === "roadmap" && fields && (
+          <RoadmapEditor adminKey={key} fields={fields} onUnauthorized={onUnauthorized} />
+        )}
 
         {tab === "field-reports" && (
           <FieldReportsPanel adminKey={key} onUnauthorized={onUnauthorized} />

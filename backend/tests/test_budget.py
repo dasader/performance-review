@@ -1,16 +1,7 @@
 import pytest
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Query, sessionmaker
 
-from app.database import Base
 from app.services.budget import BudgetExceeded, check_budget, record_usage, spent_today
-
-
-@pytest.fixture
-def db():
-    engine = create_engine("sqlite://")
-    Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine, autocommit=False, autoflush=False)()
 
 
 def test_usage_accumulates_within_the_same_day(db):

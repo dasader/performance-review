@@ -12,8 +12,6 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
-
-
 def reset_time_utc() -> datetime:
     """OpenAlex 예산이 리셋되는 다음 UTC 자정."""
     now = datetime.now(timezone.utc)

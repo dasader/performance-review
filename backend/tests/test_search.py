@@ -1,23 +1,12 @@
 import httpx
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from app.clients.openalex import OpenAlexResult
-from app.database import Base
-from app.models.field import Field, Subfield
+from app.models.field import Subfield
 from app.models.paper import Paper
 from app.config import settings
 from app.services import budget, search as search_module
 from app.services import search
 from app.services.search import merge_papers, query_hash, upsert_papers
-
-
-@pytest.fixture
-def db():
-    engine = create_engine("sqlite://")
-    Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine, autocommit=False, autoflush=False)()
 
 
 def _paper(key, **kw):
@@ -172,20 +161,11 @@ async def test_collect_records_partial_openalex_cost_when_search_fails_midway(db
 
 # ── Elsevier 초록 폴백 (search._fill_missing_abstracts) ──
 
-def _sess():
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-    from app.database import Base
-    engine = create_engine("sqlite://")
-    Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine, autocommit=False, autoflush=False)()
-
-
 def _cand(key, doi, abstract=""):
     return {"paper_key": key, "doi": doi, "abstract": abstract, "title": "T"}
 
 
-async def test_fill_abstracts_skips_everything_when_key_is_empty(monkeypatch):
+async def test_fill_abstracts_skips_everything_when_key_is_empty(db, monkeypatch):
     """키가 없으면 클라이언트를 부르지 않는다 — 기존 동작이 그대로여야 한다."""
     monkeypatch.setattr(settings, "elsevier_api_key", "")
     called = []
@@ -197,11 +177,11 @@ async def test_fill_abstracts_skips_everything_when_key_is_empty(monkeypatch):
     monkeypatch.setattr(search.elsevier, "fetch_abstract", fake)
     papers = [_cand("k1", "10.1016/j.a")]
 
-    assert await search._fill_missing_abstracts(_sess(), papers, client=None) == 0
+    assert await search._fill_missing_abstracts(db, papers, client=None) == 0
     assert called == []
 
 
-async def test_fill_abstracts_only_targets_elsevier_dois_without_abstract(monkeypatch):
+async def test_fill_abstracts_only_targets_elsevier_dois_without_abstract(db, monkeypatch):
     """ScienceDirect는 Elsevier 콘텐츠만 호스팅한다 — 다른 prefix는 확정 404라
     쿼터를 버릴 이유가 없다. 이미 초록이 있는 논문도 부르지 않는다."""
     monkeypatch.setattr(settings, "elsevier_api_key", "k")
@@ -219,7 +199,7 @@ async def test_fill_abstracts_only_targets_elsevier_dois_without_abstract(monkey
         _cand("k4", None),                               # DOI 없음
     ]
 
-    filled = await search._fill_missing_abstracts(_sess(), papers, client=None)
+    filled = await search._fill_missing_abstracts(db, papers, client=None)
 
     assert called == ["10.1016/j.target"]
     assert filled == 1
@@ -227,11 +207,10 @@ async def test_fill_abstracts_only_targets_elsevier_dois_without_abstract(monkey
     assert papers[2]["abstract"] == "이미 있음"
 
 
-async def test_fill_abstracts_skips_papers_already_stored_with_abstract(monkeypatch):
+async def test_fill_abstracts_skips_papers_already_stored_with_abstract(db, monkeypatch):
     """DB에 이미 회수해 둔 논문을 매달 다시 받아오면 안 된다 —
     이 검사가 빠지면 KR 기준 연 36,000콜이 조용히 샌다(설계 §4-3)."""
     monkeypatch.setattr(settings, "elsevier_api_key", "k")
-    db = _sess()
     db.add(Paper(paper_key="k1", title="T", abstract="예전에 회수한 초록",
                  doi="10.1016/j.a", source="openalex"))
     db.add(Paper(paper_key="k2", title="T", abstract="", doi="10.1016/j.b",
@@ -253,7 +232,7 @@ async def test_fill_abstracts_skips_papers_already_stored_with_abstract(monkeypa
     assert filled == 1
 
 
-async def test_fill_abstracts_absorbs_client_failures(monkeypatch):
+async def test_fill_abstracts_absorbs_client_failures(db, monkeypatch):
     """개별 실패는 건너뛰고 나머지를 계속한다 — 분석이 멈추면 안 된다."""
     monkeypatch.setattr(settings, "elsevier_api_key", "k")
 
@@ -266,7 +245,7 @@ async def test_fill_abstracts_absorbs_client_failures(monkeypatch):
     papers = [_cand("k1", "10.1016/j.bad"), _cand("k2", "10.1016/j.none"),
               _cand("k3", "10.1016/j.ok")]
 
-    filled = await search._fill_missing_abstracts(_sess(), papers, client=None)
+    filled = await search._fill_missing_abstracts(db, papers, client=None)
 
     assert filled == 1
     assert papers[2]["abstract"] == "본문"
@@ -290,7 +269,7 @@ def test_merge_takes_longer_lead_countries_list():
     assert merge_papers(oa, kci)[0]["lead_countries"] == ["KR", "US"]
 
 
-async def test_collect_skips_kci_for_non_kr(monkeypatch):
+async def test_collect_skips_kci_for_non_kr(db, monkeypatch):
     """KCI는 한국학술지 전용이다 — 타국 분석에서 부르면 만료된 키 때문에 무의미하게
     failed되고, KR에만 국내지가 섞여 소스가 비대칭이 된다(비교에서 KR만 부풀린다)."""
     called = {"kci": 0}
@@ -310,7 +289,6 @@ async def test_collect_skips_kci_for_non_kr(monkeypatch):
     monkeypatch.setattr(search_module.kci, "search", fake_kci)
     monkeypatch.setattr(settings, "elsevier_api_key", "")
 
-    db = _sess()
     sf = Subfield(id=1, field_id=1, name="s", query="q")
 
     await search_module.collect(db, sf, 2025, 2025, client=None, country="US")

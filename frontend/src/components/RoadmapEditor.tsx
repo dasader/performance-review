@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
-import { get, put, del, type Field, type Roadmap } from "../api";
+import { ApiError, get, put, del, type Field, type Roadmap } from "../api";
 
 // 로드맵 원문은 관리자만 보고 쓴다. 공개 조회 API는 점검 결과만 내려주고 원문은
 // 내려주지 않는다 — 비공개 판본일 수 있어서다.
 export default function RoadmapEditor({
   adminKey,
   fields,
+  onUnauthorized,
 }: {
   adminKey: string;
   fields: Field[];
+  onUnauthorized: () => void;
 }) {
   const [fieldId, setFieldId] = useState<number>(fields[0]?.id ?? 0);
   const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
@@ -24,10 +26,13 @@ export default function RoadmapEditor({
         setVersion(r.version_label);
         setContent(r.content_md);
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 401) return onUnauthorized();
+        setError(e.message);
+      });
   };
 
-  useEffect(load, [fieldId, adminKey]);
+  useEffect(load, [fieldId, adminKey, onUnauthorized]);
 
   const save = async () => {
     setSaving(true);
@@ -36,6 +41,7 @@ export default function RoadmapEditor({
       await put(`/admin/fields/${fieldId}/roadmap`, { version_label: version, content_md: content }, adminKey);
       load();
     } catch (e) {
+      if (e instanceof ApiError && e.status === 401) return onUnauthorized();
       setError(e instanceof Error ? e.message : "저장에 실패했습니다.");
     } finally {
       setSaving(false);
@@ -44,10 +50,16 @@ export default function RoadmapEditor({
 
   const remove = async () => {
     if (!confirm("등록된 로드맵을 삭제할까요? 이미 생성된 점검 보고서는 남습니다.")) return;
-    await del(`/admin/fields/${fieldId}/roadmap`, adminKey);
-    setVersion("");
-    setContent("");
-    load();
+    setError(null);
+    try {
+      await del(`/admin/fields/${fieldId}/roadmap`, adminKey);
+      setVersion("");
+      setContent("");
+      load();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) return onUnauthorized();
+      setError(e instanceof Error ? e.message : "삭제에 실패했습니다.");
+    }
   };
 
   const registered = (roadmap?.goal_count ?? 0) > 0;

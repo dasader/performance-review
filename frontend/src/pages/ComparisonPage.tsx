@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkCjkFriendly from "remark-cjk-friendly";
 import { getComparison, type Comparison } from "../api";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import Switch from "../components/Switch";
 import { COUNTRY_NAMES, sortCountries } from "../lib/countries";
-import { MARKDOWN_COMPONENTS, PROSE_CLASSES } from "../lib/prose";
+import { useQueryFlag, usePolling } from "../lib/hooks";
+import Prose from "../components/Prose";
 import { formatGeneratedAt } from "../lib/format";
 import { stripLeadingH1 } from "../lib/reportMarkdown";
 
@@ -17,17 +15,9 @@ import { stripLeadingH1 } from "../lib/reportMarkdown";
 // SectionSummaries와 같은 규약(?withSections=1 + Switch) — 2개국 비교는 sections가
 // 비어 있어(그 자체가 유일한 쌍) 아무것도 렌더링하지 않는다.
 function PairwiseSections({ sections }: { sections?: { name: string; body: string }[] }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const open = searchParams.get("withSections") === "1";
+  const [open, toggle] = useQueryFlag("withSections");
 
   if (!sections?.length) return null;
-
-  const toggle = () => {
-    const next = new URLSearchParams(searchParams);
-    if (open) next.delete("withSections");
-    else next.set("withSections", "1");
-    setSearchParams(next);
-  };
 
   // 토글이 꺼져 있으면 인쇄에서 이 구획을 통째로 숨긴다. 내용은 이미 조건부라
   // 안 나오지만 제목·설명·스위치가 남아, PDF에 본문 없는 제목만 찍혔다(사용자 지적).
@@ -57,14 +47,7 @@ function PairwiseSections({ sections }: { sections?: { name: string; body: strin
                 </p>
                 <h3 className="text-xl font-bold text-ink">{s.name}</h3>
               </div>
-              <div className={`report-prose ${PROSE_CLASSES}`}>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkCjkFriendly]}
-                  components={MARKDOWN_COMPONENTS}
-                >
-                  {stripLeadingH1(s.body)}
-                </ReactMarkdown>
-              </div>
+              <Prose md={stripLeadingH1(s.body)} />
             </article>
           ))}
       </section>
@@ -107,11 +90,7 @@ export default function ComparisonPage() {
 
   // pending이면 폴링한다. 생성은 잡 루프가 한 틱(30초)에 하나씩 처리하므로
   // 즉시 끝나지 않는다 — 분야 보고서와 같은 이유.
-  useEffect(() => {
-    if (data?.status !== "pending") return;
-    const timer = setInterval(load, 5000);
-    return () => clearInterval(timer);
-  }, [data?.status, load]);
+  usePolling(data?.status === "pending", load);
 
   return (
     <div className="min-h-screen">
@@ -184,14 +163,7 @@ export default function ComparisonPage() {
             <hr className="my-10 border-t border-border" />
 
             {data.report_md && (
-              <div className={`report-prose ${PROSE_CLASSES}`}>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkCjkFriendly]}
-                  components={MARKDOWN_COMPONENTS}
-                >
-                  {stripLeadingH1(data.report_md)}
-                </ReactMarkdown>
-              </div>
+              <Prose md={stripLeadingH1(data.report_md)} />
             )}
 
             <PairwiseSections sections={data.sections} />

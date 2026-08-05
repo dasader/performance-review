@@ -13,17 +13,16 @@ from __future__ import annotations
 import logging
 import re
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.services import _time
+from app.services._countries import parse_countries
 from app.clients import gemini_sync
 from app.config import settings
 from app.models import Analysis, CountryComparison, Subfield
 from app.prompts import COMPARE_INSTRUCTION, COMPARE_SYNTHESIS_INSTRUCTION, country_name
 
 logger = logging.getLogger(__name__)
-
-
 
 
 # 비교의 기준국. "한국과의 비교"가 목적이므로 KR을 한쪽에 고정한다.
@@ -48,17 +47,22 @@ def collect_country_analyses(
     하나라도 없으면 ValueError(→409). 일부 국가만으로 비교 보고서를 만들면 "그 국가는
     성과가 없다"로 오독되므로 부분 생성을 아예 막는다.
     """
+    # 본문이 빈 분석(논문 0건)은 없는 것으로 친다 — 합성에 넣어봐야 모델이 근거
+    # 없이 채워 넣을 여지만 준다(rollup_field의 빈 보고서 제외와 같은 이유).
+    # sections_json은 이 함수의 두 호출부(큐잉 검증·실제 처리) 어느 쪽도 읽지 않는다.
+    # run-all은 55개 세부기술 × 조합만큼 이 질의를 돌리므로 defer가 실제로 크다.
     found = {
         a.country: a
-        for a in db.query(Analysis).filter(
+        for a in db.query(Analysis)
+        .filter(
             Analysis.subfield_id == subfield_id,
             Analysis.year == year,
             Analysis.country.in_(countries),
             Analysis.status == "done",
+            Analysis.report_md.isnot(None),
+            Analysis.report_md != "",
         )
-        # 본문이 빈 분석(논문 0건)은 없는 것으로 친다 — 합성에 넣어봐야 모델이 근거
-        # 없이 채워 넣을 여지만 준다(rollup_field의 빈 보고서 제외와 같은 이유).
-        if a.report_md
+        .options(defer(Analysis.sections_json))
     }
     missing = [c for c in countries if c not in found]
     if missing:
@@ -71,6 +75,15 @@ def _pct(part: int, whole: int) -> str:
     if not whole:
         return "—"
     return f"{round(part / whole * 100)}%"
+
+
+def _achievement_types(rows: list[tuple[str, dict]]) -> list[str]:
+    """모든 국가에 등장한 성과유형의 합집합(정렬).
+
+    대조표와 §3 지시문이 **같은 집합**을 봐야 한다 — 지시문은 "성과유형이 N개"라고
+    못박고 표는 그 N행을 그리므로, 두 곳이 각자 세면 숫자와 표가 어긋난다.
+    """
+    return sorted({t for _, s in rows for t in s.get("by_achievement_type", {})})
 
 
 def build_comparison_table(rows: list[tuple[str, dict]]) -> str:
@@ -121,14 +134,10 @@ def build_comparison_table(rows: list[tuple[str, dict]]) -> str:
 
     # 성과유형은 국가마다 키가 달라 합집합을 만들고 없는 곳은 0으로 채운다. 빠뜨리면
     # "그 국가엔 그 유형이 없다"와 "집계에서 누락됐다"가 구별되지 않는다.
-    types: list[str] = []
-    for _, s in rows:
-        for t in s.get("by_achievement_type", {}):
-            if t not in types:
-                types.append(t)
+    types = _achievement_types(rows)
     if types:
         body.append(group("성과유형 (분석 기준)"))
-        for t in sorted(types):
+        for t in types:
             body.append(
                 line(t, lambda s, t=t: s.get("by_achievement_type", {}).get(t, 0))
             )
@@ -180,12 +189,7 @@ def compare_instruction(rows: list[tuple[str, dict]]) -> str:
 
     세는 일을 모델에게 시키지 않는 것도 같은 이유다(stats.py의 원칙).
     """
-    types: list[str] = []
-    for _, s in rows:
-        for t in s.get("by_achievement_type", {}):
-            if t not in types:
-                types.append(t)
-    types.sort()
+    types = _achievement_types(rows)
     return COMPARE_INSTRUCTION.replace("{type_count}", f"{len(types)}개").replace(
         "{type_list}", ", ".join(types) if types else "(집계된 성과유형 없음)"
     )
@@ -208,7 +212,7 @@ def enqueue_comparison(
     if db.get(Subfield, subfield_id) is None:
         raise LookupError(f"세부기술 {subfield_id}를 찾을 수 없습니다.")
 
-    codes = sorted({c.strip().upper() for c in countries if c.strip()})
+    codes = sorted(parse_countries(countries))
     if len(codes) < 2:
         raise ValueError("비교하려면 국가가 2개 이상이어야 합니다.")
 

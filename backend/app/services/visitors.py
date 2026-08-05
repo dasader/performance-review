@@ -9,8 +9,6 @@ from app.config import settings
 from app.models.visit import Visit
 
 
-
-
 def _client_hash(ip: str, user_agent: str, day: date) -> str:
     raw = f"{ip}{user_agent}{settings.visitor_salt}{day.isoformat()}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()

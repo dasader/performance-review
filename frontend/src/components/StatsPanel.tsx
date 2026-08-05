@@ -1,4 +1,5 @@
 import type { Stats } from "../api";
+import DoiLink from "./DoiLink";
 
 // I10: source는 openalex/kci 단일 소스뿐 아니라 "both"(양쪽 모두에서 발견됨)도 가진다.
 const SOURCE_LABEL: Record<string, string> = {
@@ -160,14 +161,7 @@ export default function StatsPanel({ stats }: { stats: Stats | Record<string, ne
                 <tr key={`${p.title}-${i}`} className="border-b border-border-light align-top">
                   <td className="max-w-xs py-2 pr-3">
                     {p.doi ? (
-                      <a
-                        href={`https://doi.org/${p.doi}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-ink underline decoration-border underline-offset-2 hover:decoration-accent"
-                      >
-                        {p.title}
-                      </a>
+                      <DoiLink doi={p.doi}>{p.title}</DoiLink>
                     ) : (
                       p.title
                     )}

@@ -72,6 +72,9 @@ export default function GeneratedReportSection<T extends GeneratedReport>({
   // status 의존성이 바뀌며 이 effect가 정리되어 폴링이 멈춘다.
   const isPending = report?.status === "pending";
   useEffect(() => {
+    // lib/hooks의 usePolling을 쓰지 않는다 — 이쪽은 응답을 기다리는 동안 path가
+    // 바뀔 수 있어(분야를 옮기면) 늦게 도착한 이전 응답이 새 화면에 꽂히는 것을
+    // stopped 플래그로 막아야 한다. 그 가드가 폴링 본체와 한 몸이다.
     if (!isPending) return;
     let stopped = false;
     const timer = setInterval(async () => {

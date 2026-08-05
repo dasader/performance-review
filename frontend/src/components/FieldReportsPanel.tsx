@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, get, post } from "../api";
+import { ApiError, STATUS_LABEL, get, post } from "../api";
 import { formatGeneratedAt } from "../lib/format";
 import StatusBadge from "./StatusBadge";
+import { usePolling } from "../lib/hooks";
+import YearInput from "./YearInput";
 
 // 관리자 "분야 보고서" 탭 — 당해연도 전체를 일괄 큐잉하고, 분야별 종합/점검 상태를
 // 한눈에 본다. 실제 생성은 잡 루프가 한 틱에 하나씩 하므로, 이 화면은 큐잉만 걸고
@@ -20,12 +22,6 @@ interface Row {
   report: Cell | null;
   roadmap_check: Cell | null;
 }
-
-const STATUS_LABEL: Record<string, string> = {
-  pending: "대기 중",
-  done: "완료",
-  failed: "실패",
-};
 
 function StatusChip({ cell, eligible }: { cell: Cell | null; eligible: boolean }) {
   if (!cell) {
@@ -69,11 +65,7 @@ export default function FieldReportsPanel({
   const hasPending =
     rows?.some((r) => r.report?.status === "pending" || r.roadmap_check?.status === "pending") ??
     false;
-  useEffect(() => {
-    if (!hasPending) return;
-    const timer = setInterval(load, 5000);
-    return () => clearInterval(timer);
-  }, [hasPending, load]);
+  usePolling(hasPending, load);
 
   const runAll = async (kind: "report" | "roadmap-check") => {
     const label = kind === "report" ? "분야 종합보고서" : "로드맵 이행 점검";
@@ -107,15 +99,7 @@ export default function FieldReportsPanel({
     <section className="mt-6 border border-border bg-surface p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-accent">분야 보고서 일괄 생성</h2>
-        <label className="text-sm text-muted">
-          대상 연도{" "}
-          <input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            className="ml-1 w-24 border border-border bg-paper px-2 py-1 text-sm text-ink"
-          />
-        </label>
+        <YearInput year={year} onChange={setYear} />
       </div>
 
       <p className="mt-2 text-xs text-muted">

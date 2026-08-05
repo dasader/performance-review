@@ -1,29 +1,16 @@
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-from app.database import Base
 from app.models.analysis import Analysis
-from app.models.field import Field, Subfield
 from app.models.paper import Paper, PaperExtraction
 from app.prompts import MAP_INSTRUCTION, MAP_SCHEMA
 from app.services import mapper
 
 
-@pytest.fixture
-def ctx():
-    engine = create_engine("sqlite://")
-    Base.metadata.create_all(engine)
-    db = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
-    f = Field(name="양자", slug="quantum", order_no=1)
-    db.add(f)
-    db.flush()
-    sf = Subfield(field_id=f.id, name="양자컴퓨팅", query="quantum computing")
-    db.add(sf)
-    db.flush()
+# 공용 ctx(분야·세부기술)에 이 파일이 필요로 하는 Analysis만 얹는다.
+@pytest.fixture(name="ctx")
+def mapper_ctx(ctx):
+    db, sf = ctx
     a = Analysis(subfield_id=sf.id, year=2025, status="extracting", query_hash="h")
     db.add(a)
-    db.flush()
     db.commit()
     return db, a
 

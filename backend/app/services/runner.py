@@ -17,6 +17,8 @@ from app.models.field import CountryComparison, FieldReport, RoadmapCheck, Subfi
 from app.models.paper import Paper, PaperExtraction
 from app.models.schedule import AnalysisRun, ScheduledRun, ScheduleSetting
 from app.services import comparison, mapper, reducer, search, stats
+from app.services._countries import parse_countries
+from app.services._time import utcnow
 from app.services.budget import BudgetExceeded, spent_today
 
 logger = logging.getLogger(__name__)
@@ -437,7 +439,7 @@ def _queue_all_active(
     years = [now.year - i for i in range(cfg.years_back + 1)]
     # 콤마 구분 목록. 기본 "KR"이라 켜기 전에는 현행과 같다. 국가마다 검색·추출이
     # 따로 돌아 비용이 곱해지므로 관리자가 명시적으로 켜야 한다.
-    countries = [c.strip() for c in (cfg.countries or "KR").split(",") if c.strip()]
+    countries = parse_countries(cfg.countries or "KR")
     subfields = db.query(Subfield).filter(Subfield.active.is_(True)).all()
     queued = 0
     for subfield in subfields:
@@ -573,8 +575,7 @@ def schedule_history(db: Session, *, limit: int = 12) -> list[dict]:
         next_ran_at = rows[i - 1].ran_at if i else None  # 내림차순 — 바로 앞 행이 다음 실행
         window_start = to_utc_naive(row.ran_at)
         window_end = (
-            to_utc_naive(next_ran_at) if next_ran_at
-            else datetime.now(timezone.utc).replace(tzinfo=None)
+            to_utc_naive(next_ran_at) if next_ran_at else utcnow()
         )
         done_count = db.query(AnalysisRun).filter(
             AnalysisRun.trigger == row.trigger,
@@ -618,34 +619,16 @@ async def advance_field_reports(db: Session) -> None:
     그 뒤에 줄서면 오래 대기하기 때문이다. 국가 비교는 입력이 가장 커(국가 수만큼
     보고서가 붙는다) 맨 뒤에 둔다.
     """
-    field_row = (
-        db.query(FieldReport)
-        .filter(FieldReport.status == "pending")
-        .order_by(FieldReport.id)
-        .first()
-    )
-    if field_row is not None:
-        await _process_report(db, field_row, reducer.process_field_report, "분야 종합")
-        return
-
-    check_row = (
-        db.query(RoadmapCheck)
-        .filter(RoadmapCheck.status == "pending")
-        .order_by(RoadmapCheck.id)
-        .first()
-    )
-    if check_row is not None:
-        await _process_report(db, check_row, reducer.process_roadmap_check, "로드맵 점검")
-        return
-
-    compare_row = (
-        db.query(CountryComparison)
-        .filter(CountryComparison.status == "pending")
-        .order_by(CountryComparison.id)
-        .first()
-    )
-    if compare_row is not None:
-        await _process_report(db, compare_row, comparison.process_comparison, "국가 비교")
+    # 순서가 곧 우선순위다 — 위에서부터 pending 행을 찾아 첫 하나만 처리한다.
+    for model, processor, label in (
+        (FieldReport, reducer.process_field_report, "분야 종합"),
+        (RoadmapCheck, reducer.process_roadmap_check, "로드맵 점검"),
+        (CountryComparison, comparison.process_comparison, "국가 비교"),
+    ):
+        row = db.query(model).filter(model.status == "pending").order_by(model.id).first()
+        if row is not None:
+            await _process_report(db, row, processor, label)
+            return
 
 
 async def _process_report(db: Session, row, processor, label: str) -> None:
@@ -675,15 +658,21 @@ async def _tick(db: Session) -> None:
     """
     run_scheduled_if_due(db)
     resume_paused(db)
-    # report_md(보고서 마크다운, 건당 12KB 규모)와 stats_json은 advance()가
+    # report_md(보고서 마크다운, 건당 12KB 규모)·stats_json·sections_json은 advance()가
     # 읽지 않는다 — _do_reduce가 쓰기만 한다. defer하지 않으면 30초마다
     # 활성 분석 전체의 보고서 본문을 통째로 읽어온다(월간 실행 직후엔
     # 55개 세부기술 × 연도 규모라 수 MB에 이른다). 지연 로딩이라
     # _do_reduce의 대입은 그대로 동작한다.
+    # sections_json은 3단 reduce의 성과유형별 중간 보고서들이라 report_md보다
+    # 크다 — 이것만 빠뜨리면 위 defer가 막으려던 비용의 대부분이 그대로 남는다.
     active = (
         db.query(Analysis)
         .filter(Analysis.status.in_(ACTIVE_STATES))
-        .options(defer(Analysis.report_md), defer(Analysis.stats_json))
+        .options(
+            defer(Analysis.report_md),
+            defer(Analysis.stats_json),
+            defer(Analysis.sections_json),
+        )
         .all()
     )
     for analysis in active:

@@ -22,6 +22,7 @@ from app.models.paper import Paper, PaperExtraction
 from app.services import mapper, stats
 from app.services import visitors as visitors_service
 from app.prompts import country_name
+from app.services._countries import parse_countries
 from app.services.runner import STEP_LABELS
 
 router = APIRouter(prefix="/api", tags=["public"])
@@ -501,30 +502,30 @@ def subfield_reports(field_id: int, year: int, db: Session = Depends(get_db)):
     빼면 부록에 논문 제목이 full name 그대로 노출된다(_footnoted_report). 참고문헌도
     함께 내려 화면이 [n] 각주 아래 목록을 붙일 수 있게 한다.
     """
-    subfields = (
-        db.query(Subfield)
-        .filter(Subfield.field_id == field_id)
+    # 세부기술마다 분석을 따로 조회하면 분야당 55번 나간다 — 조인 한 번으로 읽는다.
+    # 국가는 다른 공개 집계와 같이 KR로 못 박는다. 안 걸면 세부기술마다 국가 수만큼
+    # 행이 나와 report_md·stats_json을 통째로 읽고 하나만 남기고 버리게 되고,
+    # 게다가 어느 국가가 남는지가 정해져 있지 않다.
+    rows = (
+        db.query(Subfield.name, Analysis)
+        .join(Analysis, Analysis.subfield_id == Subfield.id)
+        .filter(
+            Subfield.field_id == field_id,
+            Analysis.year == year,
+            Analysis.status == "done",
+            Analysis.country == _KOREA,
+            Analysis.report_md.isnot(None),
+            Analysis.report_md != "",
+        )
         .order_by(Subfield.name)
         .all()
     )
     reports = []
-    for sf in subfields:
-        analysis = (
-            db.query(Analysis)
-            .filter(
-                Analysis.subfield_id == sf.id,
-                Analysis.year == year,
-                Analysis.status == "done",
-                Analysis.report_md.isnot(None),
-            )
-            .first()
-        )
-        if analysis is None or not analysis.report_md:
-            continue
+    for name, analysis in rows:
         # 부록은 세부 보고서를 붙이지 않는다 — 이미 세부기술 보고서 본문을
         # 싣고 있어 유형별 상세까지 넣으면 과하다.
         md, references, _ = _footnoted_report(db, analysis)
-        reports.append({"name": sf.name, "report_md": md, "references": references})
+        reports.append({"name": name, "report_md": md, "references": references})
     return {"field_id": field_id, "year": year, "reports": reports}
 
 
@@ -572,7 +573,7 @@ def get_comparison(
     pending/failed도 그대로 내려준다. 화면이 status로 폴링·경고를 판단한다
     (분야 보고서와 같은 규약).
     """
-    key = ",".join(sorted({c.strip().upper() for c in countries.split(",") if c.strip()}))
+    key = ",".join(sorted(parse_countries(countries)))
     row = (
         db.query(CountryComparison)
         .filter(
@@ -628,11 +629,9 @@ def subfield_availability(subfield_id: int, year: int, db: Session = Depends(get
         )
         .order_by(CountryComparison.countries)
     ):
-        codes = c.countries.split(",")
-        comparisons.append({
-            "countries": codes,
-            "label": " vs ".join(country_name(x) for x in codes),
-        })
+        # 이름표는 내려보내지 않는다 — CountryBar가 기준국(한국)을 빼고 자체 규칙으로
+        # 만들기 때문에 서버가 만든 문자열은 화면에 한 번도 쓰이지 않았다.
+        comparisons.append({"countries": c.countries.split(",")})
     return {"countries": countries, "comparisons": comparisons}
 
 
@@ -658,9 +657,11 @@ def metric_drilldown(analysis_id: int, name: str, unit: str = "", db: Session = 
 
     # 이 분석에 실제로 링크된 논문만 본다 — paper_extractions는 세부기술 단위 캐시라
     # 다른 연도 논문까지 들어 있다.
+    # 각주(_footnoted_report)와 같은 이유로 컬럼만 고른다 — 전체 ORM 행을 실으면
+    # abstract(논문당 1~2KB)까지 딸려와 5,000건짜리 분석에서 수 MB를 헛읽는다.
     titles = {
         p.paper_key: p
-        for p in db.query(Paper)
+        for p in db.query(Paper.paper_key, Paper.title, Paper.journal, Paper.year, Paper.doi)
         .join(AnalysisPaper, AnalysisPaper.paper_id == Paper.id)
         .filter(AnalysisPaper.analysis_id == analysis.id)
     }

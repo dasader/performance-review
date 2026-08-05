@@ -115,6 +115,20 @@ export interface Field {
 // 이중 관리는 남지만, 최소한 프론트 안에서는 한 곳에서만 정의한다.
 export const ACTIVE_STATUSES = new Set(["pending", "searching", "extracting", "reducing"]);
 
+// runner.py::STEP_LABELS와 같은 한글 라벨. 대부분의 admin 엔드포인트는 status_label을
+// 함께 내려주지만 comparison-grid·field-reports는 원시 상태 문자열만 주므로 화면이
+// 짝을 맞춘다 — 그 짝을 패널마다 각자 갖고 있으면(예전에는 두 벌이었고 한 벌은 3개
+// 상태만 알았다) 라벨을 고칠 때 한쪽만 바뀐다.
+export const STATUS_LABEL: Record<string, string> = {
+  pending: "대기 중",
+  searching: "논문 검색 중",
+  extracting: "성과 추출 중",
+  reducing: "보고서 작성 중",
+  done: "완료",
+  failed: "실패",
+  paused: "일시중지",
+};
+
 export interface YearRow {
   year: number;
   subfield_count: number;
