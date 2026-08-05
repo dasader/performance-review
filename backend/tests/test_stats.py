@@ -365,3 +365,73 @@ def test_hyphen_in_non_range_values_is_not_treated_as_a_range():
     agg = stats.aggregate_metrics(ext)
     assert agg["top_metrics"][0]["min"] == -5.0
     assert agg["top_metrics"][0]["max"] == -3.0
+
+
+def test_exponent_notation_is_read_as_a_number():
+    """지수 표기를 밑수로 읽으면 분포가 통째로 무너진다.
+
+    사용자 신고 + 실측(차세대 메모리반도체 KR 2025, 지표 '내구성'):
+    10^11 · 10^12 · 2×10^6 같은 값 15건이 각각 10 · 10 · 2로 읽혀
+    최소 2 / 중앙값 10 / 최대 1,000이 나왔다. 실제로는 10^3~10^12 범위다.
+
+    실측 corpus(v3 추출 44,225개 값)에 지수 표기가 2.34%(1,033건) 있고,
+    형태는 캐럿·e표기·×10 세 갈래다.
+    """
+    ext = [_e("a", [
+        {"name": "내구성", "value": "10^11", "unit": "cycles"},
+        {"name": "내구성", "value": "10^3", "unit": "cycles"},
+    ])]
+    row = stats.aggregate_metrics(ext)["top_metrics"][0]
+    assert row["min"] == 1e3
+    assert row["max"] == 1e11
+
+
+def test_mantissa_times_power_of_ten():
+    """2 × 10^6 형태. 구분자는 ×(U+00D7)·x·X·* 가 섞여 있다(실측)."""
+    ext = [_e("a", [
+        {"name": "내구성", "value": "2 × 10^6", "unit": "cycles"},
+        {"name": "내구성", "value": "1 x 10^4", "unit": "cycles"},
+        {"name": "내구성", "value": "0.25*10^12", "unit": "cycles"},
+    ])]
+    row = stats.aggregate_metrics(ext)["top_metrics"][0]
+    assert row["min"] == 1e4
+    assert row["median"] == 2e6
+    assert row["max"] == 0.25e12
+
+
+def test_e_notation_and_negative_exponents():
+    """-1.57E-03, 0.9e6, 10^-5 — 음수 지수와 e표기도 실측 corpus에 있다."""
+    ext = [_e("a", [
+        {"name": "전류", "value": "-1.57E-03", "unit": "A"},
+        {"name": "전류", "value": "0.9e6", "unit": "A"},
+        {"name": "전류", "value": "10^-5", "unit": "A"},
+    ])]
+    row = stats.aggregate_metrics(ext)["top_metrics"][0]
+    assert row["min"] == -0.00157
+    assert row["max"] == 0.9e6
+
+
+def test_earliest_number_still_wins():
+    """지수 이해가 '앞의 수를 쓴다'는 기존 규칙을 뒤집으면 안 된다 —
+    '2.5 GHz, 10^3 cycles'에서 2.5가 앞이면 2.5다."""
+    ext = [_e("a", [
+        {"name": "주파수", "value": "2.5 GHz, 10^3 cycles", "unit": "GHz"},
+        {"name": "주파수", "value": "3.5 GHz", "unit": "GHz"},
+    ])]
+    row = stats.aggregate_metrics(ext)["top_metrics"][0]
+    assert row["min"] == 2.5
+
+
+def test_garbage_with_caret_does_not_crash():
+    """'(nd)^{1/4}/sqrt(ε)' 같은 값도 실제로 있다 — 숫자가 없으면 None이고
+    metrics_total에는 남는다(기존 규칙)."""
+    ext = [_e("a", [
+        {"name": "지수", "value": "(nd)^{1/4}/sqrt(ε)", "unit": ""},
+        {"name": "지수", "value": "5", "unit": ""},
+    ])]
+    agg = stats.aggregate_metrics(ext)
+    # 예전부터 "{1/4}"의 1을 첫 숫자로 읽어 왔다. 지수 파싱이 그 동작을 바꾸지
+    # 않는다는 것이 여기서 확인하려는 것이다 — 터지지 않고, 지수로 오해하지도 않는다.
+    assert agg["metrics_total"] == 2
+    assert agg["metrics_parsed"] == 2
+    assert agg["top_metrics"][0]["min"] == 1.0

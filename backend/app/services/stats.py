@@ -51,22 +51,69 @@ def _metric_key(name: str) -> str:
 _RANGE_RE = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*[-~\u2013\u2014]\s*(\d+(?:\.\d+)?)\s*$")
 
 
-def _metric_value(raw: object) -> float | None:
-    """값 문자열에서 대표 숫자를 뽑는다. '~14' '1,200' '18.43'을 처리하고,
-    숫자가 없으면 None — 집계에서 빠지되 metrics_total에는 남는다.
+# 지수 표기 3종. 실측(v3 추출 44,225개 값): 2.34%(1,033건)가 이 형태이고, 지표에 따라
+# (예: 내구성) 거의 전부다. 밑수만 읽으면 10^3~10^12가 전부 10이 되어 분포가 무너진다
+# — 사용자 신고로 드러났다(내구성 15건이 최소 2 / 중앙값 10 / 최대 1,000으로 나왔다).
+#
+# 구분자가 ×(U+00D7)·x·X·* 로 섞여 있고 음수 지수도 있다(10^-5, -1.57E-03).
+_MANTISSA_EXP_RE = re.compile(
+    r"(-?\d+(?:\.\d+)?)\s*[×xX*]\s*10\s*\^?\s*(-?\d+)"
+)
+_POWER10_RE = re.compile(r"10\s*\^\s*(-?\d+)")
+_E_NOTATION_RE = re.compile(r"-?\d+(?:\.\d+)?[eE][-+]?\d+")
 
-    범위 표기는 **중간값**을 쓴다. 실측(2026-08-03, v3 추출 42,417개 값): 5.09%가
-    범위 표기이고 그중 35.9%는 상한이 하한의 2배 이상이다(평균 16배). 하한만 취하면
-    이 5%가 체계적으로 낮게 잡힌다 — "70-600"을 70으로 세는 식이다. 분포 요약
-    (최소·중앙값·최대)의 대표값으로는 한쪽 끝보다 중앙이 맞고, 통째로 버리면 5%를 잃는다.
+
+def _metric_value(raw: object) -> float | None:
+    """값 문자열에서 대표 숫자를 뽑는다. 숫자가 없으면 None — 집계에서 빠지되
+    metrics_total에는 남는다.
+
+    **가장 앞에 나오는 표기를 쓴다.** 지수를 이해하되 "앞의 수를 쓴다"는 기존 규칙을
+    뒤집지 않기 위해서다 — "2.5 GHz, 10^3 cycles"는 2.5다. 각 표기의 위치를 재서
+    제일 앞선 것을 고른다.
+
+    범위 표기는 중간값을 쓴다. 실측: 5.09%가 범위이고 그중 35.9%는 상한이 하한의
+    2배 이상이라(평균 16배) 하한만 취하면 체계적으로 낮게 잡힌다. 다만 지수를 낀
+    범위("0.8 x 10^-9 ~ 13.2 x 10^-9")는 하한을 쓴다 — 지수 안의 음수 부호와 범위
+    구분자를 구별할 수 없어, 잘못 쪼개느니 앞의 값을 쓰는 편이 안전하다.
     """
     text = raw if isinstance(raw, str) else str(raw or "")
     text = text.replace(",", "")
+
+    # 지수 표기부터. 위치가 가장 앞선 것을 고른다.
+    candidates: list[tuple[int, float]] = []
+    m = _MANTISSA_EXP_RE.search(text)
+    if m:
+        candidates.append((m.start(), float(m.group(1)) * 10 ** int(m.group(2))))
+    m = _POWER10_RE.search(text)
+    if m:
+        candidates.append((m.start(), 10.0 ** int(m.group(1))))
+    m = _E_NOTATION_RE.search(text)
+    if m:
+        candidates.append((m.start(), float(m.group(0))))
+
+    plain = _NUM_RE.search(text)
+    if candidates:
+        start, value = min(candidates)
+        # 평범한 숫자가 더 앞에 있으면 그것이 답이다(위 docstring의 "앞의 수" 규칙).
+        # 단 그 숫자가 지수 표기의 일부라면(2 × 10^6의 2) 지수 쪽이 맞다.
+        if plain and plain.start() < start:
+            return float(plain.group())
+        return value
+
     span = _RANGE_RE.match(text)
     if span:
         return (float(span.group(1)) + float(span.group(2))) / 2
-    match = _NUM_RE.search(text)
-    return float(match.group()) if match else None
+    return float(plain.group()) if plain else None
+
+
+def _round4(x: float) -> float:
+    """유효숫자 4자리로 반올림한다.
+
+    round(x, 4)를 쓰면 작은 값이 통째로 0이 된다 — 1e-9 → 0.0. 지수 표기를 제대로
+    읽기 시작하면서 그런 값이 실제로 들어온다(실측: 10^-4 이하가 244건). 자릿수가
+    아니라 유효숫자로 잘라야 크기를 보존한다.
+    """
+    return float(f"{x:.4g}")
 
 
 def aggregate_metrics(extractions: list[PaperExtraction]) -> dict:
@@ -112,9 +159,9 @@ def aggregate_metrics(extractions: list[PaperExtraction]) -> dict:
             # 1,523개 = 90.3%)에서 p90 == max였고, 같은 숫자가 두 열에 나와 서로 다른
             # 통계인 것처럼 보였다. 범위는 표본이 둘이어도 성립해 하한을 둘 필요가 없다.
             # 인용수 p90(compute의 citations)은 표본이 수백~수천이라 문제가 없어 그대로 둔다.
-            "min": round(min(nums), 4),
-            "median": round(statistics.median(nums), 4),
-            "max": round(max(nums), 4),
+            "min": _round4(min(nums)),
+            "median": _round4(statistics.median(nums)),
+            "max": _round4(max(nums)),
         }
         for key, nums in values.items()
         if len(nums) > 1  # 1회성 지표는 분포가 없다 — metrics_unique로 존재만 남긴다.
