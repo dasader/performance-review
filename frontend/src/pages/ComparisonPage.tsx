@@ -7,6 +7,7 @@ import { getComparison, type Comparison } from "../api";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import Switch from "../components/Switch";
+import { COUNTRY_NAMES, sortCountries } from "../lib/countries";
 import { MARKDOWN_COMPONENTS, PROSE_CLASSES } from "../lib/prose";
 import { formatGeneratedAt } from "../lib/format";
 import { stripLeadingH1 } from "../lib/reportMarkdown";
@@ -149,7 +150,7 @@ export default function ComparisonPage() {
                   나라들을 보고 있는지가 제목에서 바로 읽혀야 한다. */}
               <h1 className="mt-1 text-3xl font-bold tracking-tight text-ink">
                 {data.subfield_name}{" "}
-                <span className="text-muted">{data.country_names.join(" · ")} </span>
+                <span className="text-muted">{sortCountries(data.countries).map((c) => COUNTRY_NAMES[c] ?? c).join(" · ")} </span>
                 <span className="tabular-nums text-muted">{data.year}</span>
               </h1>
 

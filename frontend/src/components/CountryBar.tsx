@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { COUNTRY_NAMES } from "../lib/countries";
+import { COUNTRY_NAMES, sortCountries } from "../lib/countries";
 
 const BASE = "KR";
 
@@ -12,7 +12,7 @@ function name(code: string): string {
 // 한국이 없는 조합(관리자가 콤마 입력으로 만든 US,CN 같은 것)은 전부 적는다.
 function comparisonLabel(codes: string[]): string {
   const others = codes.filter((c) => c !== BASE);
-  return (others.length ? others : codes).map(name).join(" · ");
+  return sortCountries(others.length ? others : codes).map(name).join(" · ");
 }
 
 // 보고서 상단의 국가·비교 이동 줄.
@@ -40,11 +40,8 @@ export default function CountryBar({
   // 고를 것이 없으면 줄 자체를 숨긴다(한국뿐이고 비교도 없는 경우).
   if (countries.length < 2 && comparisons.length === 0) return null;
 
-  // 한국을 맨 앞에 둔다 — 기준국이고, 코드 정렬(CN·JP·KR·US)로는 가운데에 묻힌다.
-  const ordered = [
-    ...countries.filter((c) => c === BASE),
-    ...countries.filter((c) => c !== BASE),
-  ];
+  // 표시 순서는 lib/countries의 한 곳에서 정한다(한국·미국·중국·일본).
+  const ordered = sortCountries(countries);
 
   // 모든 비교가 한국을 낀 경우에만 "한국과 비교"라고 말할 수 있다.
   const allWithBase = comparisons.every((c) => c.countries.includes(BASE));
