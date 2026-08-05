@@ -67,6 +67,34 @@ class RunIn(_YearRangeMixin):
     country: str = "KR"
 
 
+class QueueAnalysisIn(BaseModel):
+    subfield_id: int
+    # ISO 3166-1 alpha-2. 화면의 국가 열 한 칸이 이 항목 하나에 대응한다.
+    country: str = "KR"
+    force: bool = False
+
+
+class QueueComparisonIn(BaseModel):
+    subfield_id: int
+    # 다국 비교 하나만 만든다 — 1:1은 그 안의 섹션으로 조회된다(2026-08-04 설계).
+    countries: list[str] = PydanticField(min_length=2)
+
+
+class QueueIn(BaseModel):
+    """관리자 화면에서 체크한 셀들을 한 요청으로 큐잉한다.
+
+    네 종류를 한 번에 받는 이유: 화면의 "선택한 N건 생성"이 호출 한 번이어야 하고,
+    부분 실패 집계를 화면마다 따로 하지 않기 위해서다. 종류별로 나누면 15건 선택에
+    왕복이 15번 나가고 어디까지 성공했는지를 프론트가 스스로 조립해야 한다.
+    """
+
+    year: int = PydanticField(ge=1900, le=2100)
+    analyses: list[QueueAnalysisIn] = []
+    comparisons: list[QueueComparisonIn] = []
+    field_reports: list[int] = []      # field_id
+    roadmap_checks: list[int] = []     # field_id
+
+
 class ScheduleIn(BaseModel):
     enabled: bool
     day: int
@@ -259,6 +287,106 @@ def run(payload: RunIn, db: Session = Depends(get_db)):
     return {"queued": queued, "blocked": blocked}
 
 
+@router.post("/queue")
+def queue(payload: QueueIn, db: Session = Depends(get_db)):
+    """체크한 대상들을 한 번에 큐잉하고, 건너뛴 것은 사유와 함께 돌려준다.
+
+    하나가 막혀도 나머지는 큐잉한다(field-reports/run-all의 규약). **조용히 건너뛰지
+    않는 것**이 run-all과 다른 점이다 — "10건 큐잉, 3건 건너뜀"만으로는 상대국 분석이
+    없어서인지 로드맵이 미등록이어서인지 알 수 없었다.
+
+    enqueue 계열 함수들이 각자 db.commit()을 하므로 여기서 다시 커밋하지 않는다.
+    """
+    queued = {"analyses": 0, "comparisons": 0, "field_reports": 0, "roadmap_checks": 0}
+    skipped: list[dict] = []
+
+    # 예산이 이미 소진됐으면 분석은 큐잉하지 않는다. 큐잉해 두면 잡 루프가 건마다
+    # count_only(건당 $0.001)를 한 번 쓰고 paused로 내려간다 — search.collect가
+    # 예산 게이트보다 먼저 부르기 때문이다(페이징 전에 게이트를 통과시키려는 설계).
+    # 보고서류는 OpenAlex를 쓰지 않으므로 같은 요청 안에서도 그대로 처리한다.
+    over_budget = bool(payload.analyses) and (
+        budget.spent_today(db) >= settings.openalex_daily_budget_usd
+    )
+    for item in payload.analyses:
+        # 화면의 셀은 subfield × country × year라, skip 사유에도 country를 실어야
+        # 프론트가 어느 셀이 걸렸는지 되짚을 수 있다(Finding 3) — 정규화 전 원문을
+        # 쓰면 "us"와 "US"가 다른 셀처럼 보인다.
+        codes = parse_countries(item.country)
+        if not codes or invalid_countries(codes):
+            skipped.append({
+                "kind": "analysis", "subfield_id": item.subfield_id,
+                "country": item.country,
+                "reason": f"국가 코드는 두 글자 알파벳이어야 합니다: {item.country}",
+            })
+            continue
+        country = codes[0]
+
+        if over_budget:
+            skipped.append({
+                "kind": "analysis",
+                "subfield_id": item.subfield_id,
+                "country": country,
+                "reason": (
+                    f"OpenAlex 일일 예산 소진 — UTC "
+                    f"{budget.reset_time_utc():%Y-%m-%d %H:%M} 이후 재시도하세요."
+                ),
+            })
+            continue
+        subfield = db.get(Subfield, item.subfield_id)
+        if subfield is None:
+            skipped.append({"kind": "analysis", "subfield_id": item.subfield_id,
+                            "country": country, "reason": "세부기술 없음"})
+            continue
+        rows = runner.enqueue(
+            db, subfield, payload.year, payload.year,
+            force=item.force, country=country,
+        )
+        if not rows:
+            # runner.enqueue가 빈 리스트를 돌려주는 건 이미 done이고 query_hash도
+            # 그대로라는 뜻(runner.py 주석 참고) — 아무 것도 안 됐는데 queued도 skipped도
+            # 안 남으면 5건 선택해 눌렀을 때 "analyses: 0"만 보고 원인을 알 수 없다.
+            skipped.append({
+                "kind": "analysis", "subfield_id": item.subfield_id, "country": country,
+                "reason": "이미 완료된 분석이고 검색식도 바뀌지 않았습니다 — "
+                          "다시 실행하려면 강제 재실행을 선택하세요.",
+            })
+            continue
+        queued["analyses"] += len(rows)
+
+    for item in payload.comparisons:
+        # enqueue_comparison도 내부에서 parse_countries로 정규화하지만 형식 오류(예:
+        # "USA")는 걸러내지 않는다 — 걸러내지 않으면 잘못된 코드가 그대로 저장돼 검색
+        # 필터·비교 화면 어느 쪽에서도 매칭되지 않는 고아 행이 된다(Finding 2).
+        codes = parse_countries(item.countries)
+        bad = invalid_countries(codes)
+        if bad:
+            skipped.append({
+                "kind": "comparison", "subfield_id": item.subfield_id, "countries": codes,
+                "reason": f"국가 코드는 두 글자 알파벳이어야 합니다: {', '.join(bad)}",
+            })
+            continue
+        try:
+            comparison.enqueue_comparison(db, item.subfield_id, payload.year, codes)
+            queued["comparisons"] += 1
+        except (LookupError, ValueError) as e:
+            skipped.append({"kind": "comparison", "subfield_id": item.subfield_id,
+                            "countries": codes, "reason": str(e)})
+
+    # 분야 산출물 두 종류는 큐잉 함수 이름과 집계 키만 다르고 실패 처리가 같다.
+    for kind, field_ids, enqueue_one in (
+        ("field_report", payload.field_reports, reducer.enqueue_field_report),
+        ("roadmap_check", payload.roadmap_checks, reducer.enqueue_roadmap_check),
+    ):
+        for field_id in field_ids:
+            try:
+                enqueue_one(db, field_id, payload.year)
+                queued[f"{kind}s"] += 1
+            except (LookupError, ValueError) as e:
+                skipped.append({"kind": kind, "field_id": field_id, "reason": str(e)})
+
+    return {"queued": queued, "skipped": skipped}
+
+
 @router.get("/dashboard")
 def dashboard(db: Session = Depends(get_db)):
     """세부기술 × 연도 격자. 검색식이 바뀐 항목은 stale=True로 표시된다."""
@@ -276,6 +404,25 @@ def dashboard(db: Session = Depends(get_db)):
     ).all():
         by_subfield.setdefault(a.subfield_id, []).append(a)
 
+    # 비교 상태도 같은 응답에 싣는다 — 세부기술 탭이 분석과 비교를 한 표에 그리므로
+    # 두 번 부르면 두 응답의 연도·국가가 어긋날 여지가 생긴다. 연도별로 나눠 담아
+    # 화면의 연도 필터와 행 펼침이 추가 요청 없이 동작하게 한다.
+    comparisons: dict[int, dict[int, dict[str, str]]] = {}
+    for c in db.query(
+        CountryComparison.subfield_id, CountryComparison.year,
+        CountryComparison.countries, CountryComparison.status,
+    ).all():
+        cells = comparisons.setdefault(c.subfield_id, {}).setdefault(c.year, {})
+        cells[c.countries] = c.status
+        # 3개국 이상 비교는 쌍별 1:1을 먼저 만들어 sections_json에 담고 종합한다
+        # (process_comparison). 그 쌍을 미생성으로 두면 이미 있는 것을 다시 만든다.
+        codes = c.countries.split(",")
+        if c.status == "done" and len(codes) > 2:
+            base = comparison.base_country(codes)
+            for other in codes:
+                if other != base:
+                    cells.setdefault(",".join(sorted((base, other))), "in_multi")
+
     rows = []
     for subfield in subfields:
         analyses = by_subfield.get(subfield.id, [])
@@ -283,6 +430,11 @@ def dashboard(db: Session = Depends(get_db)):
             "subfield_id": subfield.id,
             "subfield_name": subfield.name,
             "field_id": subfield.field_id,
+            # JSON 객체 키는 문자열이어야 한다.
+            "comparisons": {
+                str(year): cells
+                for year, cells in comparisons.get(subfield.id, {}).items()
+            },
             "years": [
                 {
                     "analysis_id": a.id,
