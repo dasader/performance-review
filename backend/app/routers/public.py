@@ -503,25 +503,25 @@ def subfield_reports(field_id: int, year: int, db: Session = Depends(get_db)):
     함께 내려 화면이 [n] 각주 아래 목록을 붙일 수 있게 한다.
     """
     # 세부기술마다 분석을 따로 조회하면 분야당 55번 나간다 — 조인 한 번으로 읽는다.
+    # 국가는 다른 공개 집계와 같이 KR로 못 박는다. 안 걸면 세부기술마다 국가 수만큼
+    # 행이 나와 report_md·stats_json을 통째로 읽고 하나만 남기고 버리게 되고,
+    # 게다가 어느 국가가 남는지가 정해져 있지 않다.
     rows = (
-        db.query(Subfield.id, Subfield.name, Analysis)
+        db.query(Subfield.name, Analysis)
         .join(Analysis, Analysis.subfield_id == Subfield.id)
         .filter(
             Subfield.field_id == field_id,
             Analysis.year == year,
             Analysis.status == "done",
+            Analysis.country == _KOREA,
             Analysis.report_md.isnot(None),
+            Analysis.report_md != "",
         )
         .order_by(Subfield.name)
         .all()
     )
     reports = []
-    seen: set[int] = set()
-    for subfield_id, name, analysis in rows:
-        # 국가별 분석이 여러 건이면 종전처럼 먼저 걸린 하나만 싣는다.
-        if subfield_id in seen or not analysis.report_md:
-            continue
-        seen.add(subfield_id)
+    for name, analysis in rows:
         # 부록은 세부 보고서를 붙이지 않는다 — 이미 세부기술 보고서 본문을
         # 싣고 있어 유형별 상세까지 넣으면 과하다.
         md, references, _ = _footnoted_report(db, analysis)

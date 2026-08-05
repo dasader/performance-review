@@ -20,8 +20,6 @@ from app.prompts import (
 logger = logging.getLogger(__name__)
 
 
-
-
 def format_extractions(
     extractions: list[PaperExtraction], papers_by_key: dict[str, Paper]
 ) -> str:

@@ -2,31 +2,12 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from app.config import settings
-from app.database import Base
 from app.models.analysis import Analysis
-from app.models.field import Field, Subfield
 from app.models.schedule import ScheduledRun
 from app.services import runner
 
 KST = ZoneInfo(settings.schedule_timezone)
-
-
-@pytest.fixture
-def ctx():
-    engine = create_engine("sqlite://")
-    Base.metadata.create_all(engine)
-    db = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
-    f = Field(name="양자", slug="quantum", order_no=1)
-    db.add(f)
-    db.flush()
-    sf = Subfield(field_id=f.id, name="양자컴퓨팅", query="quantum computing", active=True)
-    db.add(sf)
-    db.commit()
-    return db, sf
 
 
 def test_run_scheduled_skips_when_not_due_hour(ctx):

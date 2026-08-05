@@ -1036,10 +1036,20 @@ def test_subfield_reports_endpoint_returns_bodies(client):
     _seed_done_analysis(client, "세부기술 A", "## 성과\nA 본문")
     _seed_done_analysis(client, "빈 것", None)  # 본문 없는 건 제외
 
+    # 같은 세부기술에 다른 국가 분석이 있어도 부록은 늘어나지 않는다 — 다른 공개
+    # 집계와 같이 KR만 싣는다(안 걸면 세부기술마다 국가 수만큼 행이 나온다).
+    db = app.dependency_overrides[get_db]()
+    subfield_id = db.query(Subfield).filter(Subfield.name == "세부기술 A").one().id
+    db.add(Analysis(subfield_id=subfield_id, year=2026, country="US", status="done",
+                    query_hash="h", report_md="## 성과\nUS 본문", stats_json={}))
+    db.commit()
+    db.close()
+
     got = client.get("/api/fields/1/subfield-reports?year=2026").json()
     assert len(got["reports"]) == 1
     assert got["reports"][0]["name"] == "세부기술 A"
     assert "A 본문" in got["reports"][0]["report_md"]
+    assert "US 본문" not in got["reports"][0]["report_md"]
 
 
 def test_subfield_reports_apply_footnotes(client):

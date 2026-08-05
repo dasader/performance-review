@@ -363,8 +363,9 @@ function PrintHeader({ data }: { data: Analysis }) {
 // ★ 인쇄에는 접힘과 무관하게 항상 싣는다 — [12]가 있는데 참고문헌이 없는 PDF는
 //   그 자체로 결함이다.
 function References({ references }: { references: Reference[] }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const open = searchParams.get("withRefs") === "1";
+  const [open, toggle] = useQueryFlag("withRefs");
+  // 아래 해시 효과만 setSearchParams가 필요하다(펼침을 강제하는 쪽).
+  const [, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     const openIfTargeted = () => {
@@ -388,13 +389,6 @@ function References({ references }: { references: Reference[] }) {
   }, [setSearchParams]);
 
   if (references.length === 0) return null;
-
-  const toggle = () => {
-    const next = new URLSearchParams(searchParams);
-    if (open) next.delete("withRefs");
-    else next.set("withRefs", "1");
-    setSearchParams(next);
-  };
 
   return (
     <>

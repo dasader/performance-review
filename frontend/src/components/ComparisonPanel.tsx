@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ApiError, enqueueComparison, get, type AdminSubfield } from "../api";
+import YearInput from "./YearInput";
 
 // 국가 비교 보고서 생성. FieldReportsPanel과 같은 규약 — 생성은 큐잉이고
 // 실제 LLM 호출은 잡 루프가 한 틱에 하나씩 처리한다.
@@ -88,15 +89,7 @@ export default function ComparisonPanel({
           </select>
         </label>
 
-        <label className="text-sm text-muted">
-          연도
-          <input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            className="input ml-1 w-24"
-          />
-        </label>
+        <YearInput label="연도" year={year} onChange={setYear} />
 
         <label className="text-sm text-muted">
           국가(콤마 구분)

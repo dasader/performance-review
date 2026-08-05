@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import re
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.services import _time
 from app.services._countries import parse_countries
@@ -23,8 +23,6 @@ from app.models import Analysis, CountryComparison, Subfield
 from app.prompts import COMPARE_INSTRUCTION, COMPARE_SYNTHESIS_INSTRUCTION, country_name
 
 logger = logging.getLogger(__name__)
-
-
 
 
 # 비교의 기준국. "한국과의 비교"가 목적이므로 KR을 한쪽에 고정한다.
@@ -49,17 +47,22 @@ def collect_country_analyses(
     하나라도 없으면 ValueError(→409). 일부 국가만으로 비교 보고서를 만들면 "그 국가는
     성과가 없다"로 오독되므로 부분 생성을 아예 막는다.
     """
+    # 본문이 빈 분석(논문 0건)은 없는 것으로 친다 — 합성에 넣어봐야 모델이 근거
+    # 없이 채워 넣을 여지만 준다(rollup_field의 빈 보고서 제외와 같은 이유).
+    # sections_json은 이 함수의 두 호출부(큐잉 검증·실제 처리) 어느 쪽도 읽지 않는다.
+    # run-all은 55개 세부기술 × 조합만큼 이 질의를 돌리므로 defer가 실제로 크다.
     found = {
         a.country: a
-        for a in db.query(Analysis).filter(
+        for a in db.query(Analysis)
+        .filter(
             Analysis.subfield_id == subfield_id,
             Analysis.year == year,
             Analysis.country.in_(countries),
             Analysis.status == "done",
+            Analysis.report_md.isnot(None),
+            Analysis.report_md != "",
         )
-        # 본문이 빈 분석(논문 0건)은 없는 것으로 친다 — 합성에 넣어봐야 모델이 근거
-        # 없이 채워 넣을 여지만 준다(rollup_field의 빈 보고서 제외와 같은 이유).
-        if a.report_md
+        .options(defer(Analysis.sections_json))
     }
     missing = [c for c in countries if c not in found]
     if missing:

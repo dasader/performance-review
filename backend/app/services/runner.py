@@ -658,15 +658,21 @@ async def _tick(db: Session) -> None:
     """
     run_scheduled_if_due(db)
     resume_paused(db)
-    # report_md(보고서 마크다운, 건당 12KB 규모)와 stats_json은 advance()가
+    # report_md(보고서 마크다운, 건당 12KB 규모)·stats_json·sections_json은 advance()가
     # 읽지 않는다 — _do_reduce가 쓰기만 한다. defer하지 않으면 30초마다
     # 활성 분석 전체의 보고서 본문을 통째로 읽어온다(월간 실행 직후엔
     # 55개 세부기술 × 연도 규모라 수 MB에 이른다). 지연 로딩이라
     # _do_reduce의 대입은 그대로 동작한다.
+    # sections_json은 3단 reduce의 성과유형별 중간 보고서들이라 report_md보다
+    # 크다 — 이것만 빠뜨리면 위 defer가 막으려던 비용의 대부분이 그대로 남는다.
     active = (
         db.query(Analysis)
         .filter(Analysis.status.in_(ACTIVE_STATES))
-        .options(defer(Analysis.report_md), defer(Analysis.stats_json))
+        .options(
+            defer(Analysis.report_md),
+            defer(Analysis.stats_json),
+            defer(Analysis.sections_json),
+        )
         .all()
     )
     for analysis in active:

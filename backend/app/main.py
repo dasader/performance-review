@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from starlette.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
 import app.models  # noqa: F401  — 모든 모델 등록(FK 해석에 필요)
@@ -64,7 +65,12 @@ async def track_visitor(request: Request, call_next):
         db_factory = request.app.dependency_overrides.get(get_db, SessionLocal)
         db = db_factory()
         try:
-            record_visit(db, _client_ip(request), request.headers.get("user-agent", ""))
+            # 동기 DB 쓰기를 미들웨어에서 그대로 부르면 잡 루프가 얹혀 있는 같은
+            # 이벤트 루프가 그동안 멈춘다 — 공개 화면이 4~5초마다 폴링하므로 꾸준히
+            # 발생한다. FastAPI가 동기 엔드포인트를 돌리는 것과 같은 스레드풀로 뺀다.
+            await run_in_threadpool(
+                record_visit, db, _client_ip(request), request.headers.get("user-agent", "")
+            )
         finally:
             db.close()
     return response

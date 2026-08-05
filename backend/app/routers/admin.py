@@ -631,16 +631,15 @@ def enqueue_comparison(
     codes = parse_countries(countries)
     if invalid_countries(codes):
         raise HTTPException(status_code=422, detail="국가 코드는 두 글자 알파벳이어야 합니다.")
-    # 국가 2개 미만은 요청 형식 문제(422)라 여기서 직접 판정한다 — 예전에는 아래 ValueError의
-    # 한국어 메시지에 "2개"가 들어 있는지로 갈랐고, 그 문구를 다듬으면 상태 코드가 조용히 바뀌었다.
-    if len(codes) < 2:
-        raise HTTPException(status_code=422, detail="비교하려면 국가가 2개 이상이어야 합니다.")
     try:
         row = comparison.enqueue_comparison(db, subfield_id, year, codes)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        # 국가 2개 미만은 요청 형식 문제(422), 분석 부재는 상태 충돌(409). 예전에는
+        # 예외 메시지에 "2개"가 들어 있는지로 갈랐고, 그러면 문구를 다듬는 순간
+        # 상태 코드가 조용히 바뀐다 — 문자열이 아니라 요청 데이터로 판정한다.
+        raise HTTPException(status_code=422 if len(codes) < 2 else 409, detail=str(e))
     return {
         "subfield_id": row.subfield_id,
         "year": row.year,
