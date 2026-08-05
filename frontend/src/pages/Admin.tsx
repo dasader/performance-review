@@ -1,64 +1,39 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  ACTIVE_STATUSES,
-  ApiError,
-  del,
-  get,
-  post,
-  type AdminSubfield,
-  type DashboardResponse,
-  type DashboardRow,
-  type Field,
-} from "../api";
+import { ApiError, get, post, type DashboardResponse, type Field } from "../api";
 import { useAdminKey } from "../useAdminKey";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
-import StatusBadge from "../components/StatusBadge";
 import SubfieldEditor from "../components/SubfieldEditor";
-import RunDialog from "../components/RunDialog";
+import SubfieldTab from "../components/SubfieldTab";
 import ScheduleSection from "../components/ScheduleSection";
 import RoadmapEditor from "../components/RoadmapEditor";
 import FieldReportsPanel from "../components/FieldReportsPanel";
-import ComparisonPanel from "../components/ComparisonPanel";
-import ComparisonGrid from "../components/ComparisonGrid";
 
 // 관리자 화면이 세로로 길어져 스크롤로만 탐색하게 됐다. 작업 단위로 묶는다.
-// "분석 실행"과 "실행 상태"는 한 탭에 둔다 — 실행한 뒤 바로 상태를 보는 흐름이라
-// 나누면 탭을 오가야 한다.
+// "분석 실행·상태" · "국가 현황" · "국가 비교"는 전부 세부기술 하나를 다른 축으로
+// 보여줄 뿐이라 SubfieldTab 하나로 합쳤다 — 표 하나에서 현황을 보고 셀을 골라 큐잉한다.
 const TABS = [
   { id: "subfields", label: "세부기술·검색식" },
-  { id: "run", label: "분석 실행·상태" },
+  { id: "subfield", label: "세부기술" },
   { id: "schedule", label: "자동 스케줄" },
   { id: "roadmap", label: "전략기술로드맵" },
   { id: "field-reports", label: "분야 보고서" },
-  { id: "comparison", label: "국가 비교" },
-  { id: "comparison-grid", label: "국가 현황" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
 
 export default function Admin() {
   const [tab, setTab] = useState<TabId>("subfields");
-  const currentYear = new Date().getFullYear();
   const { key, save, clear } = useAdminKey();
   const [input, setInput] = useState("");
   const [authing, setAuthing] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  // 헤더의 "오늘 사용" 예산 표시 전용 — 세부기술 관련 탭은 각자 필요한 데이터를 직접 읽는다.
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [fields, setFields] = useState<Field[] | null>(null);
   const [fieldsError, setFieldsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [retryingId, setRetryingId] = useState<number | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-
-  // /admin/subfields (active 포함) 결과 — 탭이 나뉜 뒤로는 Admin이 직접 읽는다.
-  // SubfieldEditor가 끌어올려 주던 값에 의존하면, 사용자가 "분석 실행" 탭으로 바로
-  // 들어갔을 때 SubfieldEditor가 마운트되지 않아 실행 폼이 영영 뜨지 않는다.
-  const [subfields, setSubfields] = useState<AdminSubfield[] | null>(null);
-  // SubfieldEditor에서 검색식이 바뀔 때마다 증가하는 세대 카운터. RunDialog는 이 값이
-  // 바뀌면 확인했던 미리보기 숫자가 더 이상 유효하지 않다고 보고 폐기한다.
-  const [subfieldGen, setSubfieldGen] = useState(0);
 
   const onUnauthorized = useCallback(() => {
     clear();
@@ -82,26 +57,6 @@ export default function Admin() {
     if (key) loadDashboard(key);
   }, [key, loadDashboard]);
 
-  const handleDeleteAnalysis = async (row: DashboardRow, cell: { analysis_id: number; year: number }) => {
-    const ok = confirm(
-      `'${row.subfield_name}' ${cell.year}년 분석을 삭제할까요?\n\n` +
-        `지워지는 것: 보고서·통계·실행 이력\n` +
-        `남는 것: 수집한 논문과 추출 결과(캐시) — 재실행 시 추출 비용 없이 다시 만들어집니다.\n\n` +
-        `이 작업은 취소할 수 없습니다. 계속할까요?`,
-    );
-    if (!ok) return;
-    setDeletingId(cell.analysis_id);
-    try {
-      await del(`/admin/analyses/${cell.analysis_id}`, key);
-      await loadDashboard(key);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 401) return onUnauthorized();
-      setError(e instanceof Error ? e.message : "삭제 요청에 실패했습니다.");
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
   const loadFields = useCallback(() => {
     setFieldsError(null);
     get<Field[]>("/fields")
@@ -109,17 +64,9 @@ export default function Admin() {
       .catch((e) => setFieldsError(e instanceof Error ? e.message : "분야 목록을 불러오지 못했습니다."));
   }, []);
 
-  const loadSubfields = useCallback(() => {
-    if (!key) return;
-    get<AdminSubfield[]>("/admin/subfields", key)
-      .then(setSubfields)
-      .catch(() => setSubfields([]));
-  }, [key]);
-
   useEffect(() => {
     loadFields();
-    loadSubfields();
-  }, [loadFields, loadSubfields]);
+  }, [loadFields]);
 
   if (!key) {
     return (
@@ -232,28 +179,13 @@ className="btn btn-toggle btn-sm"
           <SubfieldEditor
             adminKey={key}
             fields={fields}
-            onChanged={() => {
-              loadDashboard(key);
-              loadSubfields();
-              setSubfieldGen((g) => g + 1);
-            }}
+            onChanged={() => {}}
             onUnauthorized={onUnauthorized}
           />
         )}
 
-        {tab === "run" && data && subfields && (
-          <RunDialog
-            adminKey={key}
-            rows={subfields
-              .filter((s) => s.active)
-              .map((s) => ({ subfield_id: s.id, subfield_name: s.name }))}
-            // default_year_range는 "최근 N개년"의 N(개수)이다 — 연도 범위가 아니다.
-            defaultYearFrom={currentYear - (data.default_year_range - 1)}
-            defaultYearTo={currentYear}
-            subfieldsVersion={subfieldGen}
-            onRan={() => loadDashboard(key)}
-            onUnauthorized={onUnauthorized}
-          />
+        {tab === "subfield" && (
+          <SubfieldTab adminKey={key} onUnauthorized={onUnauthorized} />
         )}
 
         {tab === "schedule" && <ScheduleSection adminKey={key} onUnauthorized={onUnauthorized} />}
@@ -264,106 +196,6 @@ className="btn btn-toggle btn-sm"
 
         {tab === "field-reports" && (
           <FieldReportsPanel adminKey={key} onUnauthorized={onUnauthorized} />
-        )}
-
-        {tab === "comparison" && (
-          <ComparisonPanel adminKey={key} onUnauthorized={onUnauthorized} />
-        )}
-
-        {tab === "comparison-grid" && (
-          <ComparisonGrid adminKey={key} onUnauthorized={onUnauthorized} />
-        )}
-
-        {/* 세부기술·검색식 / 분석 실행 섹션과 같은 카드로 묶어 시각적 단위를 맞춘다. */}
-        {tab === "run" && (
-        <section className="mt-6 border border-border bg-surface p-4">
-        <h2 className="mb-3 text-lg font-semibold text-accent">실행 상태</h2>
-
-        {!data && !error && <p className="text-sm text-muted">불러오는 중…</p>}
-
-        {data && data.rows.length === 0 && (
-          <p className="text-sm text-muted">세부기술을 추가하면 실행 상태가 표시됩니다.</p>
-        )}
-
-        {data && data.rows.length > 0 && (
-          <div className="table-scroll border-t border-border">
-            <table className="w-full border-collapse text-sm">
-              <thead className="tbl-head">
-                <tr className="border-b border-border">
-                  <th>세부기술</th>
-                  <th>연도</th>
-                  <th>상태</th>
-                  <th className="n">검색/분석</th>
-                  <th>최종수집</th>
-                  <th>
-                    <span>동작</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.rows.flatMap((row) =>
-                  row.years.map((cell) => (
-                    <tr key={cell.analysis_id} className="border-b border-border-light">
-                      <td className="py-3 pr-3 font-medium text-ink">{row.subfield_name}</td>
-                      <td className="py-3 pr-3 tabular-nums text-ink-light">{cell.year}</td>
-                      <td className="py-3 pr-3">
-                        <StatusBadge status={cell.status} label={cell.status_label} />
-                        {cell.stale && (
-                          <span className="ml-2 inline-flex items-center gap-1 text-xs font-medium text-warning">
-                            <span aria-hidden="true">⟳</span> 갱신 필요
-                          </span>
-                        )}
-                        {cell.error && <p className="mt-1 max-w-xs text-xs text-danger">{cell.error}</p>}
-                      </td>
-                      <td className="py-3 pr-3 text-right text-xs tabular-nums text-muted">
-                        {cell.searched_count.toLocaleString()} / {cell.analyzed_count.toLocaleString()}
-                      </td>
-                      <td className="py-3 pr-3 text-xs text-faint">
-                        {cell.snapshot_at ? new Date(cell.snapshot_at).toLocaleDateString("ko-KR") : "—"}
-                      </td>
-                      <td className="py-3 text-right whitespace-nowrap">
-                        {(cell.status === "failed" || cell.status === "paused") && (
-                          <button
-                            type="button"
-                            disabled={retryingId === cell.analysis_id}
-                            onClick={async () => {
-                              setRetryingId(cell.analysis_id);
-                              try {
-                                await post(`/admin/analyses/${cell.analysis_id}/retry`, {}, key);
-                                await loadDashboard(key);
-                              } catch (e) {
-                                if (e instanceof ApiError && e.status === 401) return onUnauthorized();
-                                setError(e instanceof Error ? e.message : "재실행 요청에 실패했습니다.");
-                              } finally {
-                                setRetryingId(null);
-                              }
-                            }}
-                            className="mr-2 btn btn-neutral btn-sm"
-                          >
-                            {retryingId === cell.analysis_id ? "요청 중…" : "재실행"}
-                          </button>
-                        )}
-                        {/* 진행 중(ACTIVE_STATUSES)에는 숨긴다 — batch가 이미 제출됐을 수 있어
-                            중간에 지우면 고아 상태가 된다(백엔드도 409로 같은 판단을 한다). */}
-                        {!ACTIVE_STATUSES.has(cell.status) && (
-                          <button
-                            type="button"
-                            disabled={deletingId === cell.analysis_id}
-                            onClick={() => handleDeleteAnalysis(row, cell)}
-                            className="btn btn-danger-quiet btn-sm"
-                          >
-                            {deletingId === cell.analysis_id ? "삭제 중…" : "삭제"}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  )),
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-        </section>
         )}
       </main>
       <Footer />
