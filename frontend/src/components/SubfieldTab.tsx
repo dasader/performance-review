@@ -1,0 +1,409 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ACTIVE_STATUSES,
+  ApiError,
+  STATUS_LABEL,
+  get,
+  queueAll,
+  type DashboardResponse,
+  type DashboardRow,
+  type QueueResponse,
+} from "../api";
+import { COUNTRY_NAMES, sortCountries } from "../lib/countries";
+import { usePolling } from "../lib/hooks";
+import { estimateCost } from "../lib/cost";
+import { cellKey, headerState, rowCells, toQueuePayload, toggleAll } from "../lib/selection";
+import StatusBadge from "./StatusBadge";
+import YearInput from "./YearInput";
+
+// 관리자 "세부기술" 탭 — 기술 × 국가 현황과 생성이 한 화면에 있다.
+//
+// 예전에는 "분석 실행·상태"(연도 축, 국가 미표시) · "국가 현황"(국가 축, 일괄 생성만) ·
+// "국가 비교"(현황 없이 임의 조합 생성) 세 탭에 흩어져 있었다. 같은 대상을 보는 곳과
+// 만드는 곳이 달라, 무엇이 어디까지 됐는지도 이 버튼이 무엇을 대상으로 하는지도
+// 알기 어려웠다. 셀을 체크해 고르면 대상이 눈으로 보인다.
+export default function SubfieldTab({
+  adminKey,
+  onUnauthorized,
+}: {
+  adminKey: string;
+  onUnauthorized: () => void;
+}) {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [data, setData] = useState<DashboardResponse | null>(null);
+  const [scheduleCountries, setScheduleCountries] = useState<string[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [force, setForce] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<QueueResponse | null>(null);
+
+  const load = useCallback(() => {
+    get<DashboardResponse>("/admin/dashboard", adminKey)
+      .then(setData)
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 401) return onUnauthorized();
+        setError(e instanceof Error ? e.message : "현황을 불러오지 못했습니다.");
+      });
+    get<{ countries: string }>("/admin/schedule", adminKey)
+      .then((s) => setScheduleCountries(s.countries.split(",").filter(Boolean)))
+      .catch(() => setScheduleCountries([]));
+  }, [adminKey, onUnauthorized]);
+
+  useEffect(load, [load]);
+
+  // 연도를 바꾸면 선택을 비운다 — 다른 연도 대상이 선택에 남으면 잘못 큐잉된다.
+  useEffect(() => setSelected(new Set()), [year]);
+
+  const rows = data?.rows ?? [];
+
+  // 열은 설정된 국가 + 실제로 분석이 있는 국가의 합집합이다. 설정에 없는 국가의
+  // 기존 분석이 화면에서 사라지면 "안 돌렸다"와 구별되지 않는다.
+  const countries = useMemo(() => {
+    const present = new Set(scheduleCountries);
+    for (const row of rows) {
+      for (const cell of row.years) if (cell.year === year) present.add(cell.country);
+    }
+    return sortCountries([...present]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, scheduleCountries, year]);
+
+  // 비교는 설정된 국가 전체를 한 보고서로 만든다. 2개 미만이면 만들 수 없다.
+  const comparisonKey = useMemo(
+    () => [...scheduleCountries].sort().join(","),
+    [scheduleCountries],
+  );
+  const showComparison = scheduleCountries.length >= 2;
+
+  const cellOf = (row: DashboardRow, country: string) =>
+    row.years.find((c) => c.year === year && c.country === country);
+
+  // 상대국 분석이 하나라도 없으면 비교를 만들 수 없다 — 선택 자체를 막는다.
+  const comparisonBlocked = (row: DashboardRow) =>
+    !scheduleCountries.every((c) => cellOf(row, c)?.status === "done");
+
+  const selectableOf = (row: DashboardRow) =>
+    rowCells(row.subfield_id, countries, showComparison && !comparisonBlocked(row));
+
+  const allCandidates = useMemo(
+    () => rows.flatMap((row) => selectableOf(row).map(cellKey)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, countries, showComparison, scheduleCountries, year],
+  );
+
+  // 진행 중인 것이 있으면 5초마다 다시 읽는다. 선택은 건드리지 않는다.
+  const hasActive = rows.some((row) =>
+    row.years.some((c) => c.year === year && ACTIVE_STATUSES.has(c.status)),
+  );
+  usePolling(hasActive, load);
+
+  // 갱신으로 사라진 대상은 선택에서 조용히 뺀다.
+  useEffect(() => {
+    setSelected((prev) => {
+      const valid = new Set(allCandidates);
+      const next = new Set([...prev].filter((k) => valid.has(k)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [allCandidates]);
+
+  const papersByCell = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const row of rows) {
+      for (const c of row.years) {
+        if (c.year === year && c.searched_count > 0) {
+          map[cellKey({ kind: "analysis", subfieldId: row.subfield_id, country: c.country })] =
+            c.searched_count;
+        }
+      }
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, year]);
+
+  const payload = toQueuePayload(selected, { year, countries: scheduleCountries, force });
+  const cost = estimateCost(payload, papersByCell);
+  const total = payload.analyses.length + payload.comparisons.length;
+
+  const toggle = (key: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const runQueue = async () => {
+    if (total === 0) return;
+    if (!confirm(`${year}년 ${total}건을 생성합니다. LLM 호출 비용이 발생합니다. 계속할까요?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setResult(await queueAll(payload, adminKey));
+      setSelected(new Set());
+      load();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) return onUnauthorized();
+      setError(e instanceof Error ? e.message : "생성 요청에 실패했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="mt-6 border border-border bg-surface p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-accent">세부기술 현황</h2>
+        <YearInput year={year} onChange={setYear} />
+      </div>
+
+      <p className="mt-2 text-xs text-muted">
+        셀 하나가 만들 수 있는 산출물 하나입니다. 체크해서 고르고 위에서 한 번에 생성합니다.
+        열 머리글은 그 국가 전체, 행 체크는 그 기술 전체를 고릅니다.
+        <strong className="text-ink"> —</strong>는 상대국 분석이 없어 지금은 만들 수 없는 칸입니다.
+      </p>
+
+      {/* 선택 요약 + 실행. 대상 건수를 눈으로 확인한 뒤 누르게 한다. */}
+      <div className="mt-4 flex flex-wrap items-center gap-3 border border-border-light bg-paper p-3">
+        <span className="text-sm text-ink">
+          분석 {payload.analyses.length}건 · 비교 {payload.comparisons.length}건 선택됨
+        </span>
+        {cost.reportUsd > 0 && (
+          <span className="text-xs text-muted">보고서 예상 ${cost.reportUsd.toFixed(2)}</span>
+        )}
+        {payload.analyses.length > 0 && (
+          <span className="text-xs text-muted">
+            {cost.analysisPapers === null
+              ? "분석 비용은 검색 결과에 따라 달라집니다"
+              : `분석은 과거 실적 ${cost.analysisPapers.toLocaleString()}편 기준`}
+          </span>
+        )}
+        <label className="flex items-center gap-2 text-sm text-ink-light">
+          <input type="checkbox" checked={force} onChange={() => setForce((v) => !v)} />
+          이미 완료된 것도 다시 생성
+        </label>
+        <button
+          type="button"
+          onClick={runQueue}
+          disabled={busy || total === 0}
+          className="btn btn-primary btn-sm"
+        >
+          {busy ? "요청 중…" : `선택한 ${total}건 생성`}
+        </button>
+        {selected.size > 0 && (
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            className="btn btn-neutral btn-sm"
+          >
+            선택 해제
+          </button>
+        )}
+      </div>
+
+      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+
+      {/* 부분 실패를 사유와 함께 보여준다 — 조용히 건너뛰지 않는 것이 이 API의 요점이다. */}
+      {result && (
+        <div className="mt-3 border border-border-light bg-paper p-3 text-sm">
+          <p className="text-ink">
+            분석 {result.queued.analyses}건 · 비교 {result.queued.comparisons}건 큐잉됨
+          </p>
+          {result.skipped.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {result.skipped.map((s, i) => (
+                <li key={i} className="text-xs text-muted">
+                  {rows.find((r) => r.subfield_id === s.subfield_id)?.subfield_name ?? s.subfield_id}
+                  {s.country ? ` · ${COUNTRY_NAMES[s.country] ?? s.country}` : ""} — {s.reason}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {data && (
+        <div className="mt-6 table-scroll border-t border-border">
+          <table className="w-full border-collapse text-sm">
+            <thead className="tbl-head">
+              <tr className="border-b border-border">
+                <th>세부기술</th>
+                {countries.map((c) => {
+                  const candidates = rows
+                    .map((row) => cellKey({ kind: "analysis", subfieldId: row.subfield_id, country: c }))
+                    .filter((k) => allCandidates.includes(k));
+                  const state = headerState(selected, candidates);
+                  return (
+                    <th key={c}>
+                      <label className="flex items-center justify-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={state === "all"}
+                          ref={(el) => {
+                            if (el) el.indeterminate = state === "some";
+                          }}
+                          onChange={() =>
+                            setSelected((prev) => toggleAll(prev, candidates, state !== "all"))
+                          }
+                        />
+                        {COUNTRY_NAMES[c] ?? c}
+                      </label>
+                    </th>
+                  );
+                })}
+                {showComparison && <th>국가비교</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const candidates = selectableOf(row).map(cellKey);
+                const rowState = headerState(selected, candidates);
+                const open = expanded.has(row.subfield_id);
+                return (
+                  <ExpandableRow
+                    key={row.subfield_id}
+                    row={row}
+                    year={year}
+                    countries={countries}
+                    open={open}
+                    rowState={rowState}
+                    selected={selected}
+                    showComparison={showComparison}
+                    comparisonStatus={row.comparisons[String(year)]?.[comparisonKey]}
+                    comparisonBlocked={comparisonBlocked(row)}
+                    onToggleRow={() =>
+                      setSelected((prev) => toggleAll(prev, candidates, rowState !== "all"))
+                    }
+                    onToggleCell={toggle}
+                    onToggleExpand={() =>
+                      setExpanded((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(row.subfield_id)) next.delete(row.subfield_id);
+                        else next.add(row.subfield_id);
+                        return next;
+                      })
+                    }
+                    cellOf={cellOf}
+                  />
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// 행 하나 + 펼쳤을 때의 연도 이력. 개별 분석 동작(재실행·삭제)은 여기 둔다 —
+// 표의 셀은 "선택해서 만드는 것"이라는 한 가지 뜻만 갖게 한다.
+function ExpandableRow({
+  row, year, countries, open, rowState, selected, showComparison,
+  comparisonStatus, comparisonBlocked, onToggleRow, onToggleCell, onToggleExpand, cellOf,
+}: {
+  row: DashboardRow;
+  year: number;
+  countries: string[];
+  open: boolean;
+  rowState: "none" | "some" | "all";
+  selected: Set<string>;
+  showComparison: boolean;
+  comparisonStatus: string | undefined;
+  comparisonBlocked: boolean;
+  onToggleRow: () => void;
+  onToggleCell: (key: string) => void;
+  onToggleExpand: () => void;
+  cellOf: (row: DashboardRow, country: string) => { status: string; status_label: string; stale: boolean } | undefined;
+}) {
+  const history = row.years.filter((c) => c.year !== year).sort((a, b) => b.year - a.year);
+  return (
+    <>
+      <tr className="border-b border-border-light">
+        <td className="py-3 pr-3">
+          <label className="flex items-center gap-2 font-medium text-ink">
+            <input
+              type="checkbox"
+              checked={rowState === "all"}
+              ref={(el) => {
+                if (el) el.indeterminate = rowState === "some";
+              }}
+              onChange={onToggleRow}
+            />
+            <button type="button" onClick={onToggleExpand} className="text-left">
+              <span aria-hidden="true">{open ? "▾" : "▸"}</span> {row.subfield_name}
+            </button>
+          </label>
+        </td>
+        {countries.map((c) => {
+          const cell = cellOf(row, c);
+          const key = cellKey({ kind: "analysis", subfieldId: row.subfield_id, country: c });
+          return (
+            <td key={c} className="py-3 pr-3 text-center">
+              <label className="inline-flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={selected.has(key)}
+                  onChange={() => onToggleCell(key)}
+                />
+                {cell ? (
+                  <StatusBadge status={cell.status} label={STATUS_LABEL[cell.status] ?? cell.status} />
+                ) : (
+                  <span className="text-xs text-muted">미생성</span>
+                )}
+              </label>
+              {cell?.stale && <p className="text-xs text-warning">갱신 필요</p>}
+            </td>
+          );
+        })}
+        {showComparison && (
+          <td className="py-3 text-center">
+            {comparisonBlocked && !comparisonStatus ? (
+              <span className="text-faint" title="상대국 분석이 없어 지금은 만들 수 없습니다">
+                —
+              </span>
+            ) : (
+              <label className="inline-flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={selected.has(cellKey({ kind: "comparison", subfieldId: row.subfield_id }))}
+                  disabled={comparisonBlocked}
+                  onChange={() =>
+                    onToggleCell(cellKey({ kind: "comparison", subfieldId: row.subfield_id }))
+                  }
+                />
+                {comparisonStatus ? (
+                  <StatusBadge
+                    status={comparisonStatus}
+                    label={STATUS_LABEL[comparisonStatus] ?? comparisonStatus}
+                  />
+                ) : (
+                  <span className="text-xs text-muted">미생성</span>
+                )}
+              </label>
+            )}
+          </td>
+        )}
+      </tr>
+      {open && (
+        <tr className="border-b border-border-light bg-sunken">
+          <td colSpan={countries.length + (showComparison ? 2 : 1)} className="py-3 pr-3">
+            {history.length === 0 ? (
+              <p className="text-xs text-muted">다른 연도의 분석이 없습니다.</p>
+            ) : (
+              <ul className="space-y-1">
+                {history.map((c) => (
+                  <li key={c.analysis_id} className="text-xs text-muted">
+                    {c.year} · {COUNTRY_NAMES[c.country] ?? c.country} ·{" "}
+                    {STATUS_LABEL[c.status] ?? c.status} · 검색 {c.searched_count.toLocaleString()} /
+                    분석 {c.analyzed_count.toLocaleString()}
+                    {c.stale && <span className="ml-2 text-warning">갱신 필요</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
