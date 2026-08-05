@@ -12,7 +12,7 @@ from app.database import Base, get_db
 from app.main import app
 from app.models.analysis import Analysis, AnalysisPaper
 from app.models.budget import OpenAlexUsage
-from app.models.field import CountryComparison, Field, Subfield
+from app.models.field import CountryComparison, Field, FieldReport, Subfield
 from app.models.paper import Paper, PaperExtraction
 from app.models.schedule import AnalysisRun
 from app.routers import admin as admin_module
@@ -1885,3 +1885,52 @@ def test_queue_skips_analyses_when_the_openalex_budget_is_exhausted(client):
     db = app.dependency_overrides[get_db]()
     assert db.query(Analysis).count() == 0
     db.close()
+
+
+def test_queue_enqueues_a_field_report(client):
+    _seed_done_analysis(client, "세부기술 A", "## 성과\nA 본문")
+
+    r = client.post("/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+                    json={"year": 2026, "field_reports": [1]})
+    assert r.json()["queued"]["field_reports"] == 1
+
+    db = app.dependency_overrides[get_db]()
+    assert db.query(FieldReport).one().status == "pending"
+    db.close()
+
+
+def test_queue_reports_why_a_roadmap_check_was_skipped(client):
+    """로드맵이 미등록이면 점검을 만들 수 없다 — 분야 탭이 바로 옆 칸에서 [등록]을
+    안내할 수 있도록 사유가 내려와야 한다."""
+    _seed_done_analysis(client, "세부기술 A", "## 성과\nA 본문")
+
+    r = client.post("/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+                    json={"year": 2026, "roadmap_checks": [1]})
+    body = r.json()
+    assert body["queued"]["roadmap_checks"] == 0
+    assert body["skipped"][0]["kind"] == "roadmap_check"
+    assert body["skipped"][0]["field_id"] == 1
+    assert "로드맵" in body["skipped"][0]["reason"]
+
+
+def test_queue_handles_all_four_kinds_in_one_request(client):
+    """이 API의 존재 이유 — 화면의 '선택한 N건 생성'이 호출 한 번이어야 한다."""
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR", "US"), year=2026)
+    db.close()
+    _seed_done_analysis(client, "세부기술 A", "## 성과\nA 본문")
+
+    r = client.post(
+        "/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+        json={
+            "year": 2026,
+            "analyses": [{"subfield_id": 1, "country": "JP"}],
+            "comparisons": [{"subfield_id": 1, "countries": ["KR", "US"]}],
+            "field_reports": [1],
+            "roadmap_checks": [1],          # 로드맵 미등록 → skip
+        },
+    )
+    body = r.json()
+    assert body["queued"] == {"analyses": 1, "comparisons": 1,
+                              "field_reports": 1, "roadmap_checks": 0}
+    assert [s["kind"] for s in body["skipped"]] == ["roadmap_check"]

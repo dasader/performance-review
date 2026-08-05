@@ -337,6 +337,18 @@ def queue(payload: QueueIn, db: Session = Depends(get_db)):
             skipped.append({"kind": "comparison", "subfield_id": item.subfield_id,
                             "reason": str(e)})
 
+    # 분야 산출물 두 종류는 큐잉 함수 이름과 집계 키만 다르고 실패 처리가 같다.
+    for kind, field_ids, enqueue_one in (
+        ("field_report", payload.field_reports, reducer.enqueue_field_report),
+        ("roadmap_check", payload.roadmap_checks, reducer.enqueue_roadmap_check),
+    ):
+        for field_id in field_ids:
+            try:
+                enqueue_one(db, field_id, payload.year)
+                queued[f"{kind}s"] += 1
+            except (LookupError, ValueError) as e:
+                skipped.append({"kind": kind, "field_id": field_id, "reason": str(e)})
+
     return {"queued": queued, "skipped": skipped}
 
 
