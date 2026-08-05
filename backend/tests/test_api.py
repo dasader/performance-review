@@ -1798,6 +1798,78 @@ def test_queue_enqueues_an_analysis_for_the_requested_country(client):
     db.close()
 
 
+def test_queue_rejects_a_malformed_country_without_stopping_the_request(client):
+    """'us'는 정규화되지 않은 채 Analysis(country='us')로 저장되면 대시보드·비교
+    어느 경로에서도 보이지 않는 고아 행이 된다(country == 'KR' 정확 비교, parse_countries
+    대문자화) — 400이 아니라 skip이어야 한다(한 건이 나머지를 막지 않는 이 API의 규약)."""
+    r = client.post("/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+                    json={"year": 2026, "analyses": [{"subfield_id": 1, "country": "대한민국"}]})
+    body = r.json()
+    assert body["queued"]["analyses"] == 0
+    assert body["skipped"] == [
+        {"kind": "analysis", "subfield_id": 1, "country": "대한민국",
+         "reason": "국가 코드는 두 글자 알파벳이어야 합니다: 대한민국"}
+    ]
+    db = app.dependency_overrides[get_db]()
+    assert db.query(Analysis).count() == 0
+    db.close()
+
+
+def test_queue_rejects_a_malformed_comparison_country_without_stopping_the_request(client):
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR", "US"), year=2026)
+    db.close()
+
+    r = client.post(
+        "/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+        json={"year": 2026, "comparisons": [{"subfield_id": 1, "countries": ["KR", "USA"]}]},
+    )
+    body = r.json()
+    assert body["queued"]["comparisons"] == 0
+    assert body["skipped"] == [
+        {"kind": "comparison", "subfield_id": 1, "countries": ["KR", "USA"],
+         "reason": "국가 코드는 두 글자 알파벳이어야 합니다: USA"}
+    ]
+    db = app.dependency_overrides[get_db]()
+    assert db.query(CountryComparison).count() == 0
+    db.close()
+
+
+def test_queue_skips_a_done_analysis_without_force_but_requeues_with_it(client):
+    """force는 프론트의 재생성 흐름이 기대는 유일한 스위치다(Finding 4). runner.enqueue는
+    이미 done이고 query_hash가 그대로면 빈 리스트를 돌려준다 — force 없이는 그 사실이
+    skip 사유로 남아야 하고(Finding 1), force를 주면 같은 행이 재큐잉돼야 한다."""
+    db = app.dependency_overrides[get_db]()
+    subfield = db.get(Subfield, 1)
+    db.add(Analysis(subfield_id=1, year=2026, country="KR", status="done",
+                    query_hash=search.query_hash(subfield, 2026, 2026, "KR"),
+                    report_md="x", stats_json={}))
+    db.commit()
+    db.close()
+
+    r = client.post("/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+                    json={"year": 2026, "analyses": [{"subfield_id": 1, "country": "KR"}]})
+    body = r.json()
+    assert body["queued"]["analyses"] == 0
+    assert body["skipped"] == [
+        {"kind": "analysis", "subfield_id": 1, "country": "KR",
+         "reason": "이미 완료된 분석이고 검색식도 바뀌지 않았습니다 — "
+                   "다시 실행하려면 강제 재실행을 선택하세요."}
+    ]
+
+    r2 = client.post("/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+                     json={"year": 2026,
+                           "analyses": [{"subfield_id": 1, "country": "KR", "force": True}]})
+    body2 = r2.json()
+    assert body2["queued"]["analyses"] == 1
+    assert body2["skipped"] == []
+
+    db = app.dependency_overrides[get_db]()
+    row = db.query(Analysis).filter(Analysis.subfield_id == 1, Analysis.year == 2026).one()
+    assert row.status == "pending"
+    db.close()
+
+
 def test_queue_skips_a_missing_subfield_with_a_reason(client):
     """조용히 건너뛰지 않는 것이 run-all과 다른 점이다 — 왜 빠졌는지 화면이 말해야 한다."""
     r = client.post("/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
@@ -1805,7 +1877,7 @@ def test_queue_skips_a_missing_subfield_with_a_reason(client):
     body = r.json()
     assert body["queued"]["analyses"] == 0
     assert body["skipped"] == [
-        {"kind": "analysis", "subfield_id": 999, "reason": "세부기술 없음"}
+        {"kind": "analysis", "subfield_id": 999, "country": "KR", "reason": "세부기술 없음"}
     ]
 
 

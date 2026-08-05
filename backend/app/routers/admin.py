@@ -308,10 +308,24 @@ def queue(payload: QueueIn, db: Session = Depends(get_db)):
         budget.spent_today(db) >= settings.openalex_daily_budget_usd
     )
     for item in payload.analyses:
+        # 화면의 셀은 subfield × country × year라, skip 사유에도 country를 실어야
+        # 프론트가 어느 셀이 걸렸는지 되짚을 수 있다(Finding 3) — 정규화 전 원문을
+        # 쓰면 "us"와 "US"가 다른 셀처럼 보인다.
+        codes = parse_countries(item.country)
+        if not codes or invalid_countries(codes):
+            skipped.append({
+                "kind": "analysis", "subfield_id": item.subfield_id,
+                "country": item.country,
+                "reason": f"국가 코드는 두 글자 알파벳이어야 합니다: {item.country}",
+            })
+            continue
+        country = codes[0]
+
         if over_budget:
             skipped.append({
                 "kind": "analysis",
                 "subfield_id": item.subfield_id,
+                "country": country,
                 "reason": (
                     f"OpenAlex 일일 예산 소진 — UTC "
                     f"{budget.reset_time_utc():%Y-%m-%d %H:%M} 이후 재시도하세요."
@@ -321,21 +335,42 @@ def queue(payload: QueueIn, db: Session = Depends(get_db)):
         subfield = db.get(Subfield, item.subfield_id)
         if subfield is None:
             skipped.append({"kind": "analysis", "subfield_id": item.subfield_id,
-                            "reason": "세부기술 없음"})
+                            "country": country, "reason": "세부기술 없음"})
             continue
         rows = runner.enqueue(
             db, subfield, payload.year, payload.year,
-            force=item.force, country=item.country,
+            force=item.force, country=country,
         )
+        if not rows:
+            # runner.enqueue가 빈 리스트를 돌려주는 건 이미 done이고 query_hash도
+            # 그대로라는 뜻(runner.py 주석 참고) — 아무 것도 안 됐는데 queued도 skipped도
+            # 안 남으면 5건 선택해 눌렀을 때 "analyses: 0"만 보고 원인을 알 수 없다.
+            skipped.append({
+                "kind": "analysis", "subfield_id": item.subfield_id, "country": country,
+                "reason": "이미 완료된 분석이고 검색식도 바뀌지 않았습니다 — "
+                          "다시 실행하려면 강제 재실행을 선택하세요.",
+            })
+            continue
         queued["analyses"] += len(rows)
 
     for item in payload.comparisons:
+        # enqueue_comparison도 내부에서 parse_countries로 정규화하지만 형식 오류(예:
+        # "USA")는 걸러내지 않는다 — 걸러내지 않으면 잘못된 코드가 그대로 저장돼 검색
+        # 필터·비교 화면 어느 쪽에서도 매칭되지 않는 고아 행이 된다(Finding 2).
+        codes = parse_countries(item.countries)
+        bad = invalid_countries(codes)
+        if bad:
+            skipped.append({
+                "kind": "comparison", "subfield_id": item.subfield_id, "countries": codes,
+                "reason": f"국가 코드는 두 글자 알파벳이어야 합니다: {', '.join(bad)}",
+            })
+            continue
         try:
-            comparison.enqueue_comparison(db, item.subfield_id, payload.year, item.countries)
+            comparison.enqueue_comparison(db, item.subfield_id, payload.year, codes)
             queued["comparisons"] += 1
         except (LookupError, ValueError) as e:
             skipped.append({"kind": "comparison", "subfield_id": item.subfield_id,
-                            "reason": str(e)})
+                            "countries": codes, "reason": str(e)})
 
     # 분야 산출물 두 종류는 큐잉 함수 이름과 집계 키만 다르고 실패 처리가 같다.
     for kind, field_ids, enqueue_one in (
