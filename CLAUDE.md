@@ -267,6 +267,20 @@ KCI는 *검색 소스*라 빠지면 모집단이 조용히 줄어 결과가 틀�
 필터링하기 때문에, 모델·thinking 레벨·추출 스키마 버전 중 하나만 바뀌어도 같은 논문이 재추출된다
 (신규 행으로 쌓이지 덮어쓰지 않는다).
 
+### 보고서 모델은 추출 모델과 분리돼 있다 — `GEMINI_MODEL_REDUCE`
+
+`gemini_model`은 추출(batch) 전용이고, 보고서 합성(reduce·rollup·로드맵 점검·국가 비교)은
+`settings.reduce_model`(= `gemini_model_reduce or gemini_model`)을 쓴다. **비워 두면 둘이 같은
+모델이라 기존 동작 그대로다.**
+
+나눈 이유는 위 캐시 키다. `gemini_model`은 `model_ver()`에 들어가 바꾸는 순간 추출 22,000여 건이
+전량 무효화되는데(약 $6), 보고서는 캐시 키가 `analyses` 행 자체라 모델을 바꿔도 재추출이 없다.
+**"보고서만 더 좋은 모델로"를 추출 비용 없이 시험할 수 있어야 한다** — 실측 A/B(2026-08-05,
+데이터·AI 보안 2025 KR, 489건)에서 `gemini-3.6-flash`가 현행 대비 인용률 2.9%→4.2%,
+근거 수치 0개→20개(전부 입력에 존재)를 보였지만 입력 단가가 6배($0.25→$1.50/1M)라, 이 판단은
+품질과 비용을 같이 놓고 해야 하고 그때마다 재추출이 붙으면 아예 시험할 수 없다.
+`test_gemini_clients.py::test_reduce_model_is_not_part_of_the_extraction_cache_key`가 이 분리를 고정한다.
+
 **`EXTRACTION_SCHEMA_VERSION`을 올리는 것은 되돌릴 수 없고 비싸다** — 전체 추출이 무효화되어
 다음 실행부터 전량 재추출된다(22,059건 기준 map 약 $6 + 보고서 전량 재생성 약 $1.5).
 `test_mapper.py::test_extraction_schema_version_is_pinned`가 현재 값을 고정하므로 실수로 오르지

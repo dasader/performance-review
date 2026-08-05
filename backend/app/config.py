@@ -4,6 +4,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     gemini_api_key: str
     gemini_model: str = "gemini-3.1-flash-lite"
+    # 보고서 합성(reduce·rollup·로드맵 점검·국가 비교) 전용 모델. **비우면 gemini_model을
+    # 그대로 쓴다** — 설정을 추가해도 기존 동작이 바뀌지 않아야 하므로 기본값이 빈 문자열이다.
+    #
+    # 추출(batch)과 나눠 놓은 이유는 캐시다. gemini_model은 mapper.model_ver()에 들어가
+    # 바꾸는 순간 추출 캐시 22,000여 건이 통째로 무효화된다(재추출 약 $6). 보고서는 캐시
+    # 키가 analyses 행 자체라 모델을 바꿔도 재추출이 일어나지 않는다 — 그래서 "보고서만
+    # 더 좋은 모델로" 같은 판단을 추출 비용 없이 내릴 수 있어야 한다.
+    gemini_model_reduce: str = ""
     # thinking_level 허용값은 모델 세대별로 다르다(minimal/low/medium/high 중 일부).
     # API가 값을 거부하면 .env에서 조정한다 — 코드 변경 불필요.
     thinking_map: str = "low"
@@ -82,6 +90,11 @@ class Settings(BaseSettings):
     # 방문자 식별 해시(sha256(ip+user_agent+salt+날짜))에 쓰는 솔트. 원본 IP/UA를
     # 복원하지 못하게 막는 값이므로 운영 배포에서는 반드시 임의의 긴 문자열로 바꿀 것.
     visitor_salt: str = "change-me-in-prod"
+
+    @property
+    def reduce_model(self) -> str:
+        """보고서 합성에 실제로 쓰는 모델. 미설정이면 추출과 같은 모델."""
+        return self.gemini_model_reduce or self.gemini_model
 
     model_config = SettingsConfigDict(env_file=".env")
 
