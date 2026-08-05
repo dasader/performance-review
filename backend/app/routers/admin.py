@@ -67,6 +67,34 @@ class RunIn(_YearRangeMixin):
     country: str = "KR"
 
 
+class QueueAnalysisIn(BaseModel):
+    subfield_id: int
+    # ISO 3166-1 alpha-2. 화면의 국가 열 한 칸이 이 항목 하나에 대응한다.
+    country: str = "KR"
+    force: bool = False
+
+
+class QueueComparisonIn(BaseModel):
+    subfield_id: int
+    # 다국 비교 하나만 만든다 — 1:1은 그 안의 섹션으로 조회된다(2026-08-04 설계).
+    countries: list[str] = PydanticField(min_length=2)
+
+
+class QueueIn(BaseModel):
+    """관리자 화면에서 체크한 셀들을 한 요청으로 큐잉한다.
+
+    네 종류를 한 번에 받는 이유: 화면의 "선택한 N건 생성"이 호출 한 번이어야 하고,
+    부분 실패 집계를 화면마다 따로 하지 않기 위해서다. 종류별로 나누면 15건 선택에
+    왕복이 15번 나가고 어디까지 성공했는지를 프론트가 스스로 조립해야 한다.
+    """
+
+    year: int = PydanticField(ge=1900, le=2100)
+    analyses: list[QueueAnalysisIn] = []
+    comparisons: list[QueueComparisonIn] = []
+    field_reports: list[int] = []      # field_id
+    roadmap_checks: list[int] = []     # field_id
+
+
 class ScheduleIn(BaseModel):
     enabled: bool
     day: int
@@ -257,6 +285,51 @@ def run(payload: RunIn, db: Session = Depends(get_db)):
         ):
             queued.append(analysis.id)
     return {"queued": queued, "blocked": blocked}
+
+
+@router.post("/queue")
+def queue(payload: QueueIn, db: Session = Depends(get_db)):
+    """체크한 대상들을 한 번에 큐잉하고, 건너뛴 것은 사유와 함께 돌려준다.
+
+    하나가 막혀도 나머지는 큐잉한다(field-reports/run-all의 규약). **조용히 건너뛰지
+    않는 것**이 run-all과 다른 점이다 — "10건 큐잉, 3건 건너뜀"만으로는 상대국 분석이
+    없어서인지 로드맵이 미등록이어서인지 알 수 없었다.
+
+    enqueue 계열 함수들이 각자 db.commit()을 하므로 여기서 다시 커밋하지 않는다.
+    """
+    queued = {"analyses": 0, "comparisons": 0, "field_reports": 0, "roadmap_checks": 0}
+    skipped: list[dict] = []
+
+    # 예산이 이미 소진됐으면 분석은 큐잉하지 않는다. 큐잉해 두면 잡 루프가 건마다
+    # count_only(건당 $0.001)를 한 번 쓰고 paused로 내려간다 — search.collect가
+    # 예산 게이트보다 먼저 부르기 때문이다(페이징 전에 게이트를 통과시키려는 설계).
+    # 보고서류는 OpenAlex를 쓰지 않으므로 같은 요청 안에서도 그대로 처리한다.
+    over_budget = bool(payload.analyses) and (
+        budget.spent_today(db) >= settings.openalex_daily_budget_usd
+    )
+    for item in payload.analyses:
+        if over_budget:
+            skipped.append({
+                "kind": "analysis",
+                "subfield_id": item.subfield_id,
+                "reason": (
+                    f"OpenAlex 일일 예산 소진 — UTC "
+                    f"{budget.reset_time_utc():%Y-%m-%d %H:%M} 이후 재시도하세요."
+                ),
+            })
+            continue
+        subfield = db.get(Subfield, item.subfield_id)
+        if subfield is None:
+            skipped.append({"kind": "analysis", "subfield_id": item.subfield_id,
+                            "reason": "세부기술 없음"})
+            continue
+        rows = runner.enqueue(
+            db, subfield, payload.year, payload.year,
+            force=item.force, country=item.country,
+        )
+        queued["analyses"] += len(rows)
+
+    return {"queued": queued, "skipped": skipped}
 
 
 @router.get("/dashboard")

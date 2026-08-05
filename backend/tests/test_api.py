@@ -1766,3 +1766,64 @@ def test_metric_drilldown_uses_the_same_normalization_as_the_table(client):
 def test_metric_drilldown_404_for_unknown_analysis(client):
     r = client.get("/api/analyses/99999/metrics", params={"name": "x", "unit": "%"})
     assert r.status_code == 404
+
+
+# ── POST /admin/queue — 큐잉 통합 ──
+
+def test_queue_requires_admin_key(client):
+    assert client.post("/api/admin/queue", json={"year": 2026}).status_code == 401
+
+
+def test_queue_accepts_an_empty_request(client):
+    """화면이 아무것도 선택하지 않은 채 눌러도 200이어야 한다 — 빈 요청은 오류가 아니다."""
+    r = client.post("/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+                    json={"year": 2026})
+    assert r.status_code == 200
+    assert r.json() == {
+        "queued": {"analyses": 0, "comparisons": 0, "field_reports": 0, "roadmap_checks": 0},
+        "skipped": [],
+    }
+
+
+def test_queue_enqueues_an_analysis_for_the_requested_country(client):
+    r = client.post("/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+                    json={"year": 2026, "analyses": [{"subfield_id": 1, "country": "US"}]})
+    assert r.status_code == 200
+    assert r.json()["queued"]["analyses"] == 1
+    assert r.json()["skipped"] == []
+
+    db = app.dependency_overrides[get_db]()
+    rows = db.query(Analysis).filter(Analysis.year == 2026).all()
+    assert [(a.country, a.status) for a in rows] == [("US", "pending")]
+    db.close()
+
+
+def test_queue_skips_a_missing_subfield_with_a_reason(client):
+    """조용히 건너뛰지 않는 것이 run-all과 다른 점이다 — 왜 빠졌는지 화면이 말해야 한다."""
+    r = client.post("/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+                    json={"year": 2026, "analyses": [{"subfield_id": 999, "country": "KR"}]})
+    body = r.json()
+    assert body["queued"]["analyses"] == 0
+    assert body["skipped"] == [
+        {"kind": "analysis", "subfield_id": 999, "reason": "세부기술 없음"}
+    ]
+
+
+def test_queue_skips_analyses_when_the_openalex_budget_is_exhausted(client):
+    """예산이 소진된 채 분석을 큐잉하면 잡 루프가 건마다 count_only(건당 $0.001)를
+    한 번 쓰고 paused로 내려간다 — search.collect가 예산 게이트보다 먼저 부르기
+    때문이다. 큐잉 시점에 막는다."""
+    db = app.dependency_overrides[get_db]()
+    _exhaust_budget(db)
+    db.close()
+
+    r = client.post("/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+                    json={"year": 2026, "analyses": [{"subfield_id": 1, "country": "KR"}]})
+    body = r.json()
+    assert body["queued"]["analyses"] == 0
+    assert body["skipped"][0]["kind"] == "analysis"
+    assert "예산" in body["skipped"][0]["reason"]
+
+    db = app.dependency_overrides[get_db]()
+    assert db.query(Analysis).count() == 0
+    db.close()
