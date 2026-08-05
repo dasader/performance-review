@@ -353,6 +353,8 @@ export interface ScheduleInfo {
   years_back: number;
   // 스케줄러가 돌 국가. 콤마 구분("KR,US,CN"). 국가마다 검색·추출이 따로 돌아 비용이 곱해진다.
   countries: string;
+  // 대상국 분석이 전부 done이 되면 국가 비교(다국 1건)를 자동 큐잉한다.
+  auto_comparison: boolean;
   timezone: string; // 읽기 전용 — .env 전용 값
   next_run_at: string; // 스케줄 타임존(기본 KST) wall-clock, tzinfo 없음
   history: ScheduleHistoryEntry[];
@@ -364,6 +366,7 @@ export interface ScheduleUpdateIn {
   hour: number;
   years_back: number;
   countries: string;
+  auto_comparison: boolean;
 }
 
 export interface RunNowResponse {

@@ -450,6 +450,76 @@ def _queue_all_active(
     return queued, len(subfields), years
 
 
+def enqueue_due_comparisons(db: Session, *, now: datetime | None = None) -> int:
+    """대상국 분석이 전부 done인 세부기술·연도의 국가 비교를 큐잉한다(매 틱 확인).
+
+    **분석과 같은 시점에 큐잉할 수 없어서 이렇게 한다.** 비교는 모든 대상국 분석이
+    done이어야 만들 수 있는데(collect_country_analyses가 하나라도 없으면 거부),
+    월간 스케줄이 큐잉한 수백 건이 끝나기까지는 며칠이 걸린다 — 그 시점에 같이
+    큐잉하면 전부 "상대국 분석 없음"으로 건너뛰어져 아무것도 만들어지지 않는다.
+    그래서 잡 루프가 매 틱마다 "이제 준비된 것"을 찾는다.
+
+    **다국 비교 하나만 만든다.** 3개국 이상이면 process_comparison이 쌍별 1:1을 먼저
+    만들어 sections_json에 넣고 그것을 종합하므로, 1:1을 따로 큐잉하면 같은 결과물을
+    다시 만드는 셈이다(세부기술·연도당 국가수-1콜 중복). 1:1 조회는 공개 API가 다국
+    보고서의 해당 섹션으로 폴백한다.
+
+    이미 행이 있으면 건너뛴다 — enqueue_comparison은 재생성(status를 pending으로
+    되돌림)이라, 확인 없이 부르면 매 틱 같은 비교를 무한히 다시 만든다.
+
+    55개 세부기술 × 연도를 매 틱(30초) 도는 경로라 질의를 2개로 묶는다.
+    """
+    cfg = get_schedule_settings(db)
+    if not cfg.auto_comparison:
+        return 0
+    countries = parse_countries(cfg.countries)
+    if len(countries) < 2:
+        return 0
+
+    now = now or _now_schedule_tz()
+    years = [now.year - i for i in range(cfg.years_back + 1)]
+    key = ",".join(sorted(countries))
+
+    # ① 이미 만들어졌거나 만들고 있는 조합
+    existing = {
+        (sid, yr)
+        for sid, yr in db.query(CountryComparison.subfield_id, CountryComparison.year).filter(
+            CountryComparison.year.in_(years), CountryComparison.countries == key
+        )
+    }
+    # ② 대상국 분석이 done이고 본문이 있는 것(빈 보고서는 비교 입력이 못 된다)
+    ready: dict[tuple[int, int], set[str]] = {}
+    for sid, yr, country in (
+        db.query(Analysis.subfield_id, Analysis.year, Analysis.country)
+        .join(Subfield, Subfield.id == Analysis.subfield_id)
+        .filter(
+            Subfield.active.is_(True),
+            Analysis.year.in_(years),
+            Analysis.country.in_(countries),
+            Analysis.status == "done",
+            Analysis.report_md.isnot(None),
+            Analysis.report_md != "",
+        )
+    ):
+        ready.setdefault((sid, yr), set()).add(country)
+
+    queued = 0
+    for (sid, yr), have in sorted(ready.items()):
+        if (sid, yr) in existing or not set(countries) <= have:
+            continue
+        try:
+            comparison.enqueue_comparison(db, sid, yr, countries)
+            queued += 1
+        except (LookupError, ValueError) as e:
+            # 검증에 걸리는 건은 조용히 건너뛴다 — 하나가 막혀 나머지가 멈추면 안 된다
+            # (comparisons/run-all과 같은 규약).
+            logger.debug("[비교 자동] 세부기술 %d %d년 건너뜀: %s", sid, yr, e)
+    if queued:
+        db.commit()
+        logger.info("[비교 자동] %s %s년 — %d건 큐잉", key, years, queued)
+    return queued
+
+
 def run_scheduled_if_due(db: Session, *, now: datetime | None = None) -> int | None:
     """매월 (DB) schedule_day일 schedule_hour시대(schedule_timezone)에 활성 세부기술
     전부를 당해~(당해-schedule_years_back)연도로 enqueue한다. 설정은 get_schedule_settings로
@@ -657,6 +727,7 @@ async def _tick(db: Session) -> None:
     보고서 합성은 검색·추출 파이프라인보다 우선이 아니다.
     """
     run_scheduled_if_due(db)
+    enqueue_due_comparisons(db)
     resume_paused(db)
     # report_md(보고서 마크다운, 건당 12KB 규모)·stats_json·sections_json은 advance()가
     # 읽지 않는다 — _do_reduce가 쓰기만 한다. defer하지 않으면 30초마다

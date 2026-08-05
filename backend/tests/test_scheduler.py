@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from app.config import settings
 from app.models.analysis import Analysis
+from app.models.field import CountryComparison
 from app.models.schedule import ScheduledRun
 from app.services import runner
 
@@ -201,3 +202,102 @@ def test_scheduler_defaults_to_kr_only(ctx):
 
     runner.run_scheduled_now(db, now=datetime(2026, 8, 2, 3, 0))
     assert {a.country for a in db.query(Analysis).all()} == {"KR"}
+
+
+# ── 국가 비교 자동 큐잉 (enqueue_due_comparisons) ──
+
+NOW = datetime(2026, 8, 20, 12, 0, tzinfo=KST)
+
+
+def _auto_cfg(db, countries="KR,US,CN", *, on=True, years_back=0):
+    cfg = runner.get_schedule_settings(db)
+    cfg.countries = countries
+    cfg.auto_comparison = on
+    cfg.years_back = years_back
+    db.commit()
+    return cfg
+
+
+def _done(db, sf, country, year=2026, report="본문"):
+    db.add(Analysis(subfield_id=sf.id, year=year, country=country, status="done",
+                    query_hash="h", report_md=report, stats_json={}))
+    db.commit()
+
+
+def test_auto_comparison_is_off_by_default(ctx):
+    """켜기 전에는 아무 일도 일어나지 않아야 한다 — 비교는 세부기술당 LLM 여러 콜이다."""
+    db, sf = ctx
+    for c in ("KR", "US", "CN"):
+        _done(db, sf, c)
+    _auto_cfg(db, on=False)
+
+    assert runner.enqueue_due_comparisons(db, now=NOW) == 0
+    assert db.query(CountryComparison).count() == 0
+
+
+def test_auto_comparison_waits_until_every_country_is_done(ctx):
+    """분석과 같은 시점에 큐잉할 수 없는 이유. 하나라도 안 끝났으면 만들지 않는다."""
+    db, sf = ctx
+    _auto_cfg(db)
+    _done(db, sf, "KR")
+    _done(db, sf, "US")                       # CN 아직 없음
+
+    assert runner.enqueue_due_comparisons(db, now=NOW) == 0
+
+    _done(db, sf, "CN")
+    assert runner.enqueue_due_comparisons(db, now=NOW) == 1
+    row = db.query(CountryComparison).one()
+    assert row.countries == "CN,KR,US"        # 정렬 저장
+    assert row.status == "pending"
+
+
+def test_auto_comparison_queues_only_the_multi_country_row(ctx):
+    """1:1은 만들지 않는다 — process_comparison이 다국을 만들며 쌍별을 이미 생성해
+    sections_json에 담으므로, 따로 큐잉하면 같은 결과물을 다시 만드는 셈이다."""
+    db, sf = ctx
+    _auto_cfg(db)
+    for c in ("KR", "US", "CN"):
+        _done(db, sf, c)
+
+    runner.enqueue_due_comparisons(db, now=NOW)
+
+    assert [r.countries for r in db.query(CountryComparison).all()] == ["CN,KR,US"]
+
+
+def test_auto_comparison_does_not_requeue_an_existing_row(ctx):
+    """enqueue_comparison은 재생성(pending으로 되돌림)이라, 확인 없이 부르면
+    매 틱(30초) 같은 비교를 무한히 다시 만든다."""
+    db, sf = ctx
+    _auto_cfg(db)
+    for c in ("KR", "US", "CN"):
+        _done(db, sf, c)
+
+    assert runner.enqueue_due_comparisons(db, now=NOW) == 1
+    row = db.query(CountryComparison).one()
+    row.status = "done"
+    row.report_md = "완성본"
+    db.commit()
+
+    assert runner.enqueue_due_comparisons(db, now=NOW) == 0
+    row = db.query(CountryComparison).one()
+    assert row.status == "done"               # 되돌려지지 않았다
+    assert row.report_md == "완성본"
+
+
+def test_auto_comparison_skips_analyses_without_a_report_body(ctx):
+    """본문이 빈 분석(논문 0건)은 비교 입력이 못 된다 — enqueue_comparison도 거부한다."""
+    db, sf = ctx
+    _auto_cfg(db)
+    _done(db, sf, "KR")
+    _done(db, sf, "US")
+    _done(db, sf, "CN", report="")
+
+    assert runner.enqueue_due_comparisons(db, now=NOW) == 0
+
+
+def test_auto_comparison_needs_at_least_two_countries(ctx):
+    db, sf = ctx
+    _auto_cfg(db, "KR")
+    _done(db, sf, "KR")
+
+    assert runner.enqueue_due_comparisons(db, now=NOW) == 0

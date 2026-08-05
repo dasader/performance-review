@@ -71,6 +71,8 @@ class ScheduleIn(BaseModel):
     years_back: int
     # 콤마 구분 국가 목록("KR,US,CN"). 국가마다 검색·추출이 따로 돌아 비용이 곱해진다.
     countries: str = "KR"
+    # 대상국 분석이 전부 done이 되면 국가 비교(다국 1건)를 자동 큐잉한다.
+    auto_comparison: bool = False
 
     @field_validator("countries")
     @classmethod
@@ -310,6 +312,7 @@ def get_schedule(db: Session = Depends(get_db)):
         "hour": cfg.hour,
         "years_back": cfg.years_back,
         "countries": cfg.countries,
+        "auto_comparison": cfg.auto_comparison,
         "timezone": settings.schedule_timezone,  # 읽기 전용 — .env 전용 값
         # 스케줄 타임존(기본 KST) 기준 wall-clock 값을 tzinfo 없이 그대로 낸다.
         "next_run_at": runner.next_scheduled_run_at(db).isoformat(),
@@ -325,6 +328,7 @@ def update_schedule(payload: ScheduleIn, db: Session = Depends(get_db)):
     cfg.hour = payload.hour
     cfg.years_back = payload.years_back
     cfg.countries = payload.countries
+    cfg.auto_comparison = payload.auto_comparison
     db.commit()
     # 프론트가 저장 후 곧바로 재조회하는 화면이라, GET과 같은 응답(history 포함)을
     # 그대로 돌려준다 — 응답 dict를 두 벌 유지하면 한쪽만 고쳐져 어긋난다.
@@ -509,7 +513,20 @@ def comparison_grid(year: int, db: Session = Depends(get_db)):
     for c in db.query(
         CountryComparison.subfield_id, CountryComparison.countries, CountryComparison.status
     ).filter(CountryComparison.subfield_id.in_(ids), CountryComparison.year == year):
-        comparisons.setdefault(c.subfield_id, {})[c.countries] = c.status
+        cells = comparisons.setdefault(c.subfield_id, {})
+        cells[c.countries] = c.status
+        # 3개국 이상 비교는 쌍별 1:1을 먼저 만들어 sections_json에 담고 그것을 종합한다
+        # (process_comparison). 즉 "한국 vs 중국"은 이미 이 행 안에 있는데, 격자는
+        # "CN,KR" 행을 찾으므로 없다고 표시했다 — 그래서 실제로는 만들 필요가 없는
+        # 1:1을 다시 만들게 된다. 포함된 쌍을 별도 상태로 알려 그 중복을 막는다.
+        codes = c.countries.split(",")
+        if c.status == "done" and len(codes) > 2:
+            base = comparison.base_country(codes)
+            for other in codes:
+                if other == base:
+                    continue
+                pair = ",".join(sorted((base, other)))
+                cells.setdefault(pair, "in_multi")
 
     return {
         "year": year,

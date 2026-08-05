@@ -29,13 +29,21 @@ logger = logging.getLogger(__name__)
 _BASE_COUNTRY = "KR"
 
 
-def pair_countries(codes: list[str]) -> list[tuple[str, str]]:
-    """비교할 국가 쌍 목록. 기준국(KR)을 한쪽에 고정한다.
+def base_country(codes: list[str]) -> str:
+    """쌍의 한쪽에 고정되는 기준국.
 
     codes는 정렬 저장이라 KR이 가운데 올 수 있다(CN,KR,US) — 첫 원소를 기준으로
     삼으면 "중국 vs 미국"이 되어 목적을 잃는다. KR이 없으면 첫 국가를 기준으로 한다.
+
+    생성(pair_countries)·관리자 격자·공개 조회 폴백이 **같은 기준국**을 봐야 한다.
+    어긋나면 다국 보고서 안에 있는 쌍을 화면이 못 찾아 "미생성"으로 표시한다.
     """
-    base = _BASE_COUNTRY if _BASE_COUNTRY in codes else codes[0]
+    return _BASE_COUNTRY if _BASE_COUNTRY in codes else codes[0]
+
+
+def pair_countries(codes: list[str]) -> list[tuple[str, str]]:
+    """비교할 국가 쌍 목록. 기준국을 한쪽에 고정한다."""
+    base = base_country(codes)
     return [(base, c) for c in codes if c != base]
 
 

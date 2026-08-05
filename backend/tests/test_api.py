@@ -1404,6 +1404,89 @@ def test_availability_lists_done_comparisons(client):
     assert got["comparisons"] == [{"countries": ["CN", "KR"]}]
 
 
+def _multi(db, *, sections=True):
+    """3개국 비교 1건 — 쌍별 1:1이 sections_json 안에 들어 있는 실제 형태."""
+    _seed_countries(db, ("KR", "CN", "JP"), year=2026)
+    db.add(CountryComparison(
+        subfield_id=1, year=2026, countries="CN,JP,KR", status="done",
+        report_md="종합 본문", source_count=3, generated_at=datetime(2026, 8, 4),
+        sections_json=[{"name": "한국 vs 중국", "body": "KR-CN 대조 본문"},
+                       {"name": "한국 vs 일본", "body": "KR-JP 대조 본문"}] if sections else [],
+    ))
+    db.commit()
+
+
+def test_pair_comparison_falls_back_to_the_section_inside_a_multi_report(client):
+    """1:1을 따로 생성하지 않는 근거. 다국 비교가 쌍별을 이미 만들어 두므로
+    KR,CN 요청은 그 섹션으로 넘긴다 — 없으면 이미 있는 내용을 다시 만들어야 한다."""
+    db = app.dependency_overrides[get_db]()
+    _multi(db)
+    db.close()
+
+    got = client.get("/api/subfields/1/comparison",
+                     params={"year": 2026, "countries": "KR,CN"})
+    assert got.status_code == 200
+    assert got.json()["countries"] == ["KR", "CN"]        # 기준국이 앞
+    assert got.json()["report_md"] == "KR-CN 대조 본문"
+    assert got.json()["sections"] == []                   # 쌍은 더 펼칠 것이 없다
+
+
+def test_pair_comparison_has_no_fallback_when_the_base_country_is_absent(client):
+    """'중국 vs 일본'은 애초에 생성되지 않는다 — 쌍은 기준국을 한쪽에 고정한다."""
+    db = app.dependency_overrides[get_db]()
+    _multi(db)
+    db.close()
+
+    got = client.get("/api/subfields/1/comparison",
+                     params={"year": 2026, "countries": "CN,JP"})
+    assert got.status_code == 404
+
+
+def test_exact_pair_row_wins_over_the_multi_fallback(client):
+    """전용 1:1 행이 따로 있으면 그것을 그대로 준다(수동 큐잉 경로가 살아 있어야 한다)."""
+    db = app.dependency_overrides[get_db]()
+    _multi(db)
+    db.add(CountryComparison(subfield_id=1, year=2026, countries="CN,KR", status="done",
+                             report_md="전용 1:1 본문", generated_at=datetime(2026, 8, 4)))
+    db.commit()
+    db.close()
+
+    got = client.get("/api/subfields/1/comparison",
+                     params={"year": 2026, "countries": "KR,CN"}).json()
+    assert got["report_md"] == "전용 1:1 본문"
+
+
+def test_availability_surfaces_pairs_contained_in_a_multi_report(client):
+    """폴백으로 갈 링크가 화면에 있어야 한다 — 없으면 조회 경로가 도달 불가능해진다."""
+    db = app.dependency_overrides[get_db]()
+    _multi(db)
+    db.close()
+
+    got = client.get("/api/subfields/1/availability", params={"year": 2026}).json()
+    combos = [c["countries"] for c in got["comparisons"]]
+    assert ["CN", "JP", "KR"] in combos      # 다국 자체
+    assert ["CN", "KR"] in combos            # 안에 든 쌍
+    assert ["JP", "KR"] in combos
+
+
+def test_comparison_grid_marks_pairs_included_in_a_multi_report(client):
+    """격자가 'CN,KR' 행만 찾아 미생성으로 표시하면, 이미 있는 1:1을 다시 만들게 된다."""
+    db = app.dependency_overrides[get_db]()
+    _multi(db)
+    db.close()
+    client.put("/api/admin/schedule",
+               json={"enabled": True, "day": 10, "hour": 3, "years_back": 1,
+                     "countries": "KR,CN,JP", "auto_comparison": False},
+               headers={"X-Admin-Key": settings.admin_key})
+
+    got = client.get("/api/admin/comparison-grid", params={"year": 2026},
+                     headers={"X-Admin-Key": settings.admin_key}).json()
+    cells = got["rows"][0]["comparisons"]
+    assert cells["CN,JP,KR"] == "done"
+    assert cells["CN,KR"] == "in_multi"
+    assert cells["JP,KR"] == "in_multi"
+
+
 def test_field_summary_rows_carry_countries(client):
     db = app.dependency_overrides[get_db]()
     _seed_countries(db, ("KR", "CN"), year=2026)
