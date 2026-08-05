@@ -369,6 +369,25 @@ def dashboard(db: Session = Depends(get_db)):
     ).all():
         by_subfield.setdefault(a.subfield_id, []).append(a)
 
+    # 비교 상태도 같은 응답에 싣는다 — 세부기술 탭이 분석과 비교를 한 표에 그리므로
+    # 두 번 부르면 두 응답의 연도·국가가 어긋날 여지가 생긴다. 연도별로 나눠 담아
+    # 화면의 연도 필터와 행 펼침이 추가 요청 없이 동작하게 한다.
+    comparisons: dict[int, dict[int, dict[str, str]]] = {}
+    for c in db.query(
+        CountryComparison.subfield_id, CountryComparison.year,
+        CountryComparison.countries, CountryComparison.status,
+    ).all():
+        cells = comparisons.setdefault(c.subfield_id, {}).setdefault(c.year, {})
+        cells[c.countries] = c.status
+        # 3개국 이상 비교는 쌍별 1:1을 먼저 만들어 sections_json에 담고 종합한다
+        # (process_comparison). 그 쌍을 미생성으로 두면 이미 있는 것을 다시 만든다.
+        codes = c.countries.split(",")
+        if c.status == "done" and len(codes) > 2:
+            base = comparison.base_country(codes)
+            for other in codes:
+                if other != base:
+                    cells.setdefault(",".join(sorted((base, other))), "in_multi")
+
     rows = []
     for subfield in subfields:
         analyses = by_subfield.get(subfield.id, [])
@@ -376,6 +395,11 @@ def dashboard(db: Session = Depends(get_db)):
             "subfield_id": subfield.id,
             "subfield_name": subfield.name,
             "field_id": subfield.field_id,
+            # JSON 객체 키는 문자열이어야 한다.
+            "comparisons": {
+                str(year): cells
+                for year, cells in comparisons.get(subfield.id, {}).items()
+            },
             "years": [
                 {
                     "analysis_id": a.id,

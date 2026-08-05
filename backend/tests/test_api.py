@@ -1934,3 +1934,31 @@ def test_queue_handles_all_four_kinds_in_one_request(client):
     assert body["queued"] == {"analyses": 1, "comparisons": 1,
                               "field_reports": 1, "roadmap_checks": 0}
     assert [s["kind"] for s in body["skipped"]] == ["roadmap_check"]
+
+
+def test_dashboard_carries_comparison_status_keyed_by_year(client):
+    """세부기술 탭이 응답 하나로 그려지려면 분석과 비교가 같은 응답에 있어야 한다.
+    지금은 comparison-grid를 따로 불러야 하고 그쪽은 한 연도만 준다."""
+    db = app.dependency_overrides[get_db]()
+    _seed_countries(db, ("KR", "CN", "JP"), year=2026)
+    db.add(CountryComparison(
+        subfield_id=1, year=2026, countries="CN,JP,KR", status="done",
+        report_md="종합", generated_at=datetime(2026, 8, 4),
+        sections_json=[{"name": "한국 vs 중국", "body": "b"}],
+    ))
+    db.commit()
+    db.close()
+
+    rows = client.get("/api/admin/dashboard",
+                      headers={"X-Admin-Key": settings.admin_key}).json()["rows"]
+    row = next(r for r in rows if r["subfield_id"] == 1)
+    assert row["comparisons"]["2026"]["CN,JP,KR"] == "done"
+    # 다국 안에 든 1:1은 별도 행이 없다 — 미생성으로 두면 이미 있는 것을 다시 만든다.
+    assert row["comparisons"]["2026"]["CN,KR"] == "in_multi"
+    assert row["comparisons"]["2026"]["JP,KR"] == "in_multi"
+
+
+def test_dashboard_gives_an_empty_comparison_map_when_there_are_none(client):
+    rows = client.get("/api/admin/dashboard",
+                      headers={"X-Admin-Key": settings.admin_key}).json()["rows"]
+    assert rows[0]["comparisons"] == {}
