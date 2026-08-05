@@ -44,9 +44,12 @@ const PROSE_HEADING_CLASSES =
 // 네이티브 표(세부기술별 분석 현황)와 마크다운 표가 서로 다른 모양이 된다.
 const PROSE_TABLE_CLASSES =
   "prose-table:text-sm prose-thead:border-border " +
-  "prose-th:bg-sunken prose-th:px-3 prose-th:py-2 prose-th:text-eyebrow prose-th:font-bold " +
-  "prose-th:uppercase prose-th:tracking-[0.09em] prose-th:text-muted " +
-  "prose-td:px-3 prose-td:py-2 prose-td:align-top";
+  "prose-th:bg-sunken prose-th:px-3 prose-th:py-1 prose-th:text-eyebrow prose-th:font-bold " +
+  "prose-th:uppercase prose-th:tracking-[0.09em] prose-th:text-muted prose-th:leading-snug " +
+  // 표는 본문의 행간(leading-[1.85])을 물려받으면 안 된다. 그 값은 한국어 문단을
+  // 읽기 위한 것인데, 표는 눈이 세로로 훑는 물건이라 같은 행간이면 20행짜리 표가
+  // 화면 두 장으로 퍼져 한눈에 안 들어온다(사용자 지적). 셀 여백도 8px→4px.
+  "prose-td:px-3 prose-td:py-1 prose-td:align-top prose-td:leading-snug";
 
 export const PROSE_CLASSES = `prose prose-neutral max-w-none leading-[1.85] ${PROSE_TABLE_CLASSES} ${PROSE_HEADING_CLASSES}`;
 
