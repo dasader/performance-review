@@ -1,3 +1,5 @@
+import type { QueueRequestBody } from "./lib/selection";
+
 const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 const NETWORK_ERROR_MESSAGE = "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
@@ -314,6 +316,8 @@ export interface DashboardYearCell {
   snapshot_at: string | null;
   stale: boolean;
   error: string | null;
+  // 같은 세부기술·연도라도 국가가 다르면 다른 분석이다(analyses의 유일키에 country가 있다).
+  country: string;
 }
 
 export interface DashboardRow {
@@ -321,6 +325,9 @@ export interface DashboardRow {
   subfield_name: string;
   field_id: number;
   years: DashboardYearCell[];
+  // 연도(문자열) → 정렬된 콤마 국가키 → 상태. 상태가 "in_multi"면 그 1:1이 다국
+  // 비교 안에 이미 들어 있다는 뜻이다(따로 만들 필요가 없다).
+  comparisons: Record<string, Record<string, string>>;
 }
 
 export interface DashboardResponse {
@@ -328,6 +335,29 @@ export interface DashboardResponse {
   budget_spent: number;
   budget_limit: number;
   default_year_range: number; // 최근 N개년(개수)이지 연도 범위가 아니다
+}
+
+// POST /admin/queue의 응답. skipped는 조용히 건너뛰지 않기 위한 것이라
+// 화면이 사유를 그대로 보여준다 — 문자열을 매칭해 분기하지 말 것.
+export interface QueueResponse {
+  queued: {
+    analyses: number;
+    comparisons: number;
+    field_reports: number;
+    roadmap_checks: number;
+  };
+  skipped: {
+    kind: "analysis" | "comparison" | "field_report" | "roadmap_check";
+    subfield_id?: number;
+    field_id?: number;
+    country?: string;
+    countries?: string[];
+    reason: string;
+  }[];
+}
+
+export function queueAll(body: QueueRequestBody, adminKey: string) {
+  return post<QueueResponse>("/admin/queue", body, adminKey);
 }
 
 // ── 자동 분석 스케줄 (관리자 화면 스케줄 설정 카드) ──
