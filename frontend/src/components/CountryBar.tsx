@@ -57,7 +57,9 @@ export default function CountryBar({
     // 조작물 자체는 명도로 갈린다 — 국가는 눌린 상태를 가진 토글(btn-toggle),
     // 비교는 눌림이 없는 이동 버튼(btn-neutral). 둘 다 버튼이라 손으로 누르는
     // 물건이라는 신호는 같다.
-    <div className="mt-4 flex flex-wrap items-center gap-2 print:hidden">
+    // mb-6: 아래 구분선을 없앤 자리라(원래 my-10) 본문과 바로 붙었다. 위(16px)보다
+    // 아래(24px)를 넓게 둬 이 줄이 본문이 아니라 머리 쪽에 속한 것으로 읽히게 한다.
+    <div className="mb-6 mt-4 flex flex-wrap items-center gap-2 print:hidden">
       {countries.length > 1 && (
         <>
           {/* eyebrow 모양을 쓰지 않는다 — 제목 블록에 이미 하나 있고, 같은 대문자
