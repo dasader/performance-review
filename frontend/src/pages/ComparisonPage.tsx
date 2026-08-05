@@ -28,13 +28,20 @@ function PairwiseSections({ sections }: { sections?: { name: string; body: strin
     setSearchParams(next);
   };
 
+  // 토글이 꺼져 있으면 인쇄에서 이 구획을 통째로 숨긴다. 내용은 이미 조건부라
+  // 안 나오지만 제목·설명·스위치가 남아, PDF에 본문 없는 제목만 찍혔다(사용자 지적).
+  const printable = open ? "" : "print:hidden";
+
   return (
     <>
-      <hr className="my-10 border-t border-border" />
-      <section>
+      <hr className={`my-10 border-t border-border ${printable}`} />
+      <section className={printable}>
         <div className="mb-2 flex flex-wrap items-center gap-4">
-          <h2 className="text-xl font-bold tracking-tight text-accent">쌍별 대조</h2>
-          <Switch checked={open} onChange={toggle} label="국가별 1:1 대조 포함" />
+          <h2 className="text-xl font-bold tracking-tight text-accent">국가 간 비교</h2>
+          {/* 스위치는 조작물이라 인쇄에서는 언제나 뺀다 — 종이에서 누를 수 없다. */}
+          <span className="print:hidden">
+            <Switch checked={open} onChange={toggle} label="국가별 1:1 대조 포함" />
+          </span>
         </div>
         <p className="mb-4 text-sm text-muted">
           국가가 셋 이상이면 한국과 각 나라를 1:1로 대조한 뒤 종합합니다. 위 종합은 국가를
@@ -45,7 +52,7 @@ function PairwiseSections({ sections }: { sections?: { name: string; body: strin
             <article key={s.name} className="mt-10 break-before-page">
               <div className="mb-4 border-l-4 border-accent bg-sunken px-4 py-3">
                 <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">
-                  국가 비교 {i + 1} / {sections.length}
+                  1:1 비교 {i + 1} / {sections.length}
                 </p>
                 <h3 className="text-xl font-bold text-ink">{s.name}</h3>
               </div>

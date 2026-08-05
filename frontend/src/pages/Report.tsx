@@ -140,13 +140,22 @@ function SectionSummaries({ sections }: { sections?: { name: string; body_md: st
     setSearchParams(next);
   };
 
+  // 비교 화면과 같은 규칙 — 토글이 꺼져 있으면 인쇄에서 구획을 통째로 숨긴다.
+  // 내용은 조건부라 안 나오지만 제목·설명·스위치가 남아 본문 없는 제목만 찍힌다.
+  const printable = open ? "" : "print:hidden";
+
   return (
     <>
-      <SectionDivider />
-      <section>
+      <div className={printable}>
+        <SectionDivider />
+      </div>
+      <section className={printable}>
         <div className="mb-2 flex flex-wrap items-center gap-4">
           <h2 className="text-xl font-bold tracking-tight text-accent">세부 보고서</h2>
-          <Switch checked={open} onChange={toggle} label="성과유형별 상세 포함" />
+          {/* 스위치는 조작물이라 인쇄에서는 언제나 뺀다. */}
+          <span className="print:hidden">
+            <Switch checked={open} onChange={toggle} label="성과유형별 상세 포함" />
+          </span>
         </div>
         <p className="mb-4 text-sm text-muted">
           논문이 많아 성과유형별로 나눠 정리한 뒤 종합한 분석입니다. 종합 보고서는 대표
