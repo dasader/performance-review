@@ -223,16 +223,6 @@ function ReportBody({ data, avail }: { data: Analysis; avail: Availability | nul
         </div>
       </div>
 
-      {avail && (
-        <CountryBar
-          subfieldId={data.subfield_id}
-          year={data.year}
-          current={data.country}
-          countries={avail.countries}
-          comparisons={avail.comparisons}
-        />
-      )}
-
       <header className="mb-6" style={{ animation: "fadeUp 0.3s ease-out both" }}>
         <p className="text-eyebrow font-bold uppercase tracking-[0.09em] text-muted">
           {data.field_name}
@@ -278,6 +268,16 @@ function ReportBody({ data, avail }: { data: Analysis; avail: Availability | nul
         </div>
 
       </header>
+
+      {avail && (
+        <CountryBar
+          subfieldId={data.subfield_id}
+          year={data.year}
+          current={data.country}
+          countries={avail.countries}
+          comparisons={avail.comparisons}
+        />
+      )}
 
       {data.status !== "done" && <StatusPanel data={data} />}
 
