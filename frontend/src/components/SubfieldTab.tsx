@@ -192,7 +192,15 @@ export default function SubfieldTab({
 
   const runQueue = async () => {
     if (total === 0) return;
-    if (!confirm(`${year}년 ${total}건을 생성합니다. LLM 호출 비용이 발생합니다. 계속할까요?`)) return;
+    if (
+      !confirm(
+        `${year}년 세부기술 분석 ${payload.analyses.length}건, ` +
+          `국가 비교 ${payload.comparisons.length}건을 생성합니다.\n` +
+          "LLM 호출 비용이 발생합니다. 계속할까요?",
+      )
+    ) {
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -210,13 +218,15 @@ export default function SubfieldTab({
   return (
     <section className="mt-6 border border-border bg-surface p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-accent">세부기술 현황</h2>
+        <h2 className="text-lg font-semibold text-accent">세부기술 분석·국가비교 현황</h2>
         <YearInput year={year} onChange={setYear} />
       </div>
 
       <p className="mt-2 text-xs text-muted">
-        셀 하나가 만들 수 있는 산출물 하나입니다. 체크해서 고르고 위에서 한 번에 생성합니다.
-        열 머리글은 그 국가 전체, 행 체크는 그 기술 전체를 고릅니다.
+        <strong className="text-ink">국가 칸</strong>은 그 나라의 세부기술 분석 보고서,{" "}
+        <strong className="text-ink">비교 칸</strong>은 국가 간 비교 보고서입니다. 만들 것을
+        체크해서 고르고 위에서 한 번에 생성합니다. 열 머리글은 그 국가 전체, 행 체크는 그
+        기술 전체를 고릅니다.
         <strong className="text-ink"> —</strong>는 상대국 분석이 없어 지금은 만들 수 없는 칸입니다.
       </p>
 
@@ -245,7 +255,9 @@ export default function SubfieldTab({
           disabled={busy || total === 0}
           className="btn btn-primary btn-sm"
         >
-          {busy ? "요청 중…" : `선택한 ${total}건 생성`}
+          {busy
+            ? "요청 중…"
+            : `분석 ${payload.analyses.length} · 비교 ${payload.comparisons.length}건 생성`}
         </button>
         {onlyAnalysis && (
           <button

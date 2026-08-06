@@ -13,8 +13,11 @@ import FieldReportsPanel from "../components/FieldReportsPanel";
 // "분석 실행·상태" · "국가 현황" · "국가 비교"는 전부 세부기술 하나를 다른 축으로
 // 보여줄 뿐이라 SubfieldTab 하나로 합쳤다 — 표 하나에서 현황을 보고 셀을 골라 큐잉한다.
 const TABS = [
-  { id: "subfields", label: "세부기술·검색식" },
-  { id: "subfield", label: "세부기술" },
+  // "세부기술·검색식"과 "세부기술"이 나란히 있으면 뒤쪽이 "세부기술을 만드는 곳"으로
+  // 읽힌다(사용자 신고). 탭 이름은 그 탭에서 무엇을 하는지를 말해야 한다 —
+  // 앞은 검색식을 손보는 설정, 뒤는 분석·비교 보고서를 만드는 운영이다.
+  { id: "subfields", label: "검색식 관리" },
+  { id: "subfield", label: "세부기술 분석" },
   { id: "schedule", label: "자동 스케줄" },
   { id: "roadmap", label: "전략기술로드맵" },
   { id: "field-reports", label: "분야 보고서" },
