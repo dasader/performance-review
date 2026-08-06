@@ -1166,7 +1166,55 @@ props 타입에 추가한다.
       )}
 ```
 
-- [ ] **Step 2: 세부기술 탭에 버튼을 붙인다**
+- [ ] **Step 2: 세대 카운터를 다시 잇는다**
+
+Task 6이 `SubfieldEditor`의 `onChanged`를 no-op으로 만들었다. 그때는 소비자가 없어 옳았지만,
+`RunDialog`가 돌아오는 지금은 **stale 미리보기 가드가 영구히 죽는다** — 상수를 넘기면 값이
+영영 바뀌지 않아 무효화 경고가 다시는 뜨지 않는다. 가드의 목적은 "검색식이 바뀐 뒤에도
+옛 미리보기 숫자를 근거로 실행하는" 경로를 막는 것이다.
+
+`Admin.tsx`에 세대 카운터를 되살리고 두 탭에 잇는다.
+
+```tsx
+  // 검색식이 바뀌면 확인했던 미리보기 숫자가 더 이상 유효하지 않다. 두 탭이 서로
+  // 다른 자리에 있으므로 공통 조상인 여기서 세대를 센다.
+  const [subfieldGen, setSubfieldGen] = useState(0);
+```
+
+`SubfieldEditor`에 실제 증가 함수를 다시 준다.
+
+```tsx
+            onChanged={() => setSubfieldGen((n) => n + 1)}
+```
+
+`SubfieldTab`에 내려보낸다.
+
+```tsx
+        {tab === "subfield" && (
+          <SubfieldTab
+            adminKey={key}
+            onUnauthorized={onUnauthorized}
+            subfieldsVersion={subfieldGen}
+          />
+        )}
+```
+
+`SubfieldTab`의 props에 받아 `RunDialog`로 넘긴다.
+
+```tsx
+export default function SubfieldTab({
+  adminKey,
+  onUnauthorized,
+  subfieldsVersion,
+}: {
+  adminKey: string;
+  onUnauthorized: () => void;
+  // 검색식이 바뀌면 열려 있던 정밀 견적을 폐기하기 위한 세대 값(Admin.tsx가 센다).
+  subfieldsVersion: number;
+}) {
+```
+
+- [ ] **Step 3: 세부기술 탭에 버튼을 붙인다**
 
 `SubfieldTab.tsx`의 선택 요약 줄에 추가한다. **분석 셀 하나만 골랐을 때만** 나온다 — 견적은 한 대상에 대한 것이고, 여럿을 고르면 호출이 그만큼 과금된다.
 
@@ -1202,7 +1250,7 @@ props 타입에 추가한다.
             rows={rows.map((r) => ({ subfield_id: r.subfield_id, subfield_name: r.subfield_name }))}
             defaultYearFrom={year}
             defaultYearTo={year}
-            subfieldsVersion={0}
+            subfieldsVersion={subfieldsVersion}
             locked={{
               subfieldId: onlyAnalysis.subfield_id,
               country: onlyAnalysis.country,
@@ -1227,17 +1275,13 @@ props 타입에 추가한다.
 
 import에 `RunDialog`를 더한다.
 
-- [ ] **Step 3: 게이트를 돌린다**
+- [ ] **Step 4: 게이트를 돌린다**
 
 ```bash
 cd frontend && ln -sfn /home/dev/code/performance-review/frontend/node_modules node_modules
 npm run build && npm run lint && npm test
 ```
 Expected: 전부 통과, lint 경고 0.
-
-- [ ] **Step 4: Task 6의 RunDialog 주석을 지운다**
-
-Task 6에서 "현재 화면에 붙어 있지 않다"고 적은 주석은 이제 거짓이다. 지운다.
 
 - [ ] **Step 5: 커밋**
 
