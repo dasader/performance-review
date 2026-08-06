@@ -6,8 +6,7 @@ import Footer from "../components/Footer";
 import SubfieldEditor from "../components/SubfieldEditor";
 import SubfieldTab from "../components/SubfieldTab";
 import ScheduleSection from "../components/ScheduleSection";
-import RoadmapEditor from "../components/RoadmapEditor";
-import FieldReportsPanel from "../components/FieldReportsPanel";
+import FieldTab from "../components/FieldTab";
 
 // 관리자 화면이 세로로 길어져 스크롤로만 탐색하게 됐다. 작업 단위로 묶는다.
 // "분석 실행·상태" · "국가 현황" · "국가 비교"는 전부 세부기술 하나를 다른 축으로
@@ -16,11 +15,11 @@ const TABS = [
   // "세부기술·검색식"과 "세부기술"이 나란히 있으면 뒤쪽이 "세부기술을 만드는 곳"으로
   // 읽힌다(사용자 신고). 탭 이름은 그 탭에서 무엇을 하는지를 말해야 한다 —
   // 앞은 검색식을 손보는 설정, 뒤는 분석·비교 보고서를 만드는 운영이다.
+  // 순서는 작업 단위가 커지는 순이다 — 검색식(설정) → 세부기술 → 분야 → 자동화.
   { id: "subfields", label: "검색식 관리" },
   { id: "subfield", label: "세부기술 분석" },
+  { id: "field", label: "분야 보고서" },
   { id: "schedule", label: "자동 스케줄" },
-  { id: "roadmap", label: "전략기술로드맵" },
-  { id: "field-reports", label: "분야 보고서" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -199,15 +198,9 @@ className="btn btn-toggle btn-sm"
           />
         )}
 
+        {tab === "field" && <FieldTab adminKey={key} onUnauthorized={onUnauthorized} />}
+
         {tab === "schedule" && <ScheduleSection adminKey={key} onUnauthorized={onUnauthorized} />}
-
-        {tab === "roadmap" && fields && (
-          <RoadmapEditor adminKey={key} fields={fields} onUnauthorized={onUnauthorized} />
-        )}
-
-        {tab === "field-reports" && (
-          <FieldReportsPanel adminKey={key} onUnauthorized={onUnauthorized} />
-        )}
       </main>
       <Footer />
     </div>
