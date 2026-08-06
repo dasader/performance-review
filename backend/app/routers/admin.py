@@ -657,33 +657,3 @@ def retry(analysis_id: int, db: Session = Depends(get_db)):
     analysis.search_attempts = 0   # 카운터를 리셋 안 하면 첫 재시도에서 즉시 다시 failed된다.
     db.commit()
     return {"ok": True, "id": analysis.id}
-
-
-@router.post("/subfields/{subfield_id}/comparison")
-def enqueue_comparison(
-    subfield_id: int, year: int, countries: str, db: Session = Depends(get_db)
-):
-    """국가 비교 보고서를 pending으로 큐잉한다. countries는 콤마 구분(예: KR,US,CN).
-
-    형식 오류·국가 2개 미만은 422, 세부기술 없음은 404, 분석이 없는 국가는 409.
-    국가 코드 형식을 여기서 막는 이유는 스케줄 countries와 같다 — 잘못 저장되면
-    존재하지 않는 국가로 조회가 돌아 조용히 404가 되고 원인을 찾기 어렵다.
-    """
-    codes = parse_countries(countries)
-    if invalid_countries(codes):
-        raise HTTPException(status_code=422, detail="국가 코드는 두 글자 알파벳이어야 합니다.")
-    try:
-        row = comparison.enqueue_comparison(db, subfield_id, year, codes)
-    except LookupError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except ValueError as e:
-        # 국가 2개 미만은 요청 형식 문제(422), 분석 부재는 상태 충돌(409). 예전에는
-        # 예외 메시지에 "2개"가 들어 있는지로 갈랐고, 그러면 문구를 다듬는 순간
-        # 상태 코드가 조용히 바뀐다 — 문자열이 아니라 요청 데이터로 판정한다.
-        raise HTTPException(status_code=422 if len(codes) < 2 else 409, detail=str(e))
-    return {
-        "subfield_id": row.subfield_id,
-        "year": row.year,
-        "countries": row.countries.split(","),
-        "status": row.status,
-    }

@@ -1286,49 +1286,6 @@ def _seed_countries(db, countries=("KR", "US"), *, year=2026, subfield_id=1):
     db.commit()
 
 
-def test_enqueue_comparison_requires_two_countries(client):
-    db = app.dependency_overrides[get_db]()
-    _seed_countries(db)
-    db.close()
-
-    r = client.post("/api/admin/subfields/1/comparison",
-                    params={"year": 2026, "countries": "KR"},
-                    headers={"X-Admin-Key": settings.admin_key})
-    assert r.status_code == 422
-
-
-def test_enqueue_comparison_rejects_bad_country_code(client):
-    """잘못 저장되면 존재하지 않는 국가로 조회가 돌아 조용히 404가 된다."""
-    db = app.dependency_overrides[get_db]()
-    _seed_countries(db)
-    db.close()
-
-    r = client.post("/api/admin/subfields/1/comparison",
-                    params={"year": 2026, "countries": "KR,USA"},
-                    headers={"X-Admin-Key": settings.admin_key})
-    assert r.status_code == 422
-
-
-def test_enqueue_comparison_409_when_country_missing(client):
-    """분석이 없는 국가를 요청하면 409 — 큐잉 시점에 즉시 알려준다."""
-    db = app.dependency_overrides[get_db]()
-    _seed_countries(db, ("KR",))
-    db.close()
-
-    r = client.post("/api/admin/subfields/1/comparison",
-                    params={"year": 2026, "countries": "KR,JP"},
-                    headers={"X-Admin-Key": settings.admin_key})
-    assert r.status_code == 409
-    assert "JP" in r.json()["detail"]
-
-
-def test_enqueue_comparison_404_for_unknown_subfield(client):
-    r = client.post("/api/admin/subfields/999/comparison",
-                    params={"year": 2026, "countries": "KR,US"},
-                    headers={"X-Admin-Key": settings.admin_key})
-    assert r.status_code == 404
-
-
 def test_get_comparison_404_before_generation(client):
     r = client.get("/api/subfields/1/comparison",
                    params={"year": 2026, "countries": "KR,US"})
@@ -1341,9 +1298,10 @@ def test_get_comparison_normalizes_country_order(client):
     _seed_countries(db)
     db.close()
 
-    client.post("/api/admin/subfields/1/comparison",
-                params={"year": 2026, "countries": "US,KR"},
-                headers={"X-Admin-Key": settings.admin_key})
+    client.post(
+        "/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+        json={"year": 2026, "comparisons": [{"subfield_id": 1, "countries": ["US", "KR"]}]},
+    )
 
     r = client.get("/api/subfields/1/comparison",
                    params={"year": 2026, "countries": "KR,US"})
@@ -1857,6 +1815,18 @@ def test_queue_enqueues_a_multi_country_comparison(client):
     assert row.countries == "CN,KR,US"      # 정렬 저장
     assert row.status == "pending"
     db.close()
+
+
+def test_queue_reports_an_unknown_subfield_in_a_comparison(client):
+    """없는 세부기술은 enqueue_comparison이 LookupError로 알린다 — 사유로 옮겨진다."""
+    r = client.post(
+        "/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+        json={"year": 2026, "comparisons": [{"subfield_id": 999, "countries": ["KR", "US"]}]},
+    )
+    body = r.json()
+    assert body["queued"]["comparisons"] == 0
+    assert body["skipped"][0]["kind"] == "comparison"
+    assert body["skipped"][0]["subfield_id"] == 999
 
 
 def test_queue_reports_why_a_comparison_was_skipped(client):
