@@ -323,10 +323,10 @@ function FieldRow({
           />
         </td>
         <td className="py-3 whitespace-nowrap">
-          <span className="text-xs text-muted">
-            {row.roadmap
-              ? `${row.roadmap.version_label} · 목표 ${row.roadmap.goal_count}개`
-              : "미등록"}
+          {/* 판본명은 길어서 표를 밀어낸다 — 열에서 실제로 판단에 쓰는 값은 목표 수(전수
+              점검이 몇 행을 채워야 하는가)뿐이다. 판본은 hover와 편집기에 남는다. */}
+          <span className="text-xs text-muted" title={row.roadmap?.version_label}>
+            {row.roadmap ? `목표 ${row.roadmap.goal_count}개` : "미등록"}
           </span>
           <button type="button" onClick={onToggleOpen} className="ml-2 btn btn-neutral btn-sm">
             {open ? "닫기" : row.roadmap ? "편집" : "등록"}
