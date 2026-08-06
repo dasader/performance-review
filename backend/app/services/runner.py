@@ -48,7 +48,18 @@ def enqueue(
     trigger는 이 행을 활성화한 원인(manual|scheduled)을 남긴다 — done에 도달할 때
     AnalysisRun에 그대로 기록되어 수동/자동 실행이 실제로 새 논문을 얼마나 찾아내는지
     나중에 비교할 수 있게 한다.
+
+    비활성 세부기술은 ValueError로 거부한다(호출부가 사유로 옮긴다).
     """
+    if not subfield.active:
+        # 비활성은 "목록에서 감춘 것"이 아니라 "돌리지 않기로 한 것"이다.
+        # 예전에는 실행 화면이 active 목록만 보여주는 것이 유일한 방어였는데, 관리자
+        # IA를 재편하며 그 화면들이 사라져 방어가 통째로 없어졌다 — 대시보드는 비활성도
+        # 함께 내려주므로 여기서 막지 않으면 꺼둔 세부기술에 검색·추출이 그대로 돈다.
+        # 호출부마다 막지 않고 여기서 막는 이유: 큐잉 경로가 셋이고 하나만 빠뜨려도
+        # 같은 사고가 난다(_queue_all_active는 이미 active만 고르므로 여기 걸리지 않는다).
+        raise ValueError(f"{subfield.name}은(는) 비활성 세부기술입니다.")
+
     queued: list[Analysis] = []
     for year in range(year_from, year_to + 1):
         current_hash = search.query_hash(subfield, year, year, country)

@@ -279,11 +279,15 @@ def run(payload: RunIn, db: Session = Depends(get_db)):
         if not subfield:
             blocked.append({"subfield_id": subfield_id, "reason": "세부기술 없음"})
             continue
-        for analysis in runner.enqueue(
-            db, subfield, payload.year_from, payload.year_to,
-            force=payload.force, country=payload.country,
-        ):
-            queued.append(analysis.id)
+        try:
+            rows = runner.enqueue(
+                db, subfield, payload.year_from, payload.year_to,
+                force=payload.force, country=payload.country,
+            )
+        except ValueError as e:
+            blocked.append({"subfield_id": subfield_id, "reason": str(e)})
+            continue
+        queued.extend(a.id for a in rows)
     return {"queued": queued, "blocked": blocked}
 
 
@@ -337,10 +341,17 @@ def queue(payload: QueueIn, db: Session = Depends(get_db)):
             skipped.append({"kind": "analysis", "subfield_id": item.subfield_id,
                             "country": country, "reason": "세부기술 없음"})
             continue
-        rows = runner.enqueue(
-            db, subfield, payload.year, payload.year,
-            force=item.force, country=country,
-        )
+        try:
+            rows = runner.enqueue(
+                db, subfield, payload.year, payload.year,
+                force=item.force, country=country,
+            )
+        except ValueError as e:
+            # 비활성 세부기술. 화면이 선택 불가로 그리지만 다른 세션에서 비활성화하면
+            # 오래된 선택이 그대로 넘어오므로 서버에서도 막는다(검색·추출은 과금이다).
+            skipped.append({"kind": "analysis", "subfield_id": item.subfield_id,
+                            "country": country, "reason": str(e)})
+            continue
         if not rows:
             # runner.enqueue가 빈 리스트를 돌려주는 건 이미 done이고 query_hash도
             # 그대로라는 뜻(runner.py 주석 참고) — 아무 것도 안 됐는데 queued도 skipped도
@@ -430,6 +441,9 @@ def dashboard(db: Session = Depends(get_db)):
             "subfield_id": subfield.id,
             "subfield_name": subfield.name,
             "field_id": subfield.field_id,
+            # 비활성 세부기술도 행은 보여주되(운영자가 존재를 알아야 함) 프론트가 선택
+            # 후보에서 뺀다 — 예전 /admin/subfields?active=true 필터가 하던 유일한 가드였다.
+            "active": subfield.active,
             # JSON 객체 키는 문자열이어야 한다.
             "comparisons": {
                 str(year): cells
