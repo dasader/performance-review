@@ -258,7 +258,12 @@ export default function SubfieldTab({
 
       {estimateTarget && (
         <div className="mt-4">
+          {/* key로 대상 변경 시 강제 리마운트한다 — RunDialog의 subfieldId/country는
+              lazy useState라 locked가 바뀌어도 안 갱신되고 마운트 이펙트도 []라 재실행되지
+              않는다. key가 없으면 A를 열어 둔 채 선택을 B로 바꿔 다시 누를 때 패널이 여전히
+              A의 숫자를 보여주고, 실행은 A로 나간다. */}
           <RunDialog
+            key={`${estimateTarget.subfieldId}:${estimateTarget.country}`}
             adminKey={adminKey}
             rows={rows.map((r) => ({ subfield_id: r.subfield_id, subfield_name: r.subfield_name }))}
             defaultYearFrom={year}
