@@ -363,6 +363,55 @@ export function queueAll(body: QueueRequestBody, adminKey: string) {
   return post<QueueResponse>("/admin/queue", body, adminKey);
 }
 
+// ── 분야 보고서 탭 ──
+
+export interface FieldReportCell {
+  status: "pending" | "done" | "failed";
+  source_count: number;
+  generated_at: string | null;
+  error: string | null;
+}
+
+export interface FieldReportRow {
+  field_id: number;
+  field_name: string;
+  has_roadmap: boolean;
+  // 등록된 로드맵의 판본과 목표 수. 미등록이면 null — 빈 문자열로 내면
+  // "등록됐는데 판본명이 비었다"와 구별되지 않는다.
+  roadmap: { version_label: string; goal_count: number } | null;
+  report: FieldReportCell | null;
+  roadmap_check: FieldReportCell | null;
+}
+
+export interface FieldReportsResponse {
+  year: number;
+  rows: FieldReportRow[];
+}
+
+// 로드맵 원문. 미등록 분야도 404가 아니라 빈 값이 온다 — 편집 폼이 그대로 새 입력을 받는다.
+export interface RoadmapDoc {
+  version_label: string;
+  content_md: string;
+  goal_count: number;
+  updated_at: string | null;
+}
+
+export function getRoadmap(fieldId: number, adminKey: string) {
+  return get<RoadmapDoc>(`/admin/fields/${fieldId}/roadmap`, adminKey);
+}
+
+export function putRoadmap(
+  fieldId: number,
+  body: { version_label: string; content_md: string },
+  adminKey: string,
+) {
+  return put<{ goal_count: number }>(`/admin/fields/${fieldId}/roadmap`, body, adminKey);
+}
+
+export function deleteRoadmap(fieldId: number, adminKey: string) {
+  return del(`/admin/fields/${fieldId}/roadmap`, adminKey);
+}
+
 // ── 자동 분석 스케줄 (관리자 화면 스케줄 설정 카드) ──
 
 export interface ScheduleHistoryEntry {
