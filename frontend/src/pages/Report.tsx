@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { type Components } from "react-markdown";
 import {
-  ACTIVE_STATUSES,
   get,
   getAvailability,
   type Analysis,
   type Availability,
   type Reference,
 } from "../api";
+import { ACTIVE_STATUSES } from "../lib/status";
 import Switch from "../components/Switch";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
