@@ -30,6 +30,12 @@ describe("셀 키", () => {
       expect(parseCellKey(cellKey(cell))).toEqual(cell);
     }
   });
+
+  it("모르는 종류는 null이다 — 아무 종류로도 넘기지 않는다", () => {
+    // 예전에는 default가 전부 field_report로 흡수해, 종류를 하나 더하며 switch를
+    // 안 고치면 그 선택이 조용히 분야 보고서로 큐잉됐다(돈이 나가는 오분류).
+    expect(parseCellKey("something_new:7")).toBeNull();
+  });
 });
 
 describe("행의 셀 목록", () => {
@@ -133,6 +139,14 @@ describe("요청 본문 조립", () => {
       field_reports: [],
       roadmap_checks: [],
     });
+  });
+
+  it("모르는 키는 어느 목록에도 들어가지 않는다 — 나머지는 그대로 큐잉된다", () => {
+    const payload = toQueuePayload(new Set(["analysis:3:KR", "something_new:9"]), opts);
+    expect(payload.analyses).toEqual([{ subfield_id: 3, country: "KR", force: false }]);
+    expect(payload.comparisons).toEqual([]);
+    expect(payload.field_reports).toEqual([]);
+    expect(payload.roadmap_checks).toEqual([]);
   });
 
   it("force는 모든 분석 항목에 실린다 — 완료된 것을 다시 만드는 유일한 수단이다", () => {
