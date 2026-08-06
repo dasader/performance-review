@@ -141,6 +141,16 @@ export default function RunDialog({
         실행 전 반드시 미리보기로 건수와 예상 비용을 확인하세요.
       </p>
 
+      {/* 고정 모드는 아래 선택 폼을 통째로 숨기므로, 대상(세부기술·국가·연도)이
+          화면 어디에도 안 남는다 — confirm() 문구 안에서만 보였다가 패널을 다시 열면
+          이전 대상 숫자가 새 확인 문구와 안 맞을 수 있었다. 항상 대상을 이름으로 밝힌다. */}
+      {locked && (
+        <p className="mt-3 text-sm font-medium text-ink">
+          {selectedName || `#${locked.subfieldId}`} · {COUNTRY_NAMES[locked.country] ?? locked.country} ·{" "}
+          {locked.year}년
+        </p>
+      )}
+
       {!locked && (
         <div className="mt-4 flex flex-wrap items-end gap-2">
           <div>
@@ -311,14 +321,23 @@ export default function RunDialog({
             </>
           )}
 
-          <button
-            type="button"
-            disabled={preview.over_limit || running}
-            onClick={handleRun}
-            className="mt-4 btn btn-primary"
-          >
-            {running ? "실행 요청 중…" : "이 내용으로 분석 실행"}
-          </button>
+          {/* 고정 모드(정밀 견적)는 실행 버튼을 아예 숨긴다 — force가 위 숨겨진 선택
+              폼 안에 있어 세부기술 탭의 "이미 완료된 것도 다시 생성" 토글이 여기까지
+              전달되지 않고, 이미 done인 대상은 /admin/run이 사유 없이 빈 결과만
+              돌려주며, 실행 직후 onRan()이 estimateTarget을 비워 이 컴포넌트가
+              같은 배치에서 언마운트돼 결과 배너도 못 본다. 세부기술 탭의
+              "선택한 N건 생성"(POST /admin/queue, force·skipped 사유 모두 지원)이
+              이미 같은 자리에 있으므로 여기서는 견적만 보여주고 실행은 그쪽에 맡긴다. */}
+          {!locked && (
+            <button
+              type="button"
+              disabled={preview.over_limit || running}
+              onClick={handleRun}
+              className="mt-4 btn btn-primary"
+            >
+              {running ? "실행 요청 중…" : "이 내용으로 분석 실행"}
+            </button>
+          )}
         </div>
       )}
 

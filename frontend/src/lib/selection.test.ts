@@ -6,6 +6,7 @@ import {
   headerState,
   toggleAll,
   toQueuePayload,
+  hasPendingWork,
 } from "./selection";
 
 describe("셀 키", () => {
@@ -74,6 +75,36 @@ describe("일괄 토글", () => {
   it("끄면 후보만 빼고 나머지는 남긴다", () => {
     const next = toggleAll(new Set(["analysis:1:KR", "comparison:9"]), ["analysis:1:KR"], false);
     expect([...next]).toEqual(["comparison:9"]);
+  });
+});
+
+describe("진행 중 폴링 판단", () => {
+  it("선택한 연도의 분석이 진행 중 상태면 true", () => {
+    const rows = [{ years: [{ year: 2026, status: "extracting" }], comparisons: {} }];
+    expect(hasPendingWork(rows, 2026)).toBe(true);
+  });
+
+  it("다른 연도의 진행 상태는 무시한다", () => {
+    const rows = [{ years: [{ year: 2025, status: "extracting" }], comparisons: {} }];
+    expect(hasPendingWork(rows, 2026)).toBe(false);
+  });
+
+  it("비교가 pending이면 true — 큐잉만 하고 분석 진행 상태가 없어도 폴링해야 한다", () => {
+    const rows = [
+      { years: [], comparisons: { "2026": { "CN,KR,US": "pending" } } },
+    ];
+    expect(hasPendingWork(rows, 2026)).toBe(true);
+  });
+
+  it("비교가 done/failed/in_multi면 진행 중이 아니다", () => {
+    const rows = [
+      { years: [], comparisons: { "2026": { "CN,KR,US": "done", "KR,US": "in_multi" } } },
+    ];
+    expect(hasPendingWork(rows, 2026)).toBe(false);
+  });
+
+  it("아무 행도 진행 중이 아니면 false", () => {
+    expect(hasPendingWork([{ years: [], comparisons: {} }], 2026)).toBe(false);
   });
 });
 

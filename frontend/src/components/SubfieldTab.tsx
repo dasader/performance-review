@@ -14,7 +14,14 @@ import {
 import { COUNTRY_NAMES, sortCountries } from "../lib/countries";
 import { usePolling } from "../lib/hooks";
 import { estimateCost } from "../lib/cost";
-import { cellKey, headerState, rowCells, toQueuePayload, toggleAll } from "../lib/selection";
+import {
+  cellKey,
+  hasPendingWork,
+  headerState,
+  rowCells,
+  toQueuePayload,
+  toggleAll,
+} from "../lib/selection";
 import RunDialog from "./RunDialog";
 import StatusBadge from "./StatusBadge";
 import YearInput from "./YearInput";
@@ -29,11 +36,16 @@ export default function SubfieldTab({
   adminKey,
   onUnauthorized,
   subfieldsVersion,
+  onDashboard,
 }: {
   adminKey: string;
   onUnauthorized: () => void;
   // 검색식이 바뀌면 열려 있던 정밀 견적을 폐기하기 위한 세대 값(Admin.tsx가 센다).
   subfieldsVersion: number;
+  // Admin.tsx 헤더의 "오늘 사용" 예산 표시용. 이 탭이 이미 /admin/dashboard를
+  // 불러오므로 Admin.tsx가 같은 데이터를 다시 조회하는 대신 이 콜백으로 받는다 —
+  // 안 하면 이 탭에서 생성·삭제해도 헤더 숫자가 세션 내내 갱신되지 않는다.
+  onDashboard?: (data: DashboardResponse) => void;
 }) {
   const [year, setYear] = useState(new Date().getFullYear());
   const [data, setData] = useState<DashboardResponse | null>(null);
@@ -54,23 +66,31 @@ export default function SubfieldTab({
 
   const load = useCallback(() => {
     get<DashboardResponse>("/admin/dashboard", adminKey)
-      .then(setData)
+      .then((d) => {
+        setData(d);
+        onDashboard?.(d);
+      })
       .catch((e) => {
         if (e instanceof ApiError && e.status === 401) return onUnauthorized();
         setError(e instanceof Error ? e.message : "현황을 불러오지 못했습니다.");
       });
     get<{ countries: string }>("/admin/schedule", adminKey)
       .then((s) => setScheduleCountries(s.countries.split(",").filter(Boolean)))
-      .catch(() => setScheduleCountries([]));
-  }, [adminKey, onUnauthorized]);
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 401) return onUnauthorized();
+        setScheduleCountries([]);
+      });
+  }, [adminKey, onUnauthorized, onDashboard]);
 
   useEffect(load, [load]);
 
-  // 연도를 바꾸면 선택과 열려 있던 정밀 견적을 모두 비운다 — 다른 연도 대상이 선택에
-  // 남으면 잘못 큐잉되고, 정밀 견적을 열어 둔 채 두면 옛 연도를 가리키는 패널이 남는다.
+  // 연도를 바꾸면 선택·정밀 견적·이전 연도의 큐잉 결과 배너를 모두 비운다 — 다른
+  // 연도 대상이 선택에 남으면 잘못 큐잉되고, 결과 배너를 그대로 두면 "2026년 N건
+  // 큐잉됨"이 2025년으로 넘어간 뒤에도 남아 어느 연도 얘기인지 헷갈린다.
   useEffect(() => {
     setSelected(new Set());
     setEstimateTarget(null);
+    setResult(null);
   }, [year]);
 
   const rows = data?.rows ?? [];
@@ -100,8 +120,22 @@ export default function SubfieldTab({
   const comparisonBlocked = (row: DashboardRow) =>
     !scheduleCountries.every((c) => cellOf(row, c)?.status === "done");
 
+  // "in_multi"는 이 1:1 조합이 이미 다국 비교 안의 대조로 들어 있다는 뜻이지
+  // 진행 상태가 아니다 — 그 값을 다시 큐잉하면 있는 것을 중복 생성한다.
+  const comparisonStatusOf = (row: DashboardRow) =>
+    row.comparisons[String(year)]?.[comparisonKey];
+
+  // 비활성 세부기술은 행을 보여주되(운영자가 존재를 알아야 함) 선택 후보에서는
+  // 뺀다 — 예전 /admin/subfields?active=true 필터가 하던 유일한 가드였고, 대시보드는
+  // active를 걸러 주지 않으므로(runner.enqueue도 마찬가지) 프론트가 직접 걸러야 한다.
   const selectableOf = (row: DashboardRow) =>
-    rowCells(row.subfield_id, countries, showComparison && !comparisonBlocked(row));
+    row.active
+      ? rowCells(
+          row.subfield_id,
+          countries,
+          showComparison && !comparisonBlocked(row) && comparisonStatusOf(row) !== "in_multi",
+        )
+      : [];
 
   const allCandidates = useMemo(
     () => rows.flatMap((row) => selectableOf(row).map(cellKey)),
@@ -110,9 +144,9 @@ export default function SubfieldTab({
   );
 
   // 진행 중인 것이 있으면 5초마다 다시 읽는다. 선택은 건드리지 않는다.
-  const hasActive = rows.some((row) =>
-    row.years.some((c) => c.year === year && ACTIVE_STATUSES.has(c.status)),
-  );
+  // 분석뿐 아니라 비교의 pending도 봐야 한다 — 비교만 큐잉했을 때 폴링이 안 걸리면
+  // 잡 루프가 30초마다 하나씩 처리하는 동안 화면이 얼어붙어 운영자가 재큐잉한다.
+  const hasActive = hasPendingWork(rows, year);
   usePolling(hasActive, load);
 
   // 갱신으로 사라진 대상은 선택에서 조용히 뺀다.
@@ -319,7 +353,32 @@ export default function SubfieldTab({
                     </th>
                   );
                 })}
-                {showComparison && <th>국가비교</th>}
+                {showComparison && (() => {
+                  // 국가 열과 같은 트리스테이트 헤더 체크박스 — 없으면 비교를 55개
+                  // 세부기술마다 하나씩 55번 눌러야 한다(예전 "1:1/다국 비교 일괄
+                  // 생성" 버튼이 하던 일).
+                  const candidates = rows
+                    .map((row) => cellKey({ kind: "comparison", subfieldId: row.subfield_id }))
+                    .filter((k) => allCandidates.includes(k));
+                  const state = headerState(selected, candidates);
+                  return (
+                    <th>
+                      <label className="flex items-center justify-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={state === "all"}
+                          ref={(el) => {
+                            if (el) el.indeterminate = state === "some";
+                          }}
+                          onChange={() =>
+                            setSelected((prev) => toggleAll(prev, candidates, state !== "all"))
+                          }
+                        />
+                        국가비교
+                      </label>
+                    </th>
+                  );
+                })()}
               </tr>
             </thead>
             <tbody>
@@ -336,7 +395,7 @@ export default function SubfieldTab({
                     rowState={rowState}
                     selected={selected}
                     showComparison={showComparison}
-                    comparisonStatus={row.comparisons[String(year)]?.[comparisonKey]}
+                    comparisonStatus={comparisonStatusOf(row)}
                     comparisonBlocked={comparisonBlocked(row)}
                     onToggleRow={() =>
                       setSelected((prev) => toggleAll(prev, candidates, rowState !== "all"))
@@ -384,7 +443,10 @@ function ExpandableRow({
   onToggleRow: () => void;
   onToggleCell: (key: string) => void;
   onToggleExpand: () => void;
-  cellOf: (row: DashboardRow, country: string) => { status: string; status_label: string; stale: boolean } | undefined;
+  cellOf: (
+    row: DashboardRow,
+    country: string,
+  ) => { status: string; status_label: string; stale: boolean; error: string | null } | undefined;
   adminKey: string;
   onUnauthorized: () => void;
   onError: (message: string) => void;
@@ -428,50 +490,84 @@ function ExpandableRow({
       setDeletingId(null);
     }
   };
+  const active = row.active;
   return (
     <>
-      <tr className="border-b border-border-light">
+      <tr className={`border-b border-border-light ${active ? "" : "opacity-60"}`}>
         <td className="py-3 pr-3">
-          <label className="flex items-center gap-2 font-medium text-ink">
-            <input
-              type="checkbox"
-              checked={rowState === "all"}
-              ref={(el) => {
-                if (el) el.indeterminate = rowState === "some";
-              }}
-              onChange={onToggleRow}
-            />
-            <button type="button" onClick={onToggleExpand} className="text-left">
+          {active ? (
+            <label className="flex items-center gap-2 font-medium text-ink">
+              <input
+                type="checkbox"
+                checked={rowState === "all"}
+                ref={(el) => {
+                  if (el) el.indeterminate = rowState === "some";
+                }}
+                onChange={onToggleRow}
+              />
+              <button type="button" onClick={onToggleExpand} className="text-left">
+                <span aria-hidden="true">{open ? "▾" : "▸"}</span> {row.subfield_name}
+              </button>
+            </label>
+          ) : (
+            // 비활성 세부기술 — 체크박스를 아예 안 그린다("—" 막힌 비교 칸과 같은 패턴).
+            // 존재는 보여주되(운영자가 알아야 함) 고를 수는 없다.
+            <button
+              type="button"
+              onClick={onToggleExpand}
+              className="flex items-center gap-2 text-left font-medium text-muted"
+              title="비활성화된 세부기술 — 선택할 수 없습니다"
+            >
               <span aria-hidden="true">{open ? "▾" : "▸"}</span> {row.subfield_name}
+              <span className="text-xs text-faint">(비활성)</span>
             </button>
-          </label>
+          )}
         </td>
         {countries.map((c) => {
           const cell = cellOf(row, c);
           const key = cellKey({ kind: "analysis", subfieldId: row.subfield_id, country: c });
           return (
             <td key={c} className="py-3 pr-3 text-center">
-              <label className="inline-flex items-center gap-1">
-                <input
-                  type="checkbox"
-                  checked={selected.has(key)}
-                  onChange={() => onToggleCell(key)}
-                />
-                {cell ? (
-                  <StatusBadge status={cell.status} label={STATUS_LABEL[cell.status] ?? cell.status} />
-                ) : (
-                  <span className="text-xs text-muted">미생성</span>
-                )}
-              </label>
+              {active ? (
+                <label className="inline-flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(key)}
+                    onChange={() => onToggleCell(key)}
+                  />
+                  {cell ? (
+                    <StatusBadge status={cell.status} label={STATUS_LABEL[cell.status] ?? cell.status} />
+                  ) : (
+                    <span className="text-xs text-muted">미생성</span>
+                  )}
+                </label>
+              ) : cell ? (
+                <StatusBadge status={cell.status} label={STATUS_LABEL[cell.status] ?? cell.status} />
+              ) : (
+                <span className="text-xs text-faint">—</span>
+              )}
               {cell?.stale && <p className="text-xs text-warning">갱신 필요</p>}
             </td>
           );
         })}
         {showComparison && (
           <td className="py-3 text-center">
-            {comparisonBlocked && !comparisonStatus ? (
-              <span className="text-faint" title="상대국 분석이 없어 지금은 만들 수 없습니다">
+            {!active || (comparisonBlocked && !comparisonStatus) ? (
+              <span
+                className="text-faint"
+                title={active ? "상대국 분석이 없어 지금은 만들 수 없습니다" : "비활성화된 세부기술 — 선택할 수 없습니다"}
+              >
                 —
+              </span>
+            ) : comparisonStatus === "in_multi" ? (
+              // 실행 상태가 아니라 "이미 다국 비교 안에 들어 있다"는 사실이라 점 배지를
+              // 쓰지 않는다(ComparisonGrid.tsx의 옛 IN_MULTI 분기와 같은 판단) — 여기에
+              // 체크박스를 주면 있는 것을 중복 생성하게 된다.
+              <span
+                className="text-xs text-muted"
+                title="다국 비교 안에 1:1 대조로 들어 있습니다 — 따로 만들 필요가 없습니다."
+              >
+                다국에 포함
               </span>
             ) : (
               <label className="inline-flex items-center gap-1">
@@ -511,6 +607,9 @@ function ExpandableRow({
                       분석 {c.analyzed_count.toLocaleString()}
                       {c.stale && <span className="ml-2 text-warning">갱신 필요</span>}
                     </span>
+                    {/* 재실행 버튼만 있으면 실패 사유를 몰라 재실행이 유일한 선택지가
+                        되고, 그 재실행도 같은 이유로 똑같이 실패한다 — 사유를 보여준다. */}
+                    {c.error && <span className="w-full text-danger">{c.error}</span>}
                     {(c.status === "failed" || c.status === "paused") && (
                       <button
                         type="button"

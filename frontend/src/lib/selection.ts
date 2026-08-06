@@ -65,6 +65,28 @@ export function toggleAll(
   return next;
 }
 
+// 진행 중 폴링 판단. 분석은 row.years의 상태(ACTIVE_STATUSES)로 알 수 있지만,
+// 비교는 상태 기계가 따로 없이 row.comparisons에 "pending"으로만 큐잉된다 —
+// 그 조건을 빠뜨리면 비교만 큐잉했을 때 화면이 5초 폴링을 걸지 않아 잡 루프가
+// 30초 뒤 하나씩 처리하는 동안 화면이 얼어붙고 운영자가 다 됐다고 착각해 재큐잉한다.
+const ACTIVE_ANALYSIS_STATUSES = new Set(["pending", "searching", "extracting", "reducing"]);
+
+export function hasPendingWork(
+  rows: {
+    years: { year: number; status: string }[];
+    comparisons: Record<string, Record<string, string>>;
+  }[],
+  year: number,
+): boolean {
+  return rows.some((row) => {
+    if (row.years.some((c) => c.year === year && ACTIVE_ANALYSIS_STATUSES.has(c.status))) {
+      return true;
+    }
+    const cells = row.comparisons[String(year)];
+    return cells ? Object.values(cells).some((s) => s === "pending") : false;
+  });
+}
+
 // POST /admin/queue의 요청 본문. 백엔드 QueueIn과 같은 모양이어야 한다.
 export interface QueueRequestBody {
   year: number;

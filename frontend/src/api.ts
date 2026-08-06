@@ -118,9 +118,9 @@ export interface Field {
 export const ACTIVE_STATUSES = new Set(["pending", "searching", "extracting", "reducing"]);
 
 // runner.py::STEP_LABELS와 같은 한글 라벨. 대부분의 admin 엔드포인트는 status_label을
-// 함께 내려주지만 comparison-grid·field-reports는 원시 상태 문자열만 주므로 화면이
-// 짝을 맞춘다 — 그 짝을 패널마다 각자 갖고 있으면(예전에는 두 벌이었고 한 벌은 3개
-// 상태만 알았다) 라벨을 고칠 때 한쪽만 바뀐다.
+// 함께 내려주지만 dashboard의 comparisons(세부기술 탭 국가비교 칸)·field-reports는
+// 원시 상태 문자열만 주므로 화면이 짝을 맞춘다 — 그 짝을 패널마다 각자 갖고 있으면
+// (예전에는 두 벌이었고 한 벌은 3개 상태만 알았다) 라벨을 고칠 때 한쪽만 바뀐다.
 export const STATUS_LABEL: Record<string, string> = {
   pending: "대기 중",
   searching: "논문 검색 중",
@@ -324,6 +324,9 @@ export interface DashboardRow {
   subfield_id: number;
   subfield_name: string;
   field_id: number;
+  // false면 비활성 세부기술 — 행은 보여주되(운영자가 존재를 알아야 함) 선택 후보에서는
+  // 뺀다. runner.enqueue는 이 플래그를 보지 않으므로 프론트가 유일한 가드다.
+  active: boolean;
   years: DashboardYearCell[];
   // 연도(문자열) → 정렬된 콤마 국가키 → 상태. 상태가 "in_multi"면 그 1:1이 다국
   // 비교 안에 이미 들어 있다는 뜻이다(따로 만들 필요가 없다).
@@ -527,7 +530,12 @@ export function enqueueComparison(
   );
 }
 
-// 관리자 "국가 현황" 격자 — 세부기술 × (국가 분석 · 비교 보고서) 현황.
+// 이 아래(ComparisonGridRow ~ runAllComparisons)는 관리자 "국가 현황" 탭
+// (ComparisonGrid.tsx)이 SubfieldTab 하나로 흡수되며 죽은 코드가 됐다 — 지금 이
+// 프론트 어디서도 부르지 않는다. 백엔드 엔드포인트(/admin/comparison-grid,
+// /admin/comparisons/run-all)와 함께 4단계에서 지운다. 이번 패스에서는 그대로 둔다.
+//
+// 예전 "국가 현황" 격자 — 세부기술 × (국가 분석 · 비교 보고서) 현황.
 // countries는 schedule_settings에 설정된 국가 목록(순서는 입력 그대로) —
 // 국가를 늘리면 열도 그만큼 늘어난다.
 export interface ComparisonGridRow {

@@ -77,6 +77,18 @@ def test_dashboard_stale_flag_accounts_for_country(client):
     assert cells and all(c["stale"] is False for c in cells)
 
 
+def test_dashboard_reports_active(client):
+    """비활성 세부기술도 행은 나오되 active=False를 실어야 프론트가 선택 후보에서 뺄 수 있다."""
+    db = app.dependency_overrides[get_db]()
+    db.add(Subfield(field_id=1, name="비활성기술", query="x", active=False))
+    db.commit()
+    db.close()
+
+    got = client.get("/api/admin/dashboard", headers={"X-Admin-Key": settings.admin_key}).json()
+    by_name = {r["subfield_name"]: r["active"] for r in got["rows"]}
+    assert by_name == {"양자컴퓨팅": True, "비활성기술": False}
+
+
 def test_schedule_requires_admin_key(client):
     assert client.get("/api/admin/schedule").status_code == 401
     assert client.put(

@@ -192,6 +192,7 @@ className="btn btn-toggle btn-sm"
             adminKey={key}
             onUnauthorized={onUnauthorized}
             subfieldsVersion={subfieldGen}
+            onDashboard={setData}
           />
         )}
 

@@ -430,6 +430,9 @@ def dashboard(db: Session = Depends(get_db)):
             "subfield_id": subfield.id,
             "subfield_name": subfield.name,
             "field_id": subfield.field_id,
+            # 비활성 세부기술도 행은 보여주되(운영자가 존재를 알아야 함) 프론트가 선택
+            # 후보에서 뺀다 — 예전 /admin/subfields?active=true 필터가 하던 유일한 가드였다.
+            "active": subfield.active,
             # JSON 객체 키는 문자열이어야 한다.
             "comparisons": {
                 str(year): cells
