@@ -136,7 +136,8 @@ export default function FieldTab({
         보고서, <strong className="text-ink">로드맵 점검 칸</strong>은 그 보고서로 로드맵 목표를
         전수 대조한 결과입니다. 만들 것을 체크해서 고르고 위에서 한 번에 생성합니다.
         <strong className="text-ink"> 대상 아님</strong>은 로드맵이 등록되지 않아 점검을 만들 수
-        없는 칸입니다 — 오른쪽 로드맵 열에서 등록할 수 있습니다.
+        없는 칸입니다 — 오른쪽 로드맵 열에서 등록할 수 있습니다. 이미 완료된 칸도 체크하면
+        다시 생성됩니다(세부기술 탭과 달리 건너뛰지 않습니다).
       </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-3 border border-border-light bg-paper p-3">
@@ -161,6 +162,10 @@ export default function FieldTab({
             선택 해제
           </button>
         )}
+        {/* 폴링은 pending이 있을 때만 돈다 — 다른 창에서 큐잉한 것은 이걸 눌러야 보인다. */}
+        <button type="button" onClick={load} className="btn btn-neutral btn-sm">
+          새로고침
+        </button>
       </div>
 
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
@@ -227,7 +232,6 @@ export default function FieldTab({
                   adminKey={adminKey}
                   onUnauthorized={onUnauthorized}
                   onSaved={load}
-                  onError={setError}
                 />
               ))}
             </tbody>
@@ -282,7 +286,7 @@ function ReportCell({
 // 분야 한 행 + 펼쳤을 때의 로드맵 편집기. 펼치기 전에는 원문을 가져오지도 그리지도
 // 않는다 — 10개 분야 × 13KB를 목록 응답에 실을 이유가 없고, 텍스트영역이 표를 밀어낸다.
 function FieldRow({
-  row, selected, open, onToggleCell, onToggleOpen, adminKey, onUnauthorized, onSaved, onError,
+  row, selected, open, onToggleCell, onToggleOpen, adminKey, onUnauthorized, onSaved,
 }: {
   row: FieldReportRow;
   selected: Set<string>;
@@ -292,7 +296,6 @@ function FieldRow({
   adminKey: string;
   onUnauthorized: () => void;
   onSaved: () => void;
-  onError: (message: string) => void;
 }) {
   return (
     <>
@@ -332,10 +335,10 @@ function FieldRow({
           <td colSpan={4} className="py-3 pr-3">
             <RoadmapForm
               fieldId={row.field_id}
+              registered={row.roadmap !== null}
               adminKey={adminKey}
               onUnauthorized={onUnauthorized}
               onSaved={onSaved}
-              onError={onError}
             />
           </td>
         </tr>
@@ -345,18 +348,21 @@ function FieldRow({
 }
 
 function RoadmapForm({
-  fieldId, adminKey, onUnauthorized, onSaved, onError,
+  fieldId, registered, adminKey, onUnauthorized, onSaved,
 }: {
   fieldId: number;
+  registered: boolean;
   adminKey: string;
   onUnauthorized: () => void;
   onSaved: () => void;
-  onError: (message: string) => void;
 }) {
   const [version, setVersion] = useState("");
   const [content, setContent] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  // 오류를 폼 안에 둔다 — 표 위에 띄우면 아래로 10행 펼쳐진 편집기에서 화면 밖이고,
+  // 저장에 성공해도 지워지지 않아 "표가 아니다"(422) 경고가 남는다.
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getRoadmap(fieldId, adminKey)
@@ -367,18 +373,19 @@ function RoadmapForm({
       })
       .catch((e) => {
         if (e instanceof ApiError && e.status === 401) return onUnauthorized();
-        onError(e instanceof Error ? e.message : "로드맵을 불러오지 못했습니다.");
+        setError(e instanceof Error ? e.message : "로드맵을 불러오지 못했습니다.");
       });
-  }, [fieldId, adminKey, onUnauthorized, onError]);
+  }, [fieldId, adminKey, onUnauthorized]);
 
   const save = async () => {
     setSaving(true);
+    setError(null);
     try {
       await putRoadmap(fieldId, { version_label: version, content_md: content }, adminKey);
       onSaved();
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return onUnauthorized();
-      onError(e instanceof Error ? e.message : "저장에 실패했습니다.");
+      setError(e instanceof Error ? e.message : "저장에 실패했습니다.");
     } finally {
       setSaving(false);
     }
@@ -386,6 +393,8 @@ function RoadmapForm({
 
   const remove = async () => {
     if (!confirm("등록된 로드맵을 삭제할까요? 이미 생성된 점검 보고서는 남습니다.")) return;
+    setSaving(true);
+    setError(null);
     try {
       await deleteRoadmap(fieldId, adminKey);
       setVersion("");
@@ -393,7 +402,9 @@ function RoadmapForm({
       onSaved();
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return onUnauthorized();
-      onError(e instanceof Error ? e.message : "삭제에 실패했습니다.");
+      setError(e instanceof Error ? e.message : "삭제에 실패했습니다.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -425,21 +436,36 @@ function RoadmapForm({
           <code className="bg-sunken px-1 font-sans text-ink">| 단계 | 시기 | 기술적 목표 |</code>{" "}
           형태의 표로 넣습니다. 표가 아니면 저장이 거부됩니다.
         </span>
+        {/* .input이 아니라 .textarea — .input은 높이 32px을 못 박아 rows를 죽인다. */}
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
           rows={12}
-          className="input mt-1 w-full"
+          className="mt-1 textarea"
         />
       </label>
 
+      {error && <p className="text-sm text-danger">{error}</p>}
+
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={save} disabled={saving} className="btn btn-primary btn-sm">
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving || !version.trim() || !content.trim()}
+          className="btn btn-primary btn-sm"
+        >
           {saving ? "저장 중…" : "저장"}
         </button>
-        <button type="button" onClick={remove} className="btn btn-danger-quiet btn-sm">
-          삭제
-        </button>
+        {registered && (
+          <button
+            type="button"
+            onClick={remove}
+            disabled={saving}
+            className="btn btn-danger-quiet btn-sm"
+          >
+            삭제
+          </button>
+        )}
       </div>
     </div>
   );

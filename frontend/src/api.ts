@@ -392,6 +392,7 @@ export interface FieldReportsResponse {
 export interface RoadmapDoc {
   version_label: string;
   content_md: string;
+  // 저장된 원문에서 센 목표 행 수. 0이면 표 형식이 아니라 전수 점검을 강제할 수 없다.
   goal_count: number;
   updated_at: string | null;
 }
@@ -530,14 +531,6 @@ export interface RoadmapCheck {
   // 세부기술 보고서가 늘었거나 로드맵 판본이 바뀌면 true.
   stale: boolean;
   generated_at: string | null;
-}
-
-export interface Roadmap {
-  version_label: string;
-  content_md: string;
-  // 저장된 원문에서 센 목표 행 수. 0이면 표 형식이 아니라 전수 점검을 강제할 수 없다.
-  goal_count: number;
-  updated_at: string | null;
 }
 
 // 국가 비교 보고서. FieldReport와 같은 큐잉 규약 — "생성"은 즉시 실행이 아니라
