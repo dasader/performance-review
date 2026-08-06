@@ -213,19 +213,6 @@ def _exhaust_budget(db):
     db.close()
 
 
-def test_run_returns_429_when_budget_exhausted(client):
-    db = app.dependency_overrides[get_db]()
-    _exhaust_budget(db)
-
-    r = client.post(
-        "/api/admin/run",
-        headers={"X-Admin-Key": settings.admin_key},
-        json={"subfield_ids": [1], "year_from": 2023, "year_to": 2024},
-    )
-    assert r.status_code == 429
-    assert "예산" in r.json()["detail"]
-
-
 def test_preview_returns_429_when_budget_exhausted(client):
     # check_budget()이 OpenAlex 호출 전에 걸리므로 네트워크 monkeypatch 없이도 검증 가능.
     db = app.dependency_overrides[get_db]()
@@ -323,21 +310,6 @@ def test_preview_defaults_to_korea(client, monkeypatch):
     assert seen["kci_called"] is True
 
 
-def test_run_queues_the_requested_country(client):
-    """단계적 확장의 핵심 — 화면에서 한 국가만 골라 돌릴 수 있어야 한다."""
-    r = client.post(
-        "/api/admin/run",
-        headers={"X-Admin-Key": settings.admin_key},
-        json={"subfield_ids": [1], "year_from": 2025, "year_to": 2025, "country": "JP"},
-    )
-    assert r.status_code == 200
-
-    db = app.dependency_overrides[get_db]()
-    rows = db.query(Analysis).filter(Analysis.year == 2025).all()
-    assert [a.country for a in rows] == ["JP"]
-    db.close()
-
-
 def test_create_subfield_rejects_blank_query(client):
     r = client.post(
         "/api/admin/subfields",
@@ -356,29 +328,12 @@ def test_create_subfield_rejects_blank_name(client):
     assert r.status_code == 422
 
 
-def test_run_rejects_inverted_year_range(client):
+def test_queue_rejects_an_out_of_range_year(client):
+    """연도는 본문 하나에 하나뿐이라 항목별 skipped로 못 옮긴다 — 스키마에서 막는다."""
     r = client.post(
-        "/api/admin/run",
+        "/api/admin/queue",
         headers={"X-Admin-Key": settings.admin_key},
-        json={"subfield_ids": [1], "year_from": 2024, "year_to": 2020},
-    )
-    assert r.status_code == 422
-
-
-def test_run_rejects_out_of_range_year(client):
-    r = client.post(
-        "/api/admin/run",
-        headers={"X-Admin-Key": settings.admin_key},
-        json={"subfield_ids": [1], "year_from": 1800, "year_to": 2024},
-    )
-    assert r.status_code == 422
-
-
-def test_run_rejects_empty_subfield_ids(client):
-    r = client.post(
-        "/api/admin/run",
-        headers={"X-Admin-Key": settings.admin_key},
-        json={"subfield_ids": [], "year_from": 2023, "year_to": 2024},
+        json={"year": 1800, "analyses": [{"subfield_id": 1}]},
     )
     assert r.status_code == 422
 
@@ -1064,32 +1019,6 @@ def test_field_report_failure_marks_failed_not_crash_loop(client, monkeypatch):
     assert "LLM 폭발" in got["error"]
 
 
-def test_run_all_queues_only_eligible_fields(client, monkeypatch):
-    """일괄 실행은 세부기술 보고서가 있는 분야만 큐잉하고 나머지는 건너뛴다."""
-    from datetime import datetime, timezone
-
-    year = datetime.now(timezone.utc).year
-    # 분야 1(픽스처)에만 완성 보고서를 둔다. 다른 분야는 없음 → skip.
-    _seed_done_analysis(client, "세부기술 A", "본문 A")
-    db = app.dependency_overrides[get_db]()
-    from app.models.field import Field
-    db.add(Field(name="빈 분야", slug="empty", order_no=2))
-    db.commit()
-    db.close()
-
-    r = client.post(f"/api/admin/field-reports/run-all?year={year}&kind=report",
-                    headers={"X-Admin-Key": settings.admin_key})
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["queued"] == 1 and body["skipped"] >= 1
-
-
-def test_run_all_rejects_bad_kind(client):
-    r = client.post("/api/admin/field-reports/run-all?year=2026&kind=nonsense",
-                    headers={"X-Admin-Key": settings.admin_key})
-    assert r.status_code == 422
-
-
 def test_field_reports_overview_lists_status(client, monkeypatch):
     """관리자 현황 표 — 분야별 종합/점검 상태를 한 번에 내려준다."""
     _seed_done_analysis(client, "세부기술 A", "본문 A")
@@ -1107,7 +1036,7 @@ def test_field_reports_overview_lists_status(client, monkeypatch):
     row = next(r for r in ov["rows"] if r["field_id"] == 1)
     assert row["report"]["status"] == "done"
     assert row["roadmap_check"] is None  # 점검은 안 돌렸다
-    assert row["has_roadmap"] is False
+    assert row["roadmap"] is None
 
 
 def test_field_reports_carries_roadmap_version_and_goal_count(client):
@@ -1345,41 +1274,6 @@ def test_admin_schedule_rejects_malformed_country_list(client):
     assert r.status_code == 422
 
 
-def test_comparison_grid_shows_configured_countries_only(client):
-    """열은 schedule_settings.countries에 설정된 국가만 — 안 쓰는 나라 열이 늘어붙지 않게."""
-    db = app.dependency_overrides[get_db]()
-    _seed_countries(db, ("KR", "CN"), year=2026)
-    db.close()
-    client.put("/api/admin/schedule",
-               json={"enabled": True, "day": 10, "hour": 3, "years_back": 1,
-                     "countries": "KR,CN"},
-               headers={"X-Admin-Key": settings.admin_key})
-
-    got = client.get("/api/admin/comparison-grid", params={"year": 2026},
-                     headers={"X-Admin-Key": settings.admin_key}).json()
-    assert got["countries"] == ["KR", "CN"]
-    row = got["rows"][0]
-    assert row["analyses"]["KR"] == "done"
-    assert row["comparisons"] == {}          # 아직 만든 비교가 없다
-
-
-def test_run_all_comparisons_skips_subfields_missing_a_country(client):
-    """상대국 분석이 없는 세부기술은 조용히 건너뛴다(field-reports/run-all과 같은 규약)."""
-    db = app.dependency_overrides[get_db]()
-    _seed_countries(db, ("KR",), year=2026)      # CN 없음
-    db.close()
-    client.put("/api/admin/schedule",
-               json={"enabled": True, "day": 10, "hour": 3, "years_back": 1,
-                     "countries": "KR,CN"},
-               headers={"X-Admin-Key": settings.admin_key})
-
-    r = client.post("/api/admin/comparisons/run-all",
-                    params={"year": 2026, "mode": "pairs"},
-                    headers={"X-Admin-Key": settings.admin_key})
-    assert r.status_code == 200
-    assert r.json() == {"queued": 0, "skipped": 1}
-
-
 def _seed_countries(db, countries=("KR", "US"), *, year=2026, subfield_id=1):
     """비교 API 테스트용 — 지정 국가의 done 분석을 심는다.
 
@@ -1568,24 +1462,6 @@ def test_availability_surfaces_pairs_contained_in_a_multi_report(client):
     assert ["CN", "JP", "KR"] in combos      # 다국 자체
     assert ["CN", "KR"] in combos            # 안에 든 쌍
     assert ["JP", "KR"] in combos
-
-
-def test_comparison_grid_marks_pairs_included_in_a_multi_report(client):
-    """격자가 'CN,KR' 행만 찾아 미생성으로 표시하면, 이미 있는 1:1을 다시 만들게 된다."""
-    db = app.dependency_overrides[get_db]()
-    _multi(db)
-    db.close()
-    client.put("/api/admin/schedule",
-               json={"enabled": True, "day": 10, "hour": 3, "years_back": 1,
-                     "countries": "KR,CN,JP", "auto_comparison": False},
-               headers={"X-Admin-Key": settings.admin_key})
-
-    got = client.get("/api/admin/comparison-grid", params={"year": 2026},
-                     headers={"X-Admin-Key": settings.admin_key}).json()
-    cells = got["rows"][0]["comparisons"]
-    assert cells["CN,JP,KR"] == "done"
-    assert cells["CN,KR"] == "in_multi"
-    assert cells["JP,KR"] == "in_multi"
 
 
 def test_field_summary_rows_carry_countries(client):
@@ -1905,7 +1781,7 @@ def test_queue_skips_a_done_analysis_without_force_but_requeues_with_it(client):
 
 
 def test_queue_skips_a_missing_subfield_with_a_reason(client):
-    """조용히 건너뛰지 않는 것이 run-all과 다른 점이다 — 왜 빠졌는지 화면이 말해야 한다."""
+    """조용히 건너뛰지 않는다 — 왜 빠졌는지 화면이 말해야 한다."""
     r = client.post("/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
                     json={"year": 2026, "analyses": [{"subfield_id": 999, "country": "KR"}]})
     body = r.json()
@@ -1964,21 +1840,6 @@ def test_queue_keeps_going_when_one_subfield_is_inactive(client):
     assert len(body["skipped"]) == 1
 
 
-def test_run_blocks_an_inactive_subfield(client):
-    """/admin/run도 같은 가드를 받아야 한다 — 가드는 enqueue 안에 있다."""
-    db = app.dependency_overrides[get_db]()
-    subfield_id = _inactive_subfield(db)
-    db.close()
-
-    r = client.post(
-        "/api/admin/run", headers={"X-Admin-Key": settings.admin_key},
-        json={"subfield_ids": [subfield_id], "year_from": 2026, "year_to": 2026},
-    )
-    assert r.status_code == 200
-    assert r.json()["queued"] == []
-    assert "비활성" in r.json()["blocked"][0]["reason"]
-
-
 def test_queue_enqueues_a_multi_country_comparison(client):
     db = app.dependency_overrides[get_db]()
     _seed_countries(db, ("KR", "US", "CN"), year=2026)
@@ -2016,7 +1877,7 @@ def test_queue_reports_why_a_comparison_was_skipped(client):
 
 
 def test_queue_keeps_going_after_one_item_fails(client):
-    """한 건이 막혀도 나머지는 큐잉한다 — run-all이 세운 규약."""
+    """한 건이 막혀도 나머지는 큐잉한다."""
     db = app.dependency_overrides[get_db]()
     _seed_countries(db, ("KR", "US"), year=2026)
     sf2 = Subfield(field_id=1, name="두 번째", query="q")
@@ -2143,7 +2004,7 @@ def test_queue_isolates_an_empty_comparison_country_list(client):
 
 def test_dashboard_carries_comparison_status_keyed_by_year(client):
     """세부기술 탭이 응답 하나로 그려지려면 분석과 비교가 같은 응답에 있어야 한다.
-    지금은 comparison-grid를 따로 불러야 하고 그쪽은 한 연도만 준다."""
+    둘을 따로 부르면 두 응답의 연도·국가가 어긋날 여지가 생긴다."""
     db = app.dependency_overrides[get_db]()
     _seed_countries(db, ("KR", "CN", "JP"), year=2026)
     db.add(CountryComparison(

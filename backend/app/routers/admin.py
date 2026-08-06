@@ -60,13 +60,6 @@ class PreviewIn(_YearRangeMixin):
     country: str = "KR"
 
 
-class RunIn(_YearRangeMixin):
-    subfield_ids: list[int] = PydanticField(min_length=1)
-    force: bool = False
-    # ISO 3166-1 alpha-2. 기본 KR이라 화면을 고치기 전에도 기존 동작이 그대로다.
-    country: str = "KR"
-
-
 class QueueAnalysisIn(BaseModel):
     subfield_id: int
     # ISO 3166-1 alpha-2. 화면의 국가 열 한 칸이 이 항목 하나에 대응한다.
@@ -262,48 +255,13 @@ async def preview(payload: PreviewIn, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/run")
-def run(payload: RunIn, db: Session = Depends(get_db)):
-    # C1: 여기서 검색 건수(over_limit)를 다시 확인하지 않는다 — 확인하려면 검색을
-    # 한 번 더 돌려야 해 이 요청 자체가 이중과금이 된다. 프론트의 버튼 비활성화가
-    # 유일한 사전 방어이고 curl로는 우회 가능하다. 상한 초과는 이제 차단이 아니라
-    # 표본 수집으로 처리된다 — runner._do_search가 인용 상위 N건만 받고 그 사실을
-    # stats의 population_total·sampled로 남긴다(거부하면 CN 11개·US 3개 세부기술이
-    # 그냥 실패한다는 실측 때문에 바꿨다).
-    if budget.spent_today(db) >= settings.openalex_daily_budget_usd:
-        raise HTTPException(
-            status_code=429,
-            detail=(
-                f"OpenAlex 일일 예산이 이미 소진되었습니다. "
-                f"UTC {budget.reset_time_utc():%Y-%m-%d %H:%M} 이후 재시도하세요."
-            ),
-        )
-
-    queued, blocked = [], []
-    for subfield_id in payload.subfield_ids:
-        subfield = db.get(Subfield, subfield_id)
-        if not subfield:
-            blocked.append({"subfield_id": subfield_id, "reason": "세부기술 없음"})
-            continue
-        try:
-            rows = runner.enqueue(
-                db, subfield, payload.year_from, payload.year_to,
-                force=payload.force, country=payload.country,
-            )
-        except ValueError as e:
-            blocked.append({"subfield_id": subfield_id, "reason": str(e)})
-            continue
-        queued.extend(a.id for a in rows)
-    return {"queued": queued, "blocked": blocked}
-
-
 @router.post("/queue")
 def queue(payload: QueueIn, db: Session = Depends(get_db)):
     """체크한 대상들을 한 번에 큐잉하고, 건너뛴 것은 사유와 함께 돌려준다.
 
-    하나가 막혀도 나머지는 큐잉한다(field-reports/run-all의 규약). **조용히 건너뛰지
-    않는 것**이 run-all과 다른 점이다 — "10건 큐잉, 3건 건너뜀"만으로는 상대국 분석이
-    없어서인지 로드맵이 미등록이어서인지 알 수 없었다.
+    하나가 막혀도 나머지는 큐잉한다. **건너뛴 것을 사유와 함께 돌려주는 것**이 이 API의
+    존재 이유다 — 앞서 종류마다 있던 일괄 실행(run-all)들은 "10건 큐잉, 3건 건너뜀"만
+    돌려줘, 상대국 분석이 없어서인지 로드맵이 미등록이어서인지 알 수 없었다.
 
     enqueue 계열 함수들이 각자 db.commit()을 하므로 여기서 다시 커밋하지 않는다.
     """
@@ -647,134 +605,11 @@ def field_reports_overview(year: int, db: Session = Depends(get_db)):
         rows.append({
             "field_id": field.id,
             "field_name": field.name,
-            "has_roadmap": field.id in roadmaps,
             "roadmap": roadmaps.get(field.id),
             "report": cell(reports.get(field.id)),
             "roadmap_check": cell(checks.get(field.id)),
         })
     return {"year": year, "rows": rows}
-
-
-@router.post("/field-reports/run-all")
-def run_all_field_reports(year: int, kind: str = "report", db: Session = Depends(get_db)):
-    """당해연도 전체 분야를 일괄 큐잉한다. kind: report(분야 종합) | roadmap-check.
-
-    검증에 걸리는 분야(세부기술 보고서 없음·로드맵 미등록 등)는 조용히 건너뛴다 —
-    "가능한 것만 큐잉"이 일괄 실행의 의도이므로 하나가 막혀 전체가 실패하면 안 된다.
-    """
-    if kind not in ("report", "roadmap-check"):
-        raise HTTPException(status_code=422, detail="kind는 report 또는 roadmap-check여야 합니다.")
-    enqueue = (
-        reducer.enqueue_field_report if kind == "report" else reducer.enqueue_roadmap_check
-    )
-    queued, skipped = 0, 0
-    for field in db.query(Field).all():
-        try:
-            enqueue(db, field.id, year)
-            queued += 1
-        except (LookupError, ValueError):
-            skipped += 1
-    return {"kind": kind, "year": year, "queued": queued, "skipped": skipped}
-
-
-@router.get("/comparison-grid")
-def comparison_grid(year: int, db: Session = Depends(get_db)):
-    """세부기술 × (국가 분석 · 비교 보고서) 현황.
-
-    열은 schedule_settings.countries에 설정된 국가만 — 안 쓰는 나라 열이 늘어붙으면
-    격자가 읽히지 않는다. 세부기술마다 질의하면 55번 나가므로 두 테이블을 각각
-    한 번에 읽어 subfield_id로 묶는다(field_reports_overview와 같은 방식).
-    """
-    cfg = runner.get_schedule_settings(db)
-    countries = parse_countries(cfg.countries or "KR")
-    subfields = db.query(Subfield).filter(Subfield.active.is_(True)).order_by(
-        Subfield.field_id, Subfield.name
-    ).all()
-    ids = [s.id for s in subfields]
-
-    analyses: dict[int, dict[str, str]] = {}
-    for a in db.query(Analysis.subfield_id, Analysis.country, Analysis.status).filter(
-        Analysis.subfield_id.in_(ids), Analysis.year == year
-    ):
-        analyses.setdefault(a.subfield_id, {})[a.country] = a.status
-
-    comparisons: dict[int, dict[str, str]] = {}
-    for c in db.query(
-        CountryComparison.subfield_id, CountryComparison.countries, CountryComparison.status
-    ).filter(CountryComparison.subfield_id.in_(ids), CountryComparison.year == year):
-        cells = comparisons.setdefault(c.subfield_id, {})
-        cells[c.countries] = c.status
-        # 3개국 이상 비교는 쌍별 1:1을 먼저 만들어 sections_json에 담고 그것을 종합한다
-        # (process_comparison). 즉 "한국 vs 중국"은 이미 이 행 안에 있는데, 격자는
-        # "CN,KR" 행을 찾으므로 없다고 표시했다 — 그래서 실제로는 만들 필요가 없는
-        # 1:1을 다시 만들게 된다. 포함된 쌍을 별도 상태로 알려 그 중복을 막는다.
-        codes = c.countries.split(",")
-        if c.status == "done" and len(codes) > 2:
-            base = comparison.base_country(codes)
-            for other in codes:
-                if other == base:
-                    continue
-                pair = ",".join(sorted((base, other)))
-                cells.setdefault(pair, "in_multi")
-
-    return {
-        "year": year,
-        "countries": countries,
-        "rows": [
-            {
-                "subfield_id": s.id,
-                "subfield_name": s.name,
-                "field_id": s.field_id,
-                "analyses": analyses.get(s.id, {}),
-                "comparisons": comparisons.get(s.id, {}),
-            }
-            for s in subfields
-        ],
-    }
-
-
-@router.post("/comparisons/run-all")
-def run_all_comparisons(year: int, mode: str = "pairs", db: Session = Depends(get_db)):
-    """당해연도 전체 세부기술의 비교를 일괄 큐잉한다.
-
-    mode=pairs — 기준국과 각 상대국의 1:1 비교를 각각 만든다(KR,US / KR,CN).
-    mode=all   — 설정된 국가 전체를 한 보고서로(KR,US,CN).
-
-    대상이 안 되는 세부기술(상대국 분석 없음)은 조용히 건너뛴다 —
-    하나가 막혀 전체가 실패하면 안 된다(field-reports/run-all과 같은 규약).
-    """
-    if mode not in ("pairs", "all"):
-        raise HTTPException(status_code=422, detail="mode는 pairs 또는 all이어야 합니다.")
-
-    cfg = runner.get_schedule_settings(db)
-    countries = sorted(parse_countries(cfg.countries or "KR"))
-    if len(countries) < 2:
-        raise HTTPException(
-            status_code=409,
-            detail="스케줄의 대상 국가가 2개 이상이어야 비교를 만들 수 있습니다.",
-        )
-
-    combos = (
-        [sorted(pair) for pair in comparison.pair_countries(countries)]
-        if mode == "pairs"
-        else [countries]
-    )
-
-    queued = skipped = 0
-    for subfield in db.query(Subfield).filter(Subfield.active.is_(True)):
-        for combo in combos:
-            try:
-                comparison.enqueue_comparison(db, subfield.id, year, combo)
-                queued += 1
-            except (LookupError, ValueError):
-                # enqueue_comparison은 검증(세부기술 존재·국가 2개 이상·상대국 분석
-                # 존재)을 db.add() 이전에 전부 마치므로 실패 시 세션에 남는 미결
-                # 변경이 없다 — 그래도 이전 반복에서 쌓였을 수 있는 커밋되지 않은
-                # 상태를 확실히 비워, 이 세부기술을 건너뛴 것이 다음 세부기술의
-                # 질의(analyses.filter 등)에 영향을 주지 않게 한다.
-                db.rollback()
-                skipped += 1
-    return {"queued": queued, "skipped": skipped}
 
 
 @router.delete("/analyses/{analysis_id}")

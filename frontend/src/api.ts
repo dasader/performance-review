@@ -375,7 +375,6 @@ export interface FieldReportCell {
 export interface FieldReportRow {
   field_id: number;
   field_name: string;
-  has_roadmap: boolean;
   // 등록된 로드맵의 판본과 목표 수. 미등록이면 null — 빈 문자열로 내면
   // "등록됐는데 판본명이 비었다"와 구별되지 않는다.
   roadmap: { version_label: string; goal_count: number } | null;
@@ -484,11 +483,6 @@ export interface PreviewResponse {
   max_papers: number;
 }
 
-export interface RunResponse {
-  queued: number[];
-  blocked: { subfield_id: number; reason: string }[];
-}
-
 // ── 푸터: 사이트 정보 · 방문자 통계 ──
 
 export interface SiteInfo {
@@ -559,63 +553,6 @@ export function getComparison(subfieldId: number, year: number, countries: strin
   );
 }
 
-export function enqueueComparison(
-  subfieldId: number,
-  year: number,
-  countries: string[],
-  adminKey: string,
-) {
-  return post<{ subfield_id: number; year: number; countries: string[]; status: string }>(
-    `/admin/subfields/${subfieldId}/comparison?year=${year}&countries=${countries.join(",")}`,
-    {},
-    adminKey,
-  );
-}
-
-// 이 아래(ComparisonGridRow ~ runAllComparisons)는 관리자 "국가 현황" 탭
-// (ComparisonGrid.tsx)이 SubfieldTab 하나로 흡수되며 죽은 코드가 됐다 — 지금 이
-// 프론트 어디서도 부르지 않는다. 백엔드 엔드포인트(/admin/comparison-grid,
-// /admin/comparisons/run-all)와 함께 4단계에서 지운다. 이번 패스에서는 그대로 둔다.
-//
-// 예전 "국가 현황" 격자 — 세부기술 × (국가 분석 · 비교 보고서) 현황.
-// countries는 schedule_settings에 설정된 국가 목록(순서는 입력 그대로) —
-// 국가를 늘리면 열도 그만큼 늘어난다.
-export interface ComparisonGridRow {
-  subfield_id: number;
-  subfield_name: string;
-  field_id: number;
-  // 국가 코드 → 그 국가·연도 분석 상태.
-  analyses: Record<string, string>;
-  // "CN,KR"처럼 정렬된 콤마 구분 국가 조합 → 비교 보고서 상태.
-  comparisons: Record<string, string>;
-}
-
-export interface ComparisonGridResponse {
-  year: number;
-  countries: string[];
-  rows: ComparisonGridRow[];
-}
-
-export function getComparisonGrid(year: number, adminKey: string) {
-  return get<ComparisonGridResponse>(`/admin/comparison-grid?year=${year}`, adminKey);
-}
-
-export interface ComparisonRunAllResponse {
-  queued: number;
-  skipped: number;
-}
-
-export function runAllComparisons(
-  year: number,
-  mode: "pairs" | "all",
-  adminKey: string,
-) {
-  return post<ComparisonRunAllResponse>(
-    `/admin/comparisons/run-all?year=${year}&mode=${mode}`,
-    null,
-    adminKey,
-  );
-}
 
 // 지표 표의 한 행 뒤에 있는 논문 목록(§10-1). 이상값을 기계적으로 거를 수 없어
 // — 같은 지표명 아래 다른 물리량이 섞인다 — 지우는 대신 확인 가능하게 만든 것이다.
