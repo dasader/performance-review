@@ -622,7 +622,15 @@ def field_reports_overview(year: int, db: Session = Depends(get_db)):
         r.field_id: r
         for r in db.query(RoadmapCheck).filter(RoadmapCheck.year == year)
     }
-    roadmap_fields = {r.field_id for r in db.query(Roadmap.field_id)}
+    # 판본과 목표 수까지 함께 읽는다 — 분야마다 /fields/{id}/roadmap을 따로 부르면
+    # 10번 나가고, 목록에서 "어느 판본으로 점검했는가"를 못 보여준다.
+    roadmaps = {
+        r.field_id: {
+            "version_label": r.version_label,
+            "goal_count": reducer.count_goal_rows(r.content_md),
+        }
+        for r in db.query(Roadmap.field_id, Roadmap.version_label, Roadmap.content_md)
+    }
 
     def cell(row) -> dict | None:
         if row is None:
@@ -639,7 +647,8 @@ def field_reports_overview(year: int, db: Session = Depends(get_db)):
         rows.append({
             "field_id": field.id,
             "field_name": field.name,
-            "has_roadmap": field.id in roadmap_fields,
+            "has_roadmap": field.id in roadmaps,
+            "roadmap": roadmaps.get(field.id),
             "report": cell(reports.get(field.id)),
             "roadmap_check": cell(checks.get(field.id)),
         })

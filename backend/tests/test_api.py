@@ -1110,6 +1110,28 @@ def test_field_reports_overview_lists_status(client, monkeypatch):
     assert row["has_roadmap"] is False
 
 
+def test_field_reports_carries_roadmap_version_and_goal_count(client):
+    """어느 판본으로 점검했는지가 보고서 신뢰도를 좌우한다 — 목록에서 바로 보여야 한다.
+    분야마다 /fields/{id}/roadmap을 따로 부르면 10번 나간다."""
+    client.put(
+        "/api/admin/fields/1/roadmap", headers={"X-Admin-Key": settings.admin_key},
+        json={"version_label": "2026 제1호", "content_md":
+              "| 단계 | 시기 | 목표 |\n|---|---|---|\n| 1 | 2026 | 가 |\n| 2 | 2027 | 나 |"},
+    )
+
+    rows = client.get("/api/admin/field-reports?year=2026",
+                      headers={"X-Admin-Key": settings.admin_key}).json()["rows"]
+    row = next(r for r in rows if r["field_id"] == 1)
+    assert row["roadmap"] == {"version_label": "2026 제1호", "goal_count": 2}
+
+
+def test_field_reports_gives_null_roadmap_when_unregistered(client):
+    """미등록과 '판본을 못 읽었다'가 같아 보이면 안 된다."""
+    rows = client.get("/api/admin/field-reports?year=2026",
+                      headers={"X-Admin-Key": settings.admin_key}).json()["rows"]
+    assert all(r["roadmap"] is None for r in rows)
+
+
 def test_subfield_reports_endpoint_returns_bodies(client):
     """세부기술 첨부 토글용 — 완성된 세부기술 보고서 본문을 목록으로 내려준다."""
     _seed_done_analysis(client, "세부기술 A", "## 성과\nA 본문")
