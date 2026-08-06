@@ -1893,6 +1893,70 @@ def test_queue_skips_a_missing_subfield_with_a_reason(client):
     ]
 
 
+def _inactive_subfield(db) -> int:
+    row = Subfield(field_id=1, name="비활성기술", query="q", active=False)
+    db.add(row)
+    db.commit()
+    return row.id
+
+
+def test_queue_refuses_an_inactive_subfield(client):
+    """비활성은 "목록에서 감춘 것"이 아니라 "돌리지 않기로 한 것"이다.
+
+    화면이 비활성 행을 선택 불가로 그리지만 그것만으로는 부족하다 — 다른 세션에서
+    비활성화하면 이 화면의 오래된 선택이 그대로 넘어온다. 검색·추출은 돈이 나가므로
+    서버에서 막는다.
+    """
+    db = app.dependency_overrides[get_db]()
+    subfield_id = _inactive_subfield(db)
+    db.close()
+
+    r = client.post("/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+                    json={"year": 2026, "analyses": [{"subfield_id": subfield_id, "country": "KR"}]})
+    body = r.json()
+    assert body["queued"]["analyses"] == 0
+    assert body["skipped"][0]["kind"] == "analysis"
+    assert body["skipped"][0]["subfield_id"] == subfield_id
+    assert "비활성" in body["skipped"][0]["reason"]
+
+    db = app.dependency_overrides[get_db]()
+    assert db.query(Analysis).count() == 0
+    db.close()
+
+
+def test_queue_keeps_going_when_one_subfield_is_inactive(client):
+    """한 건이 막혀도 나머지는 큐잉한다 — 이 API의 규약."""
+    db = app.dependency_overrides[get_db]()
+    inactive_id = _inactive_subfield(db)
+    db.close()
+
+    r = client.post(
+        "/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+        json={"year": 2026, "analyses": [
+            {"subfield_id": inactive_id, "country": "KR"},
+            {"subfield_id": 1, "country": "KR"},
+        ]},
+    )
+    body = r.json()
+    assert body["queued"]["analyses"] == 1
+    assert len(body["skipped"]) == 1
+
+
+def test_run_blocks_an_inactive_subfield(client):
+    """/admin/run도 같은 가드를 받아야 한다 — 가드는 enqueue 안에 있다."""
+    db = app.dependency_overrides[get_db]()
+    subfield_id = _inactive_subfield(db)
+    db.close()
+
+    r = client.post(
+        "/api/admin/run", headers={"X-Admin-Key": settings.admin_key},
+        json={"subfield_ids": [subfield_id], "year_from": 2026, "year_to": 2026},
+    )
+    assert r.status_code == 200
+    assert r.json()["queued"] == []
+    assert "비활성" in r.json()["blocked"][0]["reason"]
+
+
 def test_queue_enqueues_a_multi_country_comparison(client):
     db = app.dependency_overrides[get_db]()
     _seed_countries(db, ("KR", "US", "CN"), year=2026)
