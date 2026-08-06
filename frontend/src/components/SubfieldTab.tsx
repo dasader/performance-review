@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ACTIVE_STATUSES,
   ApiError,
-  STATUS_LABEL,
   del,
   get,
   post,
@@ -12,6 +10,7 @@ import {
   type QueueResponse,
 } from "../api";
 import { COUNTRY_NAMES, sortCountries } from "../lib/countries";
+import { ACTIVE_STATUSES, STATUS_LABEL } from "../lib/status";
 import { usePolling } from "../lib/hooks";
 import { estimateCost } from "../lib/cost";
 import {

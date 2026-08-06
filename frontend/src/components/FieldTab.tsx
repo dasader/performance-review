@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
-  STATUS_LABEL,
   deleteRoadmap,
   get,
   getRoadmap,
@@ -13,6 +12,7 @@ import {
   type QueueResponse,
 } from "../api";
 import { estimateCost } from "../lib/cost";
+import { STATUS_LABEL } from "../lib/status";
 import { formatGeneratedAt } from "../lib/format";
 import { usePolling } from "../lib/hooks";
 import { cellKey, headerState, toQueuePayload, toggleAll } from "../lib/selection";
