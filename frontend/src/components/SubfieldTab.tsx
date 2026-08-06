@@ -15,6 +15,7 @@ import { COUNTRY_NAMES, sortCountries } from "../lib/countries";
 import { usePolling } from "../lib/hooks";
 import { estimateCost } from "../lib/cost";
 import { cellKey, headerState, rowCells, toQueuePayload, toggleAll } from "../lib/selection";
+import RunDialog from "./RunDialog";
 import StatusBadge from "./StatusBadge";
 import YearInput from "./YearInput";
 
@@ -27,9 +28,12 @@ import YearInput from "./YearInput";
 export default function SubfieldTab({
   adminKey,
   onUnauthorized,
+  subfieldsVersion,
 }: {
   adminKey: string;
   onUnauthorized: () => void;
+  // 검색식이 바뀌면 열려 있던 정밀 견적을 폐기하기 위한 세대 값(Admin.tsx가 센다).
+  subfieldsVersion: number;
 }) {
   const [year, setYear] = useState(new Date().getFullYear());
   const [data, setData] = useState<DashboardResponse | null>(null);
@@ -40,6 +44,7 @@ export default function SubfieldTab({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<QueueResponse | null>(null);
+  const [estimating, setEstimating] = useState(false);
 
   const load = useCallback(() => {
     get<DashboardResponse>("/admin/dashboard", adminKey)
@@ -126,6 +131,12 @@ export default function SubfieldTab({
   const payload = toQueuePayload(selected, { year, countries: scheduleCountries, force });
   const cost = estimateCost(payload, papersByCell);
   const total = payload.analyses.length + payload.comparisons.length;
+  // 견적은 한 대상에 대한 것이고, 여럿을 고르면 /admin/preview 호출이 그만큼 과금된다 —
+  // 분석 셀 하나만 골랐을 때만 버튼을 낸다.
+  const onlyAnalysis =
+    payload.analyses.length === 1 && payload.comparisons.length === 0
+      ? payload.analyses[0]
+      : null;
 
   const toggle = (key: string) =>
     setSelected((prev) => {
@@ -192,6 +203,15 @@ export default function SubfieldTab({
         >
           {busy ? "요청 중…" : `선택한 ${total}건 생성`}
         </button>
+        {onlyAnalysis && (
+          <button
+            type="button"
+            onClick={() => setEstimating(true)}
+            className="btn btn-neutral btn-sm"
+          >
+            정밀 견적
+          </button>
+        )}
         {selected.size > 0 && (
           <button
             type="button"
@@ -221,6 +241,35 @@ export default function SubfieldTab({
               ))}
             </ul>
           )}
+        </div>
+      )}
+
+      {estimating && onlyAnalysis && (
+        <div className="mt-4">
+          <RunDialog
+            adminKey={adminKey}
+            rows={rows.map((r) => ({ subfield_id: r.subfield_id, subfield_name: r.subfield_name }))}
+            defaultYearFrom={year}
+            defaultYearTo={year}
+            subfieldsVersion={subfieldsVersion}
+            locked={{
+              subfieldId: onlyAnalysis.subfield_id,
+              country: onlyAnalysis.country,
+              year,
+            }}
+            onRan={() => {
+              setEstimating(false);
+              load();
+            }}
+            onUnauthorized={onUnauthorized}
+          />
+          <button
+            type="button"
+            onClick={() => setEstimating(false)}
+            className="mt-2 btn btn-neutral btn-sm"
+          >
+            견적 닫기
+          </button>
         </div>
       )}
 

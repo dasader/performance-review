@@ -11,6 +11,7 @@ export default function RunDialog({
   defaultYearFrom,
   defaultYearTo,
   subfieldsVersion,
+  locked,
   onRan,
   onUnauthorized,
 }: {
@@ -21,16 +22,19 @@ export default function RunDialog({
   // 세부기술 검색식이 바뀔 때마다(SubfieldEditor의 onChanged) Admin.tsx가 증가시키는 세대 카운터.
   // 이 화면 자체 입력과 무관하게 값이 바뀌면 미리보기가 stale해진 것이므로 폐기한다.
   subfieldsVersion: number;
+  // 세부기술 탭에서 셀 하나를 고른 채 열면 그 대상에 고정한다 — 대상이 이미 정해진
+  // 자리에서 세부기술·연도·국가를 다시 고르게 하면 화면이 말하는 것과 어긋난다.
+  locked?: { subfieldId: number; country: string; year: number };
   onRan: () => void;
   onUnauthorized: () => void;
 }) {
-  const [subfieldId, setSubfieldId] = useState<number | "">("");
-  const [yearFrom, setYearFrom] = useState(defaultYearFrom);
-  const [yearTo, setYearTo] = useState(defaultYearTo);
+  const [subfieldId, setSubfieldId] = useState<number | "">(locked?.subfieldId ?? "");
+  const [yearFrom, setYearFrom] = useState(locked?.year ?? defaultYearFrom);
+  const [yearTo, setYearTo] = useState(locked?.year ?? defaultYearTo);
   // 같은 세부기술·연도라도 국가가 다르면 다른 분석이다(analyses의 유일키에 country가 있다).
   // 대상 국가를 늘릴 때 전체를 한꺼번에 큐잉하지 않고 한 국가씩 시험해 볼 수 있어야 한다 —
   // 자동 스케줄의 "지금 실행"은 전체 세부기술 × 연도 × 국가를 한 번에 건다.
-  const [country, setCountry] = useState("KR");
+  const [country, setCountry] = useState(locked?.country ?? "KR");
   const [force, setForce] = useState(false);
 
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
@@ -94,6 +98,13 @@ export default function RunDialog({
     }
   };
 
+  // 고정 모드는 대상을 고르는 폼째로 숨긴다(그 안의 "미리보기" 버튼도 함께) — 그러니
+  // 여는 동작 자체가 조회를 시작해야 "정밀 견적" 버튼 하나로 끝난다.
+  useEffect(() => {
+    if (locked) handlePreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleRun = async () => {
     if (!preview || preview.over_limit || subfieldId === "") return;
     const ok = confirm(
@@ -130,102 +141,104 @@ export default function RunDialog({
         실행 전 반드시 미리보기로 건수와 예상 비용을 확인하세요.
       </p>
 
-      <div className="mt-4 flex flex-wrap items-end gap-2">
-        <div>
-          <label htmlFor="run-subfield" className="mb-1 block text-xs font-medium text-ink-light">
-            세부기술
+      {!locked && (
+        <div className="mt-4 flex flex-wrap items-end gap-2">
+          <div>
+            <label htmlFor="run-subfield" className="mb-1 block text-xs font-medium text-ink-light">
+              세부기술
+            </label>
+            <select
+              id="run-subfield"
+              value={subfieldId}
+              onChange={(e) => {
+                setSubfieldId(e.target.value ? Number(e.target.value) : "");
+                invalidate();
+              }}
+              className="input"
+            >
+              <option value="">세부기술 선택</option>
+              {rows.map((r) => (
+                <option key={r.subfield_id} value={r.subfield_id}>
+                  {r.subfield_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="run-year-from" className="mb-1 block text-xs font-medium text-ink-light">
+              시작 연도
+            </label>
+            <input
+              id="run-year-from"
+              type="number"
+              min={1900}
+              max={2100}
+              value={yearFrom}
+              onChange={(e) => {
+                setYearFrom(Number(e.target.value));
+                invalidate();
+              }}
+              className="w-24 input"
+            />
+          </div>
+          <div>
+            <label htmlFor="run-year-to" className="mb-1 block text-xs font-medium text-ink-light">
+              종료 연도
+            </label>
+            <input
+              id="run-year-to"
+              type="number"
+              min={1900}
+              max={2100}
+              value={yearTo}
+              onChange={(e) => {
+                setYearTo(Number(e.target.value));
+                invalidate();
+              }}
+              className="w-24 input"
+            />
+          </div>
+          <div>
+            <label htmlFor="run-country" className="mb-1 block text-xs font-medium text-ink-light">
+              대상 국가
+            </label>
+            <select
+              id="run-country"
+              value={country}
+              onChange={(e) => {
+                setCountry(e.target.value);
+                invalidate();
+              }}
+              className="input"
+            >
+              {sortCountries(Object.keys(COUNTRY_NAMES)).map((c) => (
+                <option key={c} value={c}>
+                  {COUNTRY_NAMES[c]} ({c})
+                </option>
+              ))}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 pb-2 text-sm text-ink-light">
+            <input
+              type="checkbox"
+              checked={force}
+              onChange={(e) => {
+                setForce(e.target.checked);
+                invalidate();
+              }}
+            />
+            이미 완료된 연도도 강제로 다시 실행
           </label>
-          <select
-            id="run-subfield"
-            value={subfieldId}
-            onChange={(e) => {
-              setSubfieldId(e.target.value ? Number(e.target.value) : "");
-              invalidate();
-            }}
-            className="input"
+          <button
+            type="button"
+            disabled={subfieldId === "" || previewing}
+            onClick={handlePreview}
+            className="btn btn-secondary disabled:opacity-40"
           >
-            <option value="">세부기술 선택</option>
-            {rows.map((r) => (
-              <option key={r.subfield_id} value={r.subfield_id}>
-                {r.subfield_name}
-              </option>
-            ))}
-          </select>
+            {previewing ? "확인 중…" : "미리보기"}
+          </button>
         </div>
-        <div>
-          <label htmlFor="run-year-from" className="mb-1 block text-xs font-medium text-ink-light">
-            시작 연도
-          </label>
-          <input
-            id="run-year-from"
-            type="number"
-            min={1900}
-            max={2100}
-            value={yearFrom}
-            onChange={(e) => {
-              setYearFrom(Number(e.target.value));
-              invalidate();
-            }}
-            className="w-24 input"
-          />
-        </div>
-        <div>
-          <label htmlFor="run-year-to" className="mb-1 block text-xs font-medium text-ink-light">
-            종료 연도
-          </label>
-          <input
-            id="run-year-to"
-            type="number"
-            min={1900}
-            max={2100}
-            value={yearTo}
-            onChange={(e) => {
-              setYearTo(Number(e.target.value));
-              invalidate();
-            }}
-            className="w-24 input"
-          />
-        </div>
-        <div>
-          <label htmlFor="run-country" className="mb-1 block text-xs font-medium text-ink-light">
-            대상 국가
-          </label>
-          <select
-            id="run-country"
-            value={country}
-            onChange={(e) => {
-              setCountry(e.target.value);
-              invalidate();
-            }}
-            className="input"
-          >
-            {sortCountries(Object.keys(COUNTRY_NAMES)).map((c) => (
-              <option key={c} value={c}>
-                {COUNTRY_NAMES[c]} ({c})
-              </option>
-            ))}
-          </select>
-        </div>
-        <label className="flex items-center gap-2 pb-2 text-sm text-ink-light">
-          <input
-            type="checkbox"
-            checked={force}
-            onChange={(e) => {
-              setForce(e.target.checked);
-              invalidate();
-            }}
-          />
-          이미 완료된 연도도 강제로 다시 실행
-        </label>
-        <button
-          type="button"
-          disabled={subfieldId === "" || previewing}
-          onClick={handlePreview}
-          className="btn btn-secondary disabled:opacity-40"
-        >
-          {previewing ? "확인 중…" : "미리보기"}
-        </button>
-      </div>
+      )}
       {staleNotice && <p className="mt-3 text-sm text-warning">{staleNotice}</p>}
       {previewError && <p className="mt-3 text-sm text-danger">{previewError}</p>}
 

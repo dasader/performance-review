@@ -34,6 +34,9 @@ export default function Admin() {
   const [fields, setFields] = useState<Field[] | null>(null);
   const [fieldsError, setFieldsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 검색식이 바뀌면 확인했던 미리보기 숫자가 더 이상 유효하지 않다. 두 탭이 서로
+  // 다른 자리에 있으므로 공통 조상인 여기서 세대를 센다.
+  const [subfieldGen, setSubfieldGen] = useState(0);
 
   const onUnauthorized = useCallback(() => {
     clear();
@@ -179,13 +182,17 @@ className="btn btn-toggle btn-sm"
           <SubfieldEditor
             adminKey={key}
             fields={fields}
-            onChanged={() => {}}
+            onChanged={() => setSubfieldGen((n) => n + 1)}
             onUnauthorized={onUnauthorized}
           />
         )}
 
         {tab === "subfield" && (
-          <SubfieldTab adminKey={key} onUnauthorized={onUnauthorized} />
+          <SubfieldTab
+            adminKey={key}
+            onUnauthorized={onUnauthorized}
+            subfieldsVersion={subfieldGen}
+          />
         )}
 
         {tab === "schedule" && <ScheduleSection adminKey={key} onUnauthorized={onUnauthorized} />}
