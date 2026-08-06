@@ -41,7 +41,10 @@ export default function FieldTab({
 
   const load = useCallback(() => {
     get<FieldReportsResponse>(`/admin/field-reports?year=${year}`, adminKey)
-      .then(setData)
+      .then((d) => {
+        setData(d);
+        setError(null);
+      })
       .catch((e) => {
         if (e instanceof ApiError && e.status === 401) return onUnauthorized();
         setError(e instanceof Error ? e.message : "현황을 불러오지 못했습니다.");
@@ -137,7 +140,7 @@ export default function FieldTab({
         전수 대조한 결과입니다. 만들 것을 체크해서 고르고 위에서 한 번에 생성합니다.
         <strong className="text-ink"> 대상 아님</strong>은 로드맵이 등록되지 않아 점검을 만들 수
         없는 칸입니다 — 오른쪽 로드맵 열에서 등록할 수 있습니다. 이미 완료된 칸도 체크하면
-        다시 생성됩니다(세부기술 탭과 달리 건너뛰지 않습니다).
+        다시 생성됩니다(세부기술 탭의 기본 동작과 달리 건너뛰지 않습니다).
       </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-3 border border-border-light bg-paper p-3">
@@ -408,7 +411,15 @@ function RoadmapForm({
     }
   };
 
-  if (!loaded) return <p className="text-xs text-muted">불러오는 중…</p>;
+  // 조회가 실패하면 loaded가 false로 남는다 — 사유를 여기서 그리지 않으면
+  // 편집기가 "불러오는 중…"에 영영 멈춘 채 아무 데도 이유가 안 나온다.
+  if (!loaded) {
+    return error ? (
+      <p className="text-sm text-danger">{error}</p>
+    ) : (
+      <p className="text-xs text-muted">불러오는 중…</p>
+    );
+  }
 
   return (
     <div className="space-y-3">
