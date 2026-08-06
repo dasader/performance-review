@@ -30,6 +30,10 @@ cd frontend && npx vitest run src/lib/reportMarkdown.test.ts   # 단건
 cd frontend && npm run lint     # oxlint
 cd frontend && npm run build    # tsc -b + vite build — 타입 오류는 여기서만 잡힌다
 
+# E2E (실제 헤드리스 브라우저 — vitest가 못 보는 렌더·라우팅을 여기서 본다)
+~/code/e2e-headless/run.sh http://localhost:8103 frontend/e2e   # code/ 공용 실행기.
+                                # 도커 이미지로 돌고, 이미 떠 있는 web 8103을 때린다. 설치 불필요.
+
 # 마이그레이션 추가
 docker compose exec api alembic revision --autogenerate -m "설명"
 ```
