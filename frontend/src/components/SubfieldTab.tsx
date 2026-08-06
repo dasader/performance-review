@@ -22,7 +22,7 @@ import {
   toQueuePayload,
   toggleAll,
 } from "../lib/selection";
-import RunDialog from "./RunDialog";
+import EstimatePanel from "./EstimatePanel";
 import StatusBadge from "./StatusBadge";
 import YearInput from "./YearInput";
 
@@ -57,7 +57,7 @@ export default function SubfieldTab({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<QueueResponse | null>(null);
   // 정밀 견적은 클릭 시점의 대상을 붙잡아 둔다. 살아 있는 선택 상태(onlyAnalysis)로
-  // 조건부 렌더링하면 패널이 열린 채 체크를 건드릴 때마다 RunDialog가 언마운트→재마운트되고,
+  // 조건부 렌더링하면 패널이 열린 채 체크를 건드릴 때마다 견적 패널이 언마운트→재마운트되고,
   // 그때마다 마운트 이펙트가 다시 돌아 /admin/preview를 또 부른다 — 이 호출은 OpenAlex 과금이다.
   const [estimateTarget, setEstimateTarget] = useState<{
     subfieldId: number;
@@ -304,26 +304,20 @@ export default function SubfieldTab({
 
       {estimateTarget && (
         <div className="mt-4">
-          {/* key로 대상 변경 시 강제 리마운트한다 — RunDialog의 subfieldId/country는
-              lazy useState라 locked가 바뀌어도 안 갱신되고 마운트 이펙트도 []라 재실행되지
-              않는다. key가 없으면 A를 열어 둔 채 선택을 B로 바꿔 다시 누를 때 패널이 여전히
-              A의 숫자를 보여주고, 실행은 A로 나간다. */}
-          <RunDialog
+          {/* key로 대상 변경 시 강제 리마운트한다 — 조회는 마운트 이펙트([])라 대상이
+              바뀌어도 재실행되지 않는다. key가 없으면 A를 열어 둔 채 선택을 B로 바꿔
+              다시 눌러도 패널이 여전히 A의 숫자를 보여준다. */}
+          <EstimatePanel
             key={`${estimateTarget.subfieldId}:${estimateTarget.country}`}
             adminKey={adminKey}
-            rows={rows.map((r) => ({ subfield_id: r.subfield_id, subfield_name: r.subfield_name }))}
-            defaultYearFrom={year}
-            defaultYearTo={year}
+            subfieldId={estimateTarget.subfieldId}
+            subfieldName={
+              rows.find((r) => r.subfield_id === estimateTarget.subfieldId)?.subfield_name ??
+              `#${estimateTarget.subfieldId}`
+            }
+            country={estimateTarget.country}
+            year={year}
             subfieldsVersion={subfieldsVersion}
-            locked={{
-              subfieldId: estimateTarget.subfieldId,
-              country: estimateTarget.country,
-              year,
-            }}
-            onRan={() => {
-              setEstimateTarget(null);
-              load();
-            }}
             onUnauthorized={onUnauthorized}
           />
           <button
@@ -573,8 +567,7 @@ function ExpandableRow({
               </span>
             ) : comparisonStatus === "in_multi" ? (
               // 실행 상태가 아니라 "이미 다국 비교 안에 들어 있다"는 사실이라 점 배지를
-              // 쓰지 않는다(ComparisonGrid.tsx의 옛 IN_MULTI 분기와 같은 판단) — 여기에
-              // 체크박스를 주면 있는 것을 중복 생성하게 된다.
+              // 쓰지 않는다 — 여기에 체크박스를 주면 있는 것을 중복 생성하게 된다.
               <span
                 className="text-xs text-muted"
                 title="다국 비교 안에 1:1 대조로 들어 있습니다 — 따로 만들 필요가 없습니다."

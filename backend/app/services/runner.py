@@ -522,8 +522,9 @@ def enqueue_due_comparisons(db: Session, *, now: datetime | None = None) -> int:
             comparison.enqueue_comparison(db, sid, yr, countries)
             queued += 1
         except (LookupError, ValueError) as e:
-            # 검증에 걸리는 건은 조용히 건너뛴다 — 하나가 막혀 나머지가 멈추면 안 된다
-            # (comparisons/run-all과 같은 규약).
+            # 검증에 걸리는 건은 조용히 건너뛴다 — 하나가 막혀 나머지가 멈추면 안 된다.
+            # 여기는 잡 루프라 사유를 돌려줄 상대가 없다(관리자가 부르는 /admin/queue는
+            # skipped로 사유를 낸다) — 로그로만 남긴다.
             logger.debug("[비교 자동] 세부기술 %d %d년 건너뜀: %s", sid, yr, e)
     if queued:
         db.commit()

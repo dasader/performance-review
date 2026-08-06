@@ -373,7 +373,7 @@ export default function ScheduleSection({
 }
 
 // 실행 일(1~28)/실행 시(0~23)/대상 연도 범위(0~5) — 셋 다 두 자리 이내 숫자라 폭을
-// 하나로 통일한다(w-16). RunDialog의 연도 입력(w-24, 네 자리)과는 자릿수가 다르므로
+// 하나로 통일한다(w-16). 네 자리 연도 입력(YearInput, w-24)과는 자릿수가 다르므로
 // 폭도 다르게 가져가는 게 "내용에 맞는 폭"이라는 원칙에 맞다.
 function ScheduleNumberField({
   id,
