@@ -1110,6 +1110,28 @@ def test_field_reports_overview_lists_status(client, monkeypatch):
     assert row["has_roadmap"] is False
 
 
+def test_field_reports_carries_roadmap_version_and_goal_count(client):
+    """어느 판본으로 점검했는지가 보고서 신뢰도를 좌우한다 — 목록에서 바로 보여야 한다.
+    분야마다 /fields/{id}/roadmap을 따로 부르면 10번 나간다."""
+    client.put(
+        "/api/admin/fields/1/roadmap", headers={"X-Admin-Key": settings.admin_key},
+        json={"version_label": "2026 제1호", "content_md":
+              "| 단계 | 시기 | 목표 |\n|---|---|---|\n| 1 | 2026 | 가 |\n| 2 | 2027 | 나 |"},
+    )
+
+    rows = client.get("/api/admin/field-reports?year=2026",
+                      headers={"X-Admin-Key": settings.admin_key}).json()["rows"]
+    row = next(r for r in rows if r["field_id"] == 1)
+    assert row["roadmap"] == {"version_label": "2026 제1호", "goal_count": 2}
+
+
+def test_field_reports_gives_null_roadmap_when_unregistered(client):
+    """미등록과 '판본을 못 읽었다'가 같아 보이면 안 된다."""
+    rows = client.get("/api/admin/field-reports?year=2026",
+                      headers={"X-Admin-Key": settings.admin_key}).json()["rows"]
+    assert all(r["roadmap"] is None for r in rows)
+
+
 def test_subfield_reports_endpoint_returns_bodies(client):
     """세부기술 첨부 토글용 — 완성된 세부기술 보고서 본문을 목록으로 내려준다."""
     _seed_done_analysis(client, "세부기술 A", "## 성과\nA 본문")
@@ -2082,6 +2104,41 @@ def test_queue_handles_all_four_kinds_in_one_request(client):
     assert body["queued"] == {"analyses": 1, "comparisons": 1,
                               "field_reports": 1, "roadmap_checks": 0}
     assert [s["kind"] for s in body["skipped"]] == ["roadmap_check"]
+
+
+def test_queue_isolates_a_one_country_comparison_instead_of_rejecting_everything(client):
+    """항목 하나가 잘못돼도 나머지는 큐잉해야 한다 — 이 API의 존재 이유다.
+
+    스키마에 min_length=2가 걸려 있으면 Pydantic이 요청 본문 전체를 422로 막아,
+    같이 보낸 분야 보고서까지 통째로 사라진다.
+    """
+    _seed_done_analysis(client, "세부기술 A", "## 성과\nA 본문")
+
+    r = client.post(
+        "/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+        json={
+            "year": 2026,
+            "comparisons": [{"subfield_id": 1, "countries": ["KR"]}],   # 1개국 — 만들 수 없다
+            "field_reports": [1],                                       # 이건 살아야 한다
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["queued"]["field_reports"] == 1
+    assert body["queued"]["comparisons"] == 0
+    assert body["skipped"][0]["kind"] == "comparison"
+    assert "2개" in body["skipped"][0]["reason"]
+
+
+def test_queue_isolates_an_empty_comparison_country_list(client):
+    """빈 목록도 같은 취급 — 요청 전체를 죽이지 않는다."""
+    r = client.post(
+        "/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+        json={"year": 2026, "comparisons": [{"subfield_id": 1, "countries": []}]},
+    )
+    assert r.status_code == 200
+    assert r.json()["queued"]["comparisons"] == 0
+    assert r.json()["skipped"][0]["kind"] == "comparison"
 
 
 def test_dashboard_carries_comparison_status_keyed_by_year(client):
