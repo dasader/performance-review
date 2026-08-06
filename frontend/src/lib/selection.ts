@@ -2,28 +2,44 @@
 // 이 저장소에는 jsdom이 없어 렌더링을 자동 검증할 수 없으므로, 검증할 수 있는
 // 형태(순수 함수)로 최대한 빼낸다.
 
-export type CellKind = "analysis" | "comparison";
+export type CellKind = "analysis" | "comparison" | "field_report" | "roadmap_check";
 
 // 화면의 셀 하나 = 만들 수 있는 산출물 하나.
-// 분석은 기술 × 국가, 비교는 기술 하나(국가 조합은 스케줄 설정이 정한다).
+//
+// 판별 유니온으로 두는 이유: 종류마다 필요한 식별자가 다르다(세부기술 × 국가 /
+// 세부기술 / 분야). 전부 선택 필드로 두면 어느 조합이 유효한지 타입이 말하지 못하고,
+// 값을 꺼낼 때마다 단언이 붙는다.
+//
 // 연도는 화면 전역 필터라 키에 넣지 않는다 — 연도를 바꾸면 선택을 비운다.
-export interface Cell {
-  kind: CellKind;
-  subfieldId: number;
-  country?: string;
-}
+export type Cell =
+  | { kind: "analysis"; subfieldId: number; country: string }
+  | { kind: "comparison"; subfieldId: number }
+  | { kind: "field_report"; fieldId: number }
+  | { kind: "roadmap_check"; fieldId: number };
 
 export function cellKey(cell: Cell): string {
-  return cell.kind === "analysis"
-    ? `analysis:${cell.subfieldId}:${cell.country}`
-    : `comparison:${cell.subfieldId}`;
+  switch (cell.kind) {
+    case "analysis":
+      return `analysis:${cell.subfieldId}:${cell.country}`;
+    case "comparison":
+      return `comparison:${cell.subfieldId}`;
+    default:
+      return `${cell.kind}:${cell.fieldId}`;
+  }
 }
 
 export function parseCellKey(key: string): Cell {
   const [kind, id, country] = key.split(":");
-  return kind === "analysis"
-    ? { kind: "analysis", subfieldId: Number(id), country }
-    : { kind: "comparison", subfieldId: Number(id) };
+  switch (kind) {
+    case "analysis":
+      return { kind: "analysis", subfieldId: Number(id), country };
+    case "comparison":
+      return { kind: "comparison", subfieldId: Number(id) };
+    case "roadmap_check":
+      return { kind: "roadmap_check", fieldId: Number(id) };
+    default:
+      return { kind: "field_report", fieldId: Number(id) };
+  }
 }
 
 export function rowCells(
@@ -114,14 +130,23 @@ export function toQueuePayload(
   };
   for (const key of [...selected].sort()) {
     const cell = parseCellKey(key);
-    if (cell.kind === "analysis") {
-      body.analyses.push({
-        subfield_id: cell.subfieldId,
-        country: cell.country as string,
-        force: opts.force,
-      });
-    } else {
-      body.comparisons.push({ subfield_id: cell.subfieldId, countries: opts.countries });
+    switch (cell.kind) {
+      case "analysis":
+        body.analyses.push({
+          subfield_id: cell.subfieldId,
+          country: cell.country,
+          force: opts.force,
+        });
+        break;
+      case "comparison":
+        body.comparisons.push({ subfield_id: cell.subfieldId, countries: opts.countries });
+        break;
+      case "field_report":
+        body.field_reports.push(cell.fieldId);
+        break;
+      case "roadmap_check":
+        body.roadmap_checks.push(cell.fieldId);
+        break;
     }
   }
   return body;

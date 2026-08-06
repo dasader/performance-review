@@ -146,3 +146,43 @@ describe("요청 본문 조립", () => {
     expect(a).toEqual(b);
   });
 });
+
+describe("분야 산출물 셀", () => {
+  it("분야 종합과 로드맵 점검은 분야 하나로 식별된다", () => {
+    expect(cellKey({ kind: "field_report", fieldId: 4 })).toBe("field_report:4");
+    expect(cellKey({ kind: "roadmap_check", fieldId: 4 })).toBe("roadmap_check:4");
+  });
+
+  it("같은 분야라도 종류가 다르면 다른 셀이다", () => {
+    expect(cellKey({ kind: "field_report", fieldId: 4 })).not.toBe(
+      cellKey({ kind: "roadmap_check", fieldId: 4 }),
+    );
+  });
+
+  it("왕복 변환이 원본과 같다", () => {
+    for (const cell of [
+      { kind: "field_report", fieldId: 4 },
+      { kind: "roadmap_check", fieldId: 9 },
+    ] as const) {
+      expect(parseCellKey(cellKey(cell))).toEqual(cell);
+    }
+  });
+
+  it("요청 본문의 분야 목록에 담긴다 — 분야 탭은 분석·비교를 만들지 않는다", () => {
+    const selected = new Set(["field_report:4", "roadmap_check:4", "roadmap_check:9"]);
+    expect(toQueuePayload(selected, { year: 2026, countries: ["KR"], force: false })).toEqual({
+      year: 2026,
+      analyses: [],
+      comparisons: [],
+      field_reports: [4],
+      roadmap_checks: [4, 9],
+    });
+  });
+
+  it("세부기술 셀과 분야 셀을 섞어 보내도 각자 자리로 간다", () => {
+    const selected = new Set(["analysis:3:US", "field_report:4"]);
+    const body = toQueuePayload(selected, { year: 2026, countries: ["KR", "US"], force: false });
+    expect(body.analyses).toEqual([{ subfield_id: 3, country: "US", force: false }]);
+    expect(body.field_reports).toEqual([4]);
+  });
+});
