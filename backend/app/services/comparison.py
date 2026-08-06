@@ -58,7 +58,7 @@ def collect_country_analyses(
     # 본문이 빈 분석(논문 0건)은 없는 것으로 친다 — 합성에 넣어봐야 모델이 근거
     # 없이 채워 넣을 여지만 준다(rollup_field의 빈 보고서 제외와 같은 이유).
     # sections_json은 이 함수의 두 호출부(큐잉 검증·실제 처리) 어느 쪽도 읽지 않는다.
-    # run-all은 55개 세부기술 × 조합만큼 이 질의를 돌리므로 defer가 실제로 크다.
+    # 일괄 큐잉은 55개 세부기술만큼 이 질의를 돌리므로 defer가 실제로 크다.
     found = {
         a.country: a
         for a in db.query(Analysis)
