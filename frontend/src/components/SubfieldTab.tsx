@@ -44,7 +44,13 @@ export default function SubfieldTab({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<QueueResponse | null>(null);
-  const [estimating, setEstimating] = useState(false);
+  // 정밀 견적은 클릭 시점의 대상을 붙잡아 둔다. 살아 있는 선택 상태(onlyAnalysis)로
+  // 조건부 렌더링하면 패널이 열린 채 체크를 건드릴 때마다 RunDialog가 언마운트→재마운트되고,
+  // 그때마다 마운트 이펙트가 다시 돌아 /admin/preview를 또 부른다 — 이 호출은 OpenAlex 과금이다.
+  const [estimateTarget, setEstimateTarget] = useState<{
+    subfieldId: number;
+    country: string;
+  } | null>(null);
 
   const load = useCallback(() => {
     get<DashboardResponse>("/admin/dashboard", adminKey)
@@ -60,8 +66,12 @@ export default function SubfieldTab({
 
   useEffect(load, [load]);
 
-  // 연도를 바꾸면 선택을 비운다 — 다른 연도 대상이 선택에 남으면 잘못 큐잉된다.
-  useEffect(() => setSelected(new Set()), [year]);
+  // 연도를 바꾸면 선택과 열려 있던 정밀 견적을 모두 비운다 — 다른 연도 대상이 선택에
+  // 남으면 잘못 큐잉되고, 정밀 견적을 열어 둔 채 두면 옛 연도를 가리키는 패널이 남는다.
+  useEffect(() => {
+    setSelected(new Set());
+    setEstimateTarget(null);
+  }, [year]);
 
   const rows = data?.rows ?? [];
 
@@ -206,7 +216,9 @@ export default function SubfieldTab({
         {onlyAnalysis && (
           <button
             type="button"
-            onClick={() => setEstimating(true)}
+            onClick={() =>
+              setEstimateTarget({ subfieldId: onlyAnalysis.subfield_id, country: onlyAnalysis.country })
+            }
             className="btn btn-neutral btn-sm"
           >
             정밀 견적
@@ -244,7 +256,7 @@ export default function SubfieldTab({
         </div>
       )}
 
-      {estimating && onlyAnalysis && (
+      {estimateTarget && (
         <div className="mt-4">
           <RunDialog
             adminKey={adminKey}
@@ -253,19 +265,19 @@ export default function SubfieldTab({
             defaultYearTo={year}
             subfieldsVersion={subfieldsVersion}
             locked={{
-              subfieldId: onlyAnalysis.subfield_id,
-              country: onlyAnalysis.country,
+              subfieldId: estimateTarget.subfieldId,
+              country: estimateTarget.country,
               year,
             }}
             onRan={() => {
-              setEstimating(false);
+              setEstimateTarget(null);
               load();
             }}
             onUnauthorized={onUnauthorized}
           />
           <button
             type="button"
-            onClick={() => setEstimating(false)}
+            onClick={() => setEstimateTarget(null)}
             className="mt-2 btn btn-neutral btn-sm"
           >
             견적 닫기
