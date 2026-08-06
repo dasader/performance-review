@@ -77,7 +77,13 @@ class QueueAnalysisIn(BaseModel):
 class QueueComparisonIn(BaseModel):
     subfield_id: int
     # 다국 비교 하나만 만든다 — 1:1은 그 안의 섹션으로 조회된다(2026-08-04 설계).
-    countries: list[str] = PydanticField(min_length=2)
+    #
+    # **min_length=2를 걸지 않는다.** 스키마에서 막으면 항목 하나가 잘못됐을 때
+    # Pydantic이 요청 본문 전체를 422로 거부해, 같이 보낸 다른 종류까지 통째로
+    # 사라진다 — "한 건이 막혀도 나머지는 큐잉한다"는 이 API의 존재 이유와 충돌한다.
+    # 국가 수 검증은 enqueue_comparison이 ValueError로 하고, 핸들러가 그것을
+    # skipped 한 줄로 옮긴다.
+    countries: list[str] = []
 
 
 class QueueIn(BaseModel):

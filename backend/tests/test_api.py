@@ -2084,6 +2084,41 @@ def test_queue_handles_all_four_kinds_in_one_request(client):
     assert [s["kind"] for s in body["skipped"]] == ["roadmap_check"]
 
 
+def test_queue_isolates_a_one_country_comparison_instead_of_rejecting_everything(client):
+    """항목 하나가 잘못돼도 나머지는 큐잉해야 한다 — 이 API의 존재 이유다.
+
+    스키마에 min_length=2가 걸려 있으면 Pydantic이 요청 본문 전체를 422로 막아,
+    같이 보낸 분야 보고서까지 통째로 사라진다.
+    """
+    _seed_done_analysis(client, "세부기술 A", "## 성과\nA 본문")
+
+    r = client.post(
+        "/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+        json={
+            "year": 2026,
+            "comparisons": [{"subfield_id": 1, "countries": ["KR"]}],   # 1개국 — 만들 수 없다
+            "field_reports": [1],                                       # 이건 살아야 한다
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["queued"]["field_reports"] == 1
+    assert body["queued"]["comparisons"] == 0
+    assert body["skipped"][0]["kind"] == "comparison"
+    assert "2개" in body["skipped"][0]["reason"]
+
+
+def test_queue_isolates_an_empty_comparison_country_list(client):
+    """빈 목록도 같은 취급 — 요청 전체를 죽이지 않는다."""
+    r = client.post(
+        "/api/admin/queue", headers={"X-Admin-Key": settings.admin_key},
+        json={"year": 2026, "comparisons": [{"subfield_id": 1, "countries": []}]},
+    )
+    assert r.status_code == 200
+    assert r.json()["queued"]["comparisons"] == 0
+    assert r.json()["skipped"][0]["kind"] == "comparison"
+
+
 def test_dashboard_carries_comparison_status_keyed_by_year(client):
     """세부기술 탭이 응답 하나로 그려지려면 분석과 비교가 같은 응답에 있어야 한다.
     지금은 comparison-grid를 따로 불러야 하고 그쪽은 한 연도만 준다."""
