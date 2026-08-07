@@ -53,6 +53,21 @@ def test_admin_requires_key(client):
                       headers={"X-Admin-Key": "wrong"}).status_code == 401
 
 
+def test_admin_rejects_non_ascii_key_without_crashing(client):
+    """비ASCII 키가 500이 아니라 401이어야 한다.
+
+    secrets.compare_digest는 str을 받으면 ASCII만 허용해 한 글자만 벗어나도
+    TypeError를 낸다. deps.require_admin이 양쪽을 bytes로 인코딩하는 이유가 이것이다.
+
+    헤더 값을 bytes로 넣는 것이 이 테스트의 핵심이다 — HTTP 헤더는 와이어에서 바이트이고
+    Starlette이 latin-1로 디코드해 넘긴다. str로 넣으면 httpx가 보내기 전에 ASCII로
+    인코딩하려다 실패해서, 정작 서버 쪽 경로를 한 번도 밟지 못한다(한글은 latin-1로도
+    인코딩되지 않아 애초에 전송 불가 — 실제로 도달할 수 있는 건 이런 latin-1 바이트다).
+    """
+    r = client.get("/api/admin/dashboard", headers={"X-Admin-Key": "kü".encode("latin-1")})
+    assert r.status_code == 401
+
+
 def test_admin_accepts_correct_key(client):
     r = client.get("/api/admin/dashboard", headers={"X-Admin-Key": settings.admin_key})
     assert r.status_code == 200

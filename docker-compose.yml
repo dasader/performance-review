@@ -6,7 +6,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-perfrev}
       POSTGRES_DB: ${POSTGRES_DB:-perfrev}
     ports:
-      - "${DB_PORT:-5403}:5432"
+      # 루프백에만 바인딩한다. 앞서 0.0.0.0이었고 POSTGRES_PASSWORD가 .env에 없어
+      # compose 기본값(perfrev)이 그대로 쓰였다 — 호스트가 외부에서 닿는 순간 DB 전체다.
+      # 로컬 psql은 그대로 되고(localhost:5403), 컨테이너 간 통신은 이 매핑과 무관하다.
+      - "127.0.0.1:${DB_PORT:-5403}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,7 +21,10 @@ services:
     build: ./backend
     env_file: .env
     ports:
-      - "${API_PORT:-8003}:8000"
+      # 이 매핑은 디버깅용일 뿐이다 — 화면은 web(nginx)이 도커 네트워크로 api:8000에
+      # 프록시한다. 0.0.0.0에 두면 nginx를 우회해 관리자 API에 직접 닿고,
+      # X-Forwarded-For를 손볼 프록시조차 없어 방문자 해시를 마음대로 만들 수 있다.
+      - "127.0.0.1:${API_PORT:-8003}:8000"
     depends_on:
       db:
         condition: service_healthy
