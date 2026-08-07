@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 
 // 화면 토글 상태를 URL 쿼리에 싣는다(?withSections=1). 상태를 컴포넌트 안에 두지
 // 않는 이유는 공유·북마크·인쇄 — 켠 채로 링크를 넘기면 상대도 켜진 화면을 본다.

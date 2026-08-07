@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { COUNTRY_NAMES, sortCountries } from "../lib/countries";
 
 const BASE = "KR";

@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router";
 
 // FieldList는 즉시 로드(첫 화면), 차트를 쓰는 Report·recharts 번들은 방문 시점에 분리 로드한다.
 import FieldList from "./pages/FieldList";

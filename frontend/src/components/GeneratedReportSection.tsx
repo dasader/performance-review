@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { ApiError, get, post } from "../api";
 
 // 분야 종합 보고서와 로드맵 이행 점검이 공유하는 껍데기. 조회(404=미생성) → 생성 →

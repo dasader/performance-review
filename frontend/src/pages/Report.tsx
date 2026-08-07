@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router";
 import { type Components } from "react-markdown";
 import {
   get,
@@ -13,7 +13,7 @@ import Switch from "../components/Switch";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import StatusBadge from "../components/StatusBadge";
-import DoiLink from "../components/DoiLink";
+import ReferenceList, { SCROLL_TARGET_CLASS } from "../components/ReferenceList";
 import StatsPanel from "../components/StatsPanel";
 import MetricTable from "../components/MetricTable";
 import CountryBar from "../components/CountryBar";
@@ -32,9 +32,6 @@ function countryQuery(country: string): string {
 function SectionDivider() {
   return <hr className="my-10 border-t border-border" />;
 }
-
-// scroll-mt-20 — 점프 대상(각주 ↔ 참고문헌)이 화면 맨 위에 딱 붙지 않게 여유를 둔다.
-const SCROLL_TARGET_CLASS = "scroll-mt-20";
 
 // report_md 각주 링크([\[1\]](#ref-1))에 "본문으로 돌아가기"용 id를 붙인다. 같은 논문이 여러
 // 번 인용될 수 있어 백엔드는 몇 번째가 "첫 인용"인지 추적하지 않으므로, md에서 그 번호가 처음
@@ -405,38 +402,11 @@ function References({ references }: { references: Reference[] }) {
             <Switch checked={open} onChange={toggle} label="목록 펼치기" />
           </span>
         </div>
-        <ol
-          className={`mt-4 space-y-2 text-sm text-ink-light print:block ${open ? "" : "hidden"}`}
-        >
-          {references.map((r) => (
-            <li key={r.n} id={`ref-${r.n}`} className={`flex gap-2 ${SCROLL_TARGET_CLASS}`}>
-              <span className="shrink-0 font-mono text-xs text-muted">
-                [{r.n}]{" "}
-                <a
-                  href={`#cite-${r.n}`}
-                  aria-label={`본문 ${r.n}번 인용 위치로 이동`}
-                  className="text-accent no-underline hover:underline print:hidden"
-                >
-                  ↑
-                </a>
-              </span>
-              <span>
-                {r.title}
-                {(r.journal || r.year) && (
-                  <span className="text-muted"> — {[r.journal, r.year].filter(Boolean).join(", ")}</span>
-                )}
-                {r.doi && (
-                  <>
-                    {" "}
-                    <DoiLink doi={r.doi} className="break-all">
-                      doi.org/{r.doi}
-                    </DoiLink>
-                  </>
-                )}
-              </span>
-            </li>
-          ))}
-        </ol>
+        <ReferenceList
+          references={references}
+          backlink
+          className={`mt-4 print:block ${open ? "" : "hidden"}`}
+        />
       </section>
     </>
   );
