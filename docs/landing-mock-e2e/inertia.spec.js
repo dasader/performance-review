@@ -97,9 +97,15 @@ test("상단 바로 소개를 건너뛰고 대시보드로 들어갈 수 있다"
 });
 
 test("모션 최소화 설정에서는 감쇠가 없다", async ({ browser }) => {
-  const page = await browser.newPage({ reducedMotion: "reduce" });
+  // browser.newPage 는 config 의 baseURL 을 물려받지 않는다 — 직접 넘겨야
+  // run.sh 가 준 대상(E2E_BASE_URL)을 따라간다. 주소를 박아 두면 다른 대상에
+  // 물렸을 때 이 케이스만 조용히 옛 서버를 때린다.
+  const page = await browser.newPage({
+    reducedMotion: "reduce",
+    baseURL: process.env.E2E_BASE_URL,
+  });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("http://localhost:8925/landing-mock.html");
+  await page.goto("/landing-mock.html");
   await wait(page, 500);
   await gotoAct(page, "read", 0.55);
 
