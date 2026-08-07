@@ -107,7 +107,7 @@ export default function StatsPanel({ stats }: { stats: Stats | Record<string, ne
             </div>
           </div>
           {/* 차트의 텍스트 대안. 스크린리더가 읽을 수 있고, 인쇄 시에도 그대로 보여 유용하다. */}
-          <table className="mt-3 w-full max-w-xs border-collapse text-xs">
+          <table className="tbl-report mt-3 w-full max-w-xs border-collapse text-xs">
             <caption className="sr-only">연도별 검색 논문 수 (표)</caption>
             <thead className="tbl-head">
               <tr className="border-b border-border-light">
@@ -118,8 +118,8 @@ export default function StatsPanel({ stats }: { stats: Stats | Record<string, ne
             <tbody>
               {byYear.map((d) => (
                 <tr key={d.year} className="border-b border-border-light">
-                  <td className="py-1 text-ink-light">{d.year}</td>
-                  <td className="py-1 text-right tabular-nums text-muted">
+                  <td className="text-ink-light">{d.year}</td>
+                  <td className="text-right tabular-nums text-muted">
                     {d.count.toLocaleString()}
                   </td>
                 </tr>
@@ -147,7 +147,7 @@ export default function StatsPanel({ stats }: { stats: Stats | Record<string, ne
       {stats.top_cited.length > 0 && (
         <div className="avoid-break table-scroll">
           <h3 className="mb-2 text-sm font-bold text-ink">최다 피인용 논문</h3>
-          <table className="w-full border-collapse text-sm">
+          <table className="tbl-report w-full border-collapse text-sm">
             <thead className="tbl-head">
               <tr className="border-b border-border">
                 <th>제목</th>
@@ -159,18 +159,18 @@ export default function StatsPanel({ stats }: { stats: Stats | Record<string, ne
             <tbody>
               {stats.top_cited.map((p, i) => (
                 <tr key={`${p.title}-${i}`} className="border-b border-border-light align-top">
-                  <td className="max-w-xs py-2 pr-3">
+                  <td className="max-w-xs pr-3">
                     {p.doi ? (
                       <DoiLink doi={p.doi}>{p.title}</DoiLink>
                     ) : (
                       p.title
                     )}
                   </td>
-                  <td className="whitespace-nowrap py-2 pr-3 font-mono text-xs text-muted">
+                  <td className="whitespace-nowrap pr-3 font-mono text-xs text-muted">
                     {p.year ?? <span className="text-muted">—</span>}
                   </td>
-                  <td className="py-2 pr-3 text-xs text-muted">{p.journal ?? <span className="text-muted">—</span>}</td>
-                  <td className="whitespace-nowrap py-2 text-right text-xs tabular-nums text-ink-light">
+                  <td className="pr-3 text-xs text-muted">{p.journal ?? <span className="text-muted">—</span>}</td>
+                  <td className="whitespace-nowrap text-right text-xs tabular-nums text-ink-light">
                     {p.citations.toLocaleString()}
                   </td>
                 </tr>
@@ -232,12 +232,12 @@ function RankTable({ title, rows }: { title: string; rows: [string, number][] })
   return (
     <div className="avoid-break table-scroll">
       <h3 className="mb-2 text-sm font-bold text-ink">{title}</h3>
-      <table className="w-full border-collapse text-sm">
+      <table className="tbl-report w-full border-collapse text-sm">
         <tbody>
           {rows.slice(0, 10).map(([name, count]) => (
             <tr key={name} className="border-b border-border-light">
-              <td className="py-2 pr-3 text-ink-light">{name}</td>
-              <td className="py-2 text-right text-xs tabular-nums text-muted">
+              <td className="pr-3 text-ink-light">{name}</td>
+              <td className="text-right text-xs tabular-nums text-muted">
                 {count.toLocaleString()}
               </td>
             </tr>

@@ -11,6 +11,7 @@ import {
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import Prose from "../components/Prose";
+import ReferenceList from "../components/ReferenceList";
 import { useQueryFlag } from "../lib/hooks";
 import { formatGeneratedAt } from "../lib/format";
 import { stripLeadingH1 } from "../lib/reportMarkdown";
@@ -170,19 +171,17 @@ export default function FieldReportPage({ kind }: { kind: Kind }) {
                     {/* 본문의 [n] 각주가 가리키는 참고문헌. 세부기술별로 번호가 새로
                         시작하므로 각 보고서 바로 아래에 둔다(여러 세부기술을 한 페이지에
                         올리면 #ref-n 앵커는 겹치지만, 인쇄물에서 필요한 건 번호-제목
-                        대응이라 목록만 있으면 된다). */}
+                        대응이라 목록만 있으면 된다).
+                        목록 양식은 세부기술 보고서와 같은 ReferenceList를 쓴다 — 예전에는
+                        여기서 따로 조립해 글자 크기·구분자·DOI 링크가 전부 갈라져 있었다.
+                        제목만 화면이 붙인다: 세부기술명(h3) 아래라 Report의 h2를 쓸 수 없어
+                        본문 `###`(prose-h3)과 같은 크기로 맞춘다. */}
                     {s.references.length > 0 && (
-                      <div className="avoid-break mt-6 border-t border-border pt-4 text-xs text-muted">
-                        <p className="font-medium text-ink-light">참고문헌</p>
-                        <ol className="mt-2 space-y-1">
-                          {s.references.map((r) => (
-                            <li key={r.n} id={`ref-${r.n}`}>
-                              [{r.n}] {r.title}
-                              {r.journal && ` · ${r.journal}`}
-                              {r.year && ` (${r.year})`}
-                            </li>
-                          ))}
-                        </ol>
+                      <div className="avoid-break mt-6 border-t border-border pt-4">
+                        <h4 className="text-base font-bold text-ink">
+                          참고문헌 <span className="text-faint">{s.references.length}</span>
+                        </h4>
+                        <ReferenceList references={s.references} className="mt-2" />
                       </div>
                     )}
                   </div>

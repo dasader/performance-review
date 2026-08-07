@@ -53,7 +53,7 @@ export default function MetricTable({
           변환효율) 값이 튀면 여기서 확인합니다.
         </span>
       </p>
-      <table className="w-full border-collapse text-sm">
+      <table className="tbl-report w-full border-collapse text-sm">
         <thead>
           <tr className="tbl-head">
             <th>지표</th>
@@ -67,11 +67,11 @@ export default function MetricTable({
           {rows.map((m) => (
             <Fragment key={`${m.name}|${m.unit}`}>
             <tr className="border-b border-border-light">
-              <td className="py-2 pr-3 text-ink-light">
+              <td className="pr-3 text-ink-light">
                 {m.name}
                 {m.unit && <span className="text-muted"> ({m.unit})</span>}
               </td>
-              <td className="py-2 pr-3 text-right text-xs tabular-nums text-muted">
+              <td className="pr-3 text-right text-xs tabular-nums text-muted">
                 {/* 인쇄물에서는 누를 수 없으므로 숫자만 남긴다. */}
                 <button
                   type="button"
@@ -82,19 +82,21 @@ export default function MetricTable({
                   {m.count.toLocaleString()}
                 </button>
               </td>
-              <td className="py-2 pr-3 text-right tabular-nums text-muted">
+              <td className="pr-3 text-right tabular-nums text-muted">
                 {m.min.toLocaleString()}
               </td>
-              <td className="py-2 pr-3 text-right tabular-nums">
+              <td className="pr-3 text-right tabular-nums">
                 {m.median.toLocaleString()}
               </td>
-              <td className="py-2 pr-3 text-right tabular-nums text-muted">
+              <td className="pr-3 text-right tabular-nums text-muted">
                 {m.max.toLocaleString()}
               </td>
             </tr>
             {open === `${m.name}|${m.unit}` && (
               <tr className="border-b border-border-light print:hidden">
-                <td colSpan={5} className="py-2">
+                {/* 여백은 `.tbl-report td`(index.css)가 준다 — 여기서 py-*를 적어도
+                    그 규칙의 명시도(0,1,1)가 유틸리티(0,1,0)를 이겨 무시된다. */}
+                <td colSpan={5}>
                   {loading && <p className="text-xs text-muted">불러오는 중…</p>}
                   {papers && papers.length === 0 && (
                     <p className="text-xs text-muted">해당 논문을 찾지 못했습니다.</p>

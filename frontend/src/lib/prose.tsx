@@ -42,14 +42,16 @@ const PROSE_HEADING_CLASSES =
 // eyebrow, 세로 괘선은 긋지 않는다(열 정렬이 이미 열을 가른다), 행 구분은 hair.
 // 이 지정이 없으면 prose 기본값이 머리행을 그냥 굵은 글씨로만 두어, 같은 화면 안에서
 // 네이티브 표(세부기술별 분석 현황)와 마크다운 표가 서로 다른 모양이 된다.
+// 머리행 값은 네이티브 표의 `.tbl-head th`와 글자 하나까지 같아야 한다 — 세부기술
+// 보고서 한 화면에 마크다운 표와 네이티브 표가 나란히 놓인다. react-markdown이 만드는
+// <th>에는 클래스를 붙일 수 없어 그 계약을 재사용하지 못하고 여기 다시 적는다.
+// **데이터 행의 여백·행간은 여기 없다** — index.css의 `.report-prose td, .tbl-report td`
+// 한 규칙이 마크다운·네이티브 양쪽을 함께 잡는다(밀도를 바꿀 땐 거기만 고친다).
 const PROSE_TABLE_CLASSES =
   "prose-table:text-sm prose-thead:border-border " +
-  "prose-th:bg-sunken prose-th:px-3 prose-th:py-1 prose-th:text-eyebrow prose-th:font-bold " +
-  "prose-th:uppercase prose-th:tracking-[0.09em] prose-th:text-muted prose-th:leading-snug " +
-  // 표는 본문의 행간(leading-[1.85])을 물려받으면 안 된다. 그 값은 한국어 문단을
-  // 읽기 위한 것인데, 표는 눈이 세로로 훑는 물건이라 같은 행간이면 20행짜리 표가
-  // 화면 두 장으로 퍼져 한눈에 안 들어온다(사용자 지적). 셀 여백도 8px→4px.
-  "prose-td:px-3 prose-td:py-1 prose-td:align-top prose-td:leading-snug";
+  "prose-th:bg-sunken prose-th:px-3 prose-th:py-2 prose-th:text-eyebrow prose-th:font-bold " +
+  "prose-th:uppercase prose-th:tracking-[0.09em] prose-th:text-muted " +
+  "prose-td:px-3 prose-td:align-top";
 
 export const PROSE_CLASSES = `prose prose-neutral max-w-none leading-[1.85] ${PROSE_TABLE_CLASSES} ${PROSE_HEADING_CLASSES}`;
 
