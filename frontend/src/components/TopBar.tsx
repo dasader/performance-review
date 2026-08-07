@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router";
 
 // 모든 화면 위에 얇게 깔리는 브랜드 바. 인쇄 시에는 보고서 본문만 남기고 숨긴다.
 //

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { get, type Field } from "../api";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";

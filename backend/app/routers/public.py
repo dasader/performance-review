@@ -35,6 +35,25 @@ router = APIRouter(prefix="/api", tags=["public"])
 # 상수 하나로 고정한다.
 _KOREA = "KR"
 
+# 공개 응답에는 내부 예외 문자열을 싣지 않는다.
+#
+# runner·reducer·comparison은 실패를 `row.error = str(e)`로 남기는데(runner.py의
+# 네 갈래, reducer._process_report, comparison), 그 예외가 항상 우리가 만든 문장인
+# 것은 아니다 — Gemini SDK·psycopg2·httpx가 올리는 것이 그대로 실리면 내부 호스트명·
+# 파일 경로·설정값이 익명 방문자에게 나간다. 화면 셋(Report·ComparisonPage·
+# GeneratedReportSection)은 이미 자기 쪽에서 "분석이 실패했습니다" / "생성 실패:"를
+# 붙이므로 뒤에 붙을 한 문장이면 충분하다.
+#
+# **원문은 관리자 화면이 그대로 받는다**(admin 대시보드 격자·분야 보고서 탭) — 원인을
+# 봐야 하는 사람은 관리자이고, 그쪽은 인증 뒤에 있다. 운영에서 잃는 정보가 없다.
+_PUBLIC_ERROR = "처리 중 오류가 발생했습니다. 관리자에게 문의해 주세요."
+
+
+def _public_error(error: str | None) -> str | None:
+    """실패 사실만 남기고 내부 문자열은 버린다. 없던 실패를 만들지 않도록 None은 None."""
+    return _PUBLIC_ERROR if error else None
+
+
 # 인용 형식 두 가지를 함께 잡는다.
 #
 # ① 괄호 — 한 단계 중첩까지 허용한다: 인용문 안에 "TrioN (3N0C)"처럼 논문 제목 자체가
@@ -272,7 +291,7 @@ def _serialize(db: Session, analysis: Analysis) -> dict:
         "searched_count": analysis.searched_count,
         "analyzed_count": analysis.analyzed_count,
         "snapshot_at": analysis.snapshot_at.isoformat() if analysis.snapshot_at else None,
-        "error": analysis.error,
+        "error": _public_error(analysis.error),
     }
 
 
@@ -446,7 +465,7 @@ def field_report(field_id: int, year: int, db: Session = Depends(get_db)):
         # pending/failed도 그대로 내려준다 — 처음 생성 중이면 report_md는 빈 문자열,
         # 재생성 중이면 이전 본문이 담겨 있어 화면이 옛 보고서를 보여주며 폴링한다.
         "status": row.status,
-        "error": row.error,
+        "error": _public_error(row.error),
         "report_md": row.report_md,
         "source_count": row.source_count,
         "current_count": current,
@@ -476,7 +495,7 @@ def roadmap_check(field_id: int, year: int, db: Session = Depends(get_db)):
         "field_id": row.field_id,
         "year": row.year,
         "status": row.status,
-        "error": row.error,
+        "error": _public_error(row.error),
         "report_md": row.report_md,
         "source_count": row.source_count,
         "current_count": current,
@@ -602,7 +621,7 @@ def get_comparison(
         "countries": codes,
         "country_names": [country_name(c) for c in codes],
         "status": row.status,
-        "error": row.error,
+        "error": _public_error(row.error),
         "report_md": body,
         "source_count": len(codes),
         "generated_at": row.generated_at.isoformat() if row.generated_at else None,

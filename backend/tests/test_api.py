@@ -378,6 +378,30 @@ def test_delete_subfield_succeeds_without_analysis_history(client):
     db.close()
 
 
+def test_public_analysis_hides_internal_error_but_admin_sees_it(client):
+    """공개 응답은 실패 사실만, 관리자 격자는 원문 그대로.
+
+    runner는 실패를 `analysis.error = str(e)`로 남기는데 그 예외가 항상 우리가 만든
+    문장인 것은 아니다 — Gemini SDK·psycopg2·httpx가 올리는 것이 그대로 실리면 내부
+    호스트명·경로가 익명 방문자에게 나간다. 원인을 봐야 하는 사람은 관리자이고,
+    그쪽은 인증 뒤에 있으므로 원문을 그대로 받아야 한다.
+    """
+    leak = "psycopg2.OperationalError: could not connect to 10.0.0.7:5432 user=perfrev"
+    db = app.dependency_overrides[get_db]()
+    db.add(Analysis(subfield_id=1, year=2024, status="failed", query_hash="x", error=leak))
+    db.commit()
+    db.close()
+
+    public = client.get("/api/analyses/1").json()
+    assert leak not in str(public)
+    # 실패 사실 자체는 남아야 한다 — 화면이 이걸로 실패 배너를 띄운다.
+    assert public["status"] == "failed"
+    assert public["error"]
+
+    grid = client.get("/api/admin/dashboard", headers={"X-Admin-Key": settings.admin_key}).json()
+    assert leak in str(grid)
+
+
 # ── 개별 분석(보고서) 삭제 (DELETE /api/admin/analyses/{id}) ──
 
 def test_delete_analysis_requires_admin_key(client):
@@ -1031,7 +1055,13 @@ def test_field_report_failure_marks_failed_not_crash_loop(client, monkeypatch):
 
     got = client.get("/api/fields/1/report?year=2026").json()
     assert got["status"] == "failed"
-    assert "LLM 폭발" in got["error"]
+    # 원문은 관리자 쪽에서 확인한다 — 공개 응답은 실패 사실만 싣는다
+    # (test_public_analysis_hides_internal_error_but_admin_sees_it 참고).
+    assert "LLM 폭발" not in got["error"]
+    ov = client.get("/api/admin/field-reports?year=2026",
+                    headers={"X-Admin-Key": settings.admin_key}).json()
+    row = next(r for r in ov["rows"] if r["field_id"] == 1)
+    assert "LLM 폭발" in row["report"]["error"]
 
 
 def test_field_reports_overview_lists_status(client, monkeypatch):

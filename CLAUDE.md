@@ -52,6 +52,35 @@ docker compose exec api alembic revision --autogenerate -m "설명"
 `api` 8003 · `web` 8103 · `db` 5403. 레지스트리는 `../PORTS.md`.
 NN=00은 backend가 8000이 되어 nst-wiki와 충돌하므로 03을 배정했다.
 
+**`api`와 `db`는 `127.0.0.1`에만 바인딩된다** — 다른 기기에서 8003으로 붙지 않는 것이
+정상이다. 화면은 `web`(8103, 전 인터페이스)이 도커 네트워크로 `api:8000`에 프록시하므로
+그쪽 하나만 열려 있으면 된다. 8003·5403 매핑은 호스트 안에서의 디버깅용이다.
+
+## 보안 경계 — 되돌리기 쉬운 결정들
+
+셋 다 "고쳐 놓으면 다시 무너뜨리기 쉬운" 항목이라 여기 적어 둔다.
+
+- **관리자 키 비교는 `secrets.compare_digest`**(`deps.py`). 계정 체계도 시도 횟수 제한도
+  없어 이 키 하나가 과금 실행·삭제·스케줄 변경 전부를 연다 — `!=`로 되돌리면 첫 불일치
+  바이트에서 빠져나가 대입 공격에 앞자리부터 흘려준다. 양쪽을 **bytes로 인코딩해서**
+  넘긴다: `compare_digest`는 str을 받으면 ASCII만 허용해 비ASCII 헤더 한 글자에
+  TypeError(=500)를 낸다(`test_admin_rejects_non_ascii_key_without_crashing`).
+- **공개 API는 `error` 원문을 내려주지 않는다**(`public.py::_public_error`). `runner`·
+  `reducer`·`comparison`이 실패를 `row.error = str(e)`로 남기는데 그 예외가 늘 우리가 만든
+  문장인 것은 아니다 — Gemini SDK·psycopg2·httpx가 올리는 것이 그대로 실리면 내부 호스트명·
+  경로가 익명 방문자에게 나간다. 화면은 이미 자기 쪽에서 "분석이 실패했습니다"를 붙이고,
+  **원문은 관리자 응답이 그대로 받는다**(대시보드 격자·분야 보고서 탭). 디버깅에 잃는 것이
+  없으니 공개 쪽에 원문을 되살리지 말 것.
+- **nginx의 `X-Forwarded-For`는 `$remote_addr`**(`frontend/nginx.conf`). 흔히 쓰는
+  `$proxy_add_x_forwarded_for`는 **클라이언트가 보낸 값 뒤에** 실제 IP를 덧붙이는데
+  `main.py::_client_ip`는 첫 값을 쓴다 — 그대로 두면 방문자 해시의 입력을 요청자가 직접
+  정해 순방문자 수를 임의로 부풀릴 수 있다. 이 nginx 앞에 또 다른 리버스 프록시를 두게
+  되면 그때는 신뢰 프록시만 통과시키는 realip 모듈로 바꿔야 한다.
+
+같은 파일에 CSP·`limit_req`도 있다. CSP의 본체는 `script-src 'self'`이고, 폰트 두 출처
+(jsdelivr·Google Fonts)는 `index.html`이 실제로 부르는 곳이라 빼면 화면이 기본 폰트로
+떨어진다. 헤드리스 e2e의 "콘솔 에러 없음" 케이스가 CSP 위반을 잡아 준다.
+
 ## 프론트엔드 (React 19 + Vite + Tailwind + react-router)
 
 프론트엔드 디자인은 `/home/dev/code/web-design/DESIGN.md` 체계를 따른다.
@@ -73,6 +102,19 @@ NN=00은 backend가 8000이 되어 nst-wiki와 충돌하므로 03을 배정했�
 > 후자는 `src/**/*.html`을 찾는데 `—`가 `.tsx`에 있기 때문이다. **빌드된 CSS와 렌더된
 > DOM으로 재면 둘 다 PASS**다(실측 확인). 소스 기준 9/11이 정상이니 이 둘을 쫓아
 > 코드를 바꾸지 말 것.
+
+**라우터 패키지는 `react-router`다 — `react-router-dom`이 아니다.** v8부터 `-dom` 배포가
+끊겨(마지막이 7.18.2) 같은 API를 `react-router`에서 직접 가져온다. `-dom`에 머무르면
+`react-router` 7.x에 걸린 고위험 권고(GHSA-qwww-vcr4-c8h2)를 계속 안고 간다. 이관은
+import 경로만 바뀌었고(10개 파일) `BrowserRouter`·`Link`·`useParams`·`useSearchParams`·
+`useLocation` 전부 그대로다.
+
+**`npm test`(vitest)는 `src/**/*.test.ts`만 본다**(`vite.config.ts`의 `test.include`).
+기본 include는 저장소 전체를 훑어 `e2e/*.spec.js`까지 수집하는데, 그 스펙은
+`@playwright/test`를 import하고 그 패키지는 로컬에 깔지 않는다(도커 이미지 안에서만
+도는 스펙 — 루트 CLAUDE.md). 범위를 넓히면 `npm test`가 늘 "1 failed"로 끝나 진짜 실패를
+가린다. `defineConfig`를 `vitest/config`에서 가져오는 것도 이 블록 때문이다(`vite`의
+것은 `test` 키를 모르는 타입이라 `tsc -b`가 거부한다).
 
 라우트는 `src/App.tsx` 한 곳에 모여 있다. 공개 화면은 분야 목록(`/`) · 분야 상세
 (`/fields/:id`) · 분야 보고서 전용 페이지(`/fields/:id/report/:year`, `/roadmap-check/:year`) ·

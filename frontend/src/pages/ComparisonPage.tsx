@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router";
 import { getComparison, type Comparison } from "../api";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
