@@ -128,11 +128,9 @@ export default function ScheduleSection({
         </div>
         {data && (
           <div className="shrink-0 border border-border-light bg-paper px-4 py-2">
-            <p className="flex items-center justify-end gap-2 text-xs font-medium text-ink-light">
-              <span
-                aria-hidden="true"
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${data.enabled ? "bg-positive-mark" : "bg-border-strong"}`}
-              />
+            {/* 점을 찍지 않는다 — "켜짐"/"꺼짐"이라는 말이 이미 상태를 다 말한다.
+                lib/status.ts::STATUS_DOT_CLASS와 같은 규칙(점은 손을 대야 하는 상태에만). */}
+            <p className="text-right text-xs font-medium text-ink-light">
               자동 실행 {data.enabled ? "켜짐" : "꺼짐"}
             </p>
             <p className="mt-1 text-right text-xs tabular-nums text-muted">

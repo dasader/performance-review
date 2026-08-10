@@ -21,3 +21,21 @@ export const STATUS_LABEL: Record<string, string> = {
   failed: "실패",
   paused: "일시중지",
 };
+
+// StatusBadge가 찍는 점의 색. **사람이 손을 대야 하는 상태에만 찍는다** — 지금은
+// failed·paused 둘뿐이고, 색도 그 둘에서만 나온다(상태 4단의 경고/위험).
+// 정상은 칠하지 않는다(index.css가 .banner-ok를 두지 않은 것과 같은 규칙).
+//
+// done의 점을 먼저 걷어냈고(f1a8ac6), 대기·진행 중(pending·searching·extracting·
+// reducing)도 같은 이유로 걷어냈다: 이 넷은 잡 루프가 알아서 넘기는 정상 경로라
+// 눈길을 끌 이유가 없는데, 체크박스가 이미 붙어 있는 관리자 격자에서 무채색 점이
+// 하나 더 붙으면 읽는 사람이 "무슨 표시지" 하고 한 번 멈춘다. 라벨("논문 검색 중")이
+// 이미 진행 중임을 다 말하므로 점이 더하는 정보는 0이다.
+// 점이 보이면 볼 것이 있다는 뜻이어야 한다 — statusDot.test.ts가 이를 고정한다.
+//
+// 컴포넌트가 아니라 여기 두는 이유: 상수를 .tsx에서 export하면 fast refresh가 깨진다
+// (oxlint react/only-export-components). 상태 어휘는 어차피 이 잎사귀 파일이 단일 출처다.
+export const STATUS_DOT_CLASS: Record<string, string> = {
+  failed: "bg-danger-mark",
+  paused: "bg-warning-mark",
+};
