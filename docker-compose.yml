@@ -1,6 +1,13 @@
 services:
   db:
     image: postgres:16-alpine
+    # 호스트 재부팅 후 스택이 자동으로 돌아오게 한다. 이게 없어 2026-08-08 재부팅
+    # 이후 3개 컨테이너가 이틀간 내려가 있었고, 그 사이 8/10 월간 자동 분석이
+    # 통째로 건너뛰어졌다(scheduled_runs에 2026-08 행 없음). 잡 루프가 스케줄
+    # 시각에 살아 있는 것이 전제인 서비스라 정지가 곧 기능 상실이다.
+    # `no`가 아니라 `unless-stopped`인 이유: 관리자가 의도적으로 내린 상태
+    # (docker compose stop)는 재부팅 후에도 유지돼야 한다.
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-perfrev}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-perfrev}
@@ -19,6 +26,7 @@ services:
 
   api:
     build: ./backend
+    restart: unless-stopped
     env_file: .env
     ports:
       # 이 매핑은 디버깅용일 뿐이다 — 화면은 web(nginx)이 도커 네트워크로 api:8000에
@@ -31,6 +39,7 @@ services:
 
   web:
     build: ./frontend
+    restart: unless-stopped
     ports:
       - "${WEB_PORT:-8103}:80"
     depends_on:
