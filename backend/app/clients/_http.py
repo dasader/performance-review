@@ -78,6 +78,24 @@ async def get_with_retry(
             await asyncio.sleep(delay)
             continue
 
+        if response.status_code >= 500 and attempt < max_attempts - 1:
+            # 5xx는 서버 쪽 일시 장애다 — 429·연결 실패와 같은 백오프에 합류시킨다.
+            # 실측(2026-08-24 00:00 UTC): OpenAlex가 504를 한 번 돌려주자 분석 9건이
+            # search_attempts=0인 채 곧바로 failed로 확정됐다. RuntimeError는
+            # advance()의 포괄 except Exception에 잡혀 즉시 failed가 되고, failed는
+            # paused와 달리 resume_paused가 되살리지 않아 스스로 복구되지 않는다.
+            # 같은 검색식을 직후에 다시 부르면 200(2,054건)이 나오는 순수 장애였다.
+            #
+            # 4xx는 여기 오지 않는다 — 잘못된 검색식·만료된 키를 다섯 번 재과금할
+            # 뿐이고(OpenAlex는 요청 건당 과금), 재시도해도 답이 바뀌지 않는다.
+            delay = 2 ** attempt
+            logger.warning(
+                "%s %d (%d/%d), %.1fs 후 재시도: %s",
+                service_name, response.status_code, attempt + 1, max_attempts, delay, context,
+            )
+            await asyncio.sleep(delay)
+            continue
+
         if response.status_code >= 400:
             raise RuntimeError(f"{service_name} 오류 {response.status_code}: {context}")
         return response

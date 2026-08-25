@@ -474,3 +474,32 @@ def test_tolerance_only_values_are_excluded():
     실측 42건. 되돌리려면 허용 문자에 ±를 넣으면 된다."""
     assert stats._metric_value("±0.15") is None
     assert stats._metric_value("± 10") is None
+
+
+def test_out_of_range_exponent_is_dropped_instead_of_crashing():
+    """float 범위 밖의 지수는 값이 아니라 오독으로 처리한다.
+
+    실측(2026-08-23, 데이터·AI 보안 CN 2026): 어느 논문의 추출값 "10^216742"
+    하나가 10.0 ** 216742에서 OverflowError를 내 stats.compute →
+    runner._do_reduce가 통째로 죽고, 검색 4,321건짜리 분석이 failed로 끝났다.
+    추출 캐시(paper_extractions)에 남는 값이라 재실행해도 같은 자리에서 다시 죽는다.
+
+    지수 표기 두 분기(10^N, N × 10^M)가 모두 같은 상한을 봐야 한다.
+    """
+    assert stats._metric_value("10^216742") is None
+    assert stats._metric_value("2 x 10^400") is None
+    # 정상 범위는 그대로 읽는다.
+    assert stats._metric_value("10^113") == 1e113
+    assert stats._metric_value("7.812 × 10^109") == 7.812e109
+    assert stats._metric_value("1.77 x 10^-105") == 1.77e-105
+
+
+def test_out_of_range_exponent_counts_as_unparsed_not_as_a_crash():
+    """집계는 계속되고, 못 읽은 값은 분모에만 남는다."""
+    ext = [_e("a", [
+        {"name": "암호화 용량", "value": "10^216742", "unit": ""},
+        {"name": "암호화 용량", "value": "12.5", "unit": ""},
+    ])]
+    agg = stats.aggregate_metrics(ext)
+    assert agg["metrics_total"] == 2
+    assert agg["metrics_parsed"] == 1

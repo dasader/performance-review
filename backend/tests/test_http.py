@@ -137,3 +137,55 @@ async def test_timeout_is_retried_and_reported_as_timeout(monkeypatch):
         await get_with_retry("http://x", client=client, service_name="OpenAlex",
                              max_attempts=2)
     assert client.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_transient_5xx_is_retried(monkeypatch):
+    """5xx는 서버 쪽 일시 장애다 — 429·연결 실패와 같은 백오프에 합류시킨다.
+
+    실측(2026-08-24 00:00 UTC): OpenAlex가 504를 한 번 돌려주자 분석 9건이
+    search_attempts=0인 채 곧바로 failed로 확정됐다. 같은 검색식을 직후에 다시
+    호출하면 200(2,054건)이 나오는, 순수한 게이트웨이 일시 장애였다.
+    failed는 resume_paused가 되살리지 않으므로 스스로 복구되지 않는다.
+    """
+    slept = []
+
+    async def fake_sleep(delay):
+        slept.append(delay)
+
+    monkeypatch.setattr(_http.asyncio, "sleep", fake_sleep)
+    client = _Client([_Resp(504), _Resp(200)])
+
+    response = await get_with_retry("http://x", client=client, service_name="OpenAlex")
+    assert response.status_code == 200
+    assert client.calls == 2
+    assert slept == [1]
+
+
+@pytest.mark.asyncio
+async def test_5xx_fails_only_after_exhausting_retries(monkeypatch):
+    async def fake_sleep(delay):
+        pass
+
+    monkeypatch.setattr(_http.asyncio, "sleep", fake_sleep)
+    client = _Client([_Resp(502)] * 3)
+
+    with pytest.raises(RuntimeError, match="오류 502"):
+        await get_with_retry("http://x", client=client, service_name="OpenAlex",
+                             max_attempts=3)
+    assert client.calls == 3
+
+
+@pytest.mark.asyncio
+async def test_4xx_still_fails_immediately(monkeypatch):
+    """4xx는 재시도하면 안 된다 — 잘못된 검색식을 다섯 번 재과금할 뿐이다
+    (OpenAlex는 요청 건당 과금한다)."""
+    async def fake_sleep(delay):
+        raise AssertionError("4xx에서 자면 안 된다")
+
+    monkeypatch.setattr(_http.asyncio, "sleep", fake_sleep)
+    client = _Client([_Resp(400)])
+
+    with pytest.raises(RuntimeError, match="오류 400"):
+        await get_with_retry("http://x", client=client, service_name="OpenAlex")
+    assert client.calls == 1
