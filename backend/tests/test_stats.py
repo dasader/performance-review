@@ -14,7 +14,7 @@ def _p(key, **kw):
 
 def test_counts_separate_searched_from_analyzed():
     papers = [_p("a"), _p("b", abstract=""), _p("c")]
-    ext = [PaperExtraction(paper_key="a", subfield_id=1, tech_summary="x", model_ver="m")]
+    ext = [PaperExtraction(paper_key="a", tech_summary="x", model_ver="m")]
     s = stats.compute(papers, ext, snapshot_at=datetime(2026, 7, 18))
     assert s["searched_count"] == 3
     assert s["no_abstract_count"] == 1
@@ -81,11 +81,11 @@ def test_citation_distribution_uses_median_and_p90():
 
 def test_achievement_type_distribution():
     ext = [
-        PaperExtraction(paper_key="a", subfield_id=1, tech_summary="x",
+        PaperExtraction(paper_key="a", tech_summary="x",
                         achievement_type="공정", model_ver="m"),
-        PaperExtraction(paper_key="b", subfield_id=1, tech_summary="y",
+        PaperExtraction(paper_key="b", tech_summary="y",
                         achievement_type="공정", model_ver="m"),
-        PaperExtraction(paper_key="c", subfield_id=1, tech_summary="z",
+        PaperExtraction(paper_key="c", tech_summary="z",
                         achievement_type="알고리즘", model_ver="m"),
     ]
     s = stats.compute([_p("a"), _p("b"), _p("c")], ext, snapshot_at=datetime(2026, 7, 18))
@@ -143,8 +143,8 @@ def test_missing_year_and_journal_counted():
     assert s["no_journal_count"] == 1
 
 
-def _e(key, metrics, subfield_id=1):
-    return PaperExtraction(paper_key=key, subfield_id=subfield_id, tech_summary="x",
+def _e(key, metrics):
+    return PaperExtraction(paper_key=key, tech_summary="x",
                            model_ver="m", metrics_json=metrics)
 
 
@@ -236,9 +236,9 @@ def test_aggregate_metrics_tolerates_malformed_rows():
 def test_compute_includes_metric_aggregate():
     papers = [_p("a"), _p("b")]
     ext = [
-        PaperExtraction(paper_key="a", subfield_id=1, tech_summary="x", model_ver="m",
+        PaperExtraction(paper_key="a", tech_summary="x", model_ver="m",
                         metrics_json=[{"name": "효율", "value": "10", "unit": "%"}]),
-        PaperExtraction(paper_key="b", subfield_id=1, tech_summary="y", model_ver="m",
+        PaperExtraction(paper_key="b", tech_summary="y", model_ver="m",
                         metrics_json=[{"name": "효율", "value": "30", "unit": "%"}]),
     ]
     s = stats.compute(papers, ext, snapshot_at=datetime(2026, 8, 1))

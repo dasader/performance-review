@@ -258,3 +258,36 @@ def test_generate_uses_the_reduce_model(monkeypatch):
 
     assert asyncio.run(gemini_sync.generate("sys", "user", thinking="high")) == "ok"
     assert seen["model"] == "gemini-3.6-flash"
+
+
+def test_reduce_calls_use_the_flex_service_tier(monkeypatch):
+    """보고서 합성은 Flex 티어로 나가야 한다 — 표준가의 절반이다.
+
+    reduce·rollup·로드맵 점검·국가 비교는 전부 잡 루프가 30초 틱으로 돌리고 화면은
+    폴링하므로, Flex의 대가(혼잡 시 큐잉)가 UX에 드러나지 않는다. 실측(2026-08-25,
+    gemini-3.1-flash-lite): 표준 $0.25/$1.50 → Flex $0.125/$0.75.
+    이 한 줄이 빠지면 조용히 두 배를 낸다.
+    """
+    from google.genai import types
+
+    from app.clients import gemini_sync
+
+    captured = {}
+
+    class _FakeModels:
+        def generate_content(self, *, model, contents, config):
+            captured["config"] = config
+
+            class _R:
+                text = "본문"
+
+            return _R()
+
+    class _FakeClient:
+        models = _FakeModels()
+
+    monkeypatch.setattr(gemini_sync, "_get_client", lambda: _FakeClient())
+
+    asyncio.run(gemini_sync.generate("지시", "입력", thinking="high"))
+
+    assert captured["config"].service_tier == types.ServiceTier.FLEX

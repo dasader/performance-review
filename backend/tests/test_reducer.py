@@ -28,7 +28,7 @@ class _FakeGenerate:
 
 
 def _ext(key, atype, approach="", improvement=""):
-    return PaperExtraction(paper_key=key, subfield_id=1, tech_summary=f"{key} 성과",
+    return PaperExtraction(paper_key=key, tech_summary=f"{key} 성과",
                            achievement_type=atype, metrics_json=[], model_ver="m",
                            approach=approach, improvement=improvement)
 
