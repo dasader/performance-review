@@ -131,12 +131,12 @@ async def test_extract_attempts_resets_when_progress_is_made(ctx, monkeypatch):
     # 정상적으로 추출이 진행된 상황을 흉내낸다.
     calls = {"n": 0}
 
-    def fake_pending(db, analysis, papers):
+    def fake_pending(db, papers):
         calls["n"] += 1
         return [] if calls["n"] > 1 else [p]
 
     monkeypatch.setattr(runner.mapper, "pending_papers", fake_pending)
-    monkeypatch.setattr(runner.mapper, "save_results", lambda db, a, results: 1)
+    monkeypatch.setattr(runner.mapper, "save_results", lambda db, results: 1)
     monkeypatch.setattr(runner.gemini_batch, "poll", lambda job_id: ("succeeded", []))
 
     await runner.advance(db, a)
@@ -169,12 +169,12 @@ async def test_extracted_this_run_accumulates_across_multiple_batches(ctx, monke
     # 청크 1: before=[p1,p2](2건), 저장 후 still_pending=[p2](1건) — p1만 이번에 저장됨.
     calls = {"n": 0}
 
-    def fake_pending_chunk1(db, analysis, papers):
+    def fake_pending_chunk1(db, papers):
         calls["n"] += 1
         return [p1, p2] if calls["n"] == 1 else [p2]
 
     monkeypatch.setattr(runner.mapper, "pending_papers", fake_pending_chunk1)
-    monkeypatch.setattr(runner.mapper, "save_results", lambda db, a, results: 1)
+    monkeypatch.setattr(runner.mapper, "save_results", lambda db, results: 1)
 
     await runner.advance(db, a)
     db.refresh(a)
@@ -191,12 +191,12 @@ async def test_extracted_this_run_accumulates_across_multiple_batches(ctx, monke
     # 청크 2: before=[p2](1건), 저장 후 still_pending=[](0건) — 이제 다 끝남.
     calls2 = {"n": 0}
 
-    def fake_pending_chunk2(db, analysis, papers):
+    def fake_pending_chunk2(db, papers):
         calls2["n"] += 1
         return [p2] if calls2["n"] == 1 else []
 
     monkeypatch.setattr(runner.mapper, "pending_papers", fake_pending_chunk2)
-    monkeypatch.setattr(runner.mapper, "save_results", lambda db, a, results: 1)
+    monkeypatch.setattr(runner.mapper, "save_results", lambda db, results: 1)
 
     await runner.advance(db, a)
     db.refresh(a)
@@ -219,8 +219,8 @@ async def test_extract_attempts_fails_after_max_when_no_progress(ctx, monkeypatc
     db.commit()
 
     # pending_papers는 항상 같은 논문을 반환 — 저장해도 줄지 않는 상황(파싱 실패) 흉내.
-    monkeypatch.setattr(runner.mapper, "pending_papers", lambda db, a, papers: [p])
-    monkeypatch.setattr(runner.mapper, "save_results", lambda db, a, results: 0)
+    monkeypatch.setattr(runner.mapper, "pending_papers", lambda db, papers: [p])
+    monkeypatch.setattr(runner.mapper, "save_results", lambda db, results: 0)
     monkeypatch.setattr(runner.gemini_batch, "poll", lambda job_id: ("succeeded", []))
 
     for i in range(settings.max_extract_attempts):
@@ -477,7 +477,7 @@ def _link_extracted_paper(db, a, sf, key, *, model_ver=None):
     db.add(p)
     db.commit()
     db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
-    db.add(PaperExtraction(paper_key=key, subfield_id=sf.id, tech_summary="s",
+    db.add(PaperExtraction(paper_key=key, tech_summary="s",
                            model_ver=model_ver or runner.mapper.model_ver()))
     db.commit()
 

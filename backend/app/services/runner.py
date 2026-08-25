@@ -259,8 +259,8 @@ async def _do_extract(db: Session, analysis: Analysis) -> None:
             db.commit()
             return
 
-        before = len(mapper.pending_papers(db, analysis, _analysis_papers(db, analysis)))
-        saved = mapper.save_results(db, analysis, results or [])
+        before = len(mapper.pending_papers(db, _analysis_papers(db, analysis)))
+        saved = mapper.save_results(db, results or [])
         # save_results가 저장한 건 전부 mapper.pending_papers(캐시에 없는 논문)로만
         # 구성된 요청의 결과다 — 즉 saved는 "덮어쓴 총 행 수"가 아니라 "이번 실행에서
         # 실제로 LLM을 돌려 새로 얻은 결과 수"(비용이 발생한 건수)와 같다. 여러 청크에
@@ -273,7 +273,7 @@ async def _do_extract(db: Session, analysis: Analysis) -> None:
         # expire_on_commit=True(기본값)라, 저장 전에 실어둔 Paper 인스턴스를 재사용하면
         # 속성 접근마다 행 단위 refresh가 나간다 — 실측 1,128건 기준 SELECT 1,130회 대
         # 재조회 3회로, 아끼려던 쿼리보다 훨씬 크게 손해다.
-        still_pending = mapper.pending_papers(db, analysis, _analysis_papers(db, analysis))
+        still_pending = mapper.pending_papers(db, _analysis_papers(db, analysis))
         # poll()이 성공을 반환해도 개별 요청이 대량 파싱 실패했을 수 있다. 제출 시점의
         # 건수를 그대로 비교할 수 없으니(제출과 폴링 사이 시점 차) 저장 전후로 남은
         # pending 건수가 줄지 않았는지로 "진행이 없었다"를 감지한다 — 그래야 다음
@@ -309,7 +309,7 @@ async def _do_extract(db: Session, analysis: Analysis) -> None:
         return
 
     papers = _analysis_papers(db, analysis)
-    pending = mapper.pending_papers(db, analysis, papers)
+    pending = mapper.pending_papers(db, papers)
     if not pending:
         analysis.status = "reducing"
         db.commit()
@@ -342,7 +342,6 @@ async def _do_reduce(db: Session, analysis: Analysis) -> None:
     papers_by_key = {p.paper_key: p for p in papers}
     extractions = db.query(PaperExtraction).filter(
         PaperExtraction.paper_key.in_(list(papers_by_key)),
-        PaperExtraction.subfield_id == analysis.subfield_id,
         PaperExtraction.model_ver == mapper.model_ver(),
     ).all()
 

@@ -50,18 +50,12 @@ def test_uq_subfield_name_rejects_duplicate():
 
 
 def test_uq_extraction_rejects_duplicate():
+    """같은 (paper_key, model_ver)는 한 행뿐이다 — 세부기술은 키가 아니다(0021)."""
     db = _session()
-    f = Field(name="반도체·디스플레이", slug="semiconductor", order_no=1)
-    db.add(f)
-    db.flush()
-    sf = Subfield(field_id=f.id, name="HBM", query="HBM memory")
-    db.add(sf)
-    db.flush()
-
-    db.add(PaperExtraction(paper_key="paper-1", subfield_id=sf.id, model_ver="v1"))
+    db.add(PaperExtraction(paper_key="paper-1", model_ver="v1"))
     db.commit()
 
-    db.add(PaperExtraction(paper_key="paper-1", subfield_id=sf.id, model_ver="v1"))
+    db.add(PaperExtraction(paper_key="paper-1", model_ver="v1"))
     with pytest.raises(IntegrityError):
         db.commit()
     db.rollback()

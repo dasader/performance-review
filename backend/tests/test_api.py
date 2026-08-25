@@ -444,7 +444,7 @@ def test_delete_analysis_keeps_papers_and_extractions_deletes_links_and_runs(cli
     db.add(p)
     db.flush()
     db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
-    db.add(PaperExtraction(paper_key="k1", subfield_id=1, model_ver="m1"))
+    db.add(PaperExtraction(paper_key="k1", model_ver="m1"))
     db.add(AnalysisRun(analysis_id=a.id, ran_at=datetime.now(timezone.utc),
                         searched_count=1, analyzed_count=1, new_papers=1, trigger="manual"))
     db.commit()
@@ -1632,7 +1632,7 @@ def _seed_metric_drilldown(db, *, year=2031):
         db.flush()
         db.add(AnalysisPaper(analysis_id=a.id, paper_id=p.id))
         db.add(PaperExtraction(
-            paper_key=key, subfield_id=1, tech_summary="요약",
+            paper_key=key, tech_summary="요약",
             metrics_json=[{"name": "전력변환효율(PCE)", "value": value,
                            "unit": "%", "target": target}],
             model_ver=mapper.model_ver(),

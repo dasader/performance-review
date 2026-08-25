@@ -26,17 +26,16 @@ def test_pending_excludes_papers_without_abstract(ctx):
     db, a = ctx
     p1 = _paper(db, "k1", "있음")
     p2 = _paper(db, "k2", "")
-    pending = mapper.pending_papers(db, a, [p1, p2])
+    pending = mapper.pending_papers(db, [p1, p2])
     assert [p.paper_key for p in pending] == ["k1"]
 
 
 def test_pending_excludes_cache_hits(ctx):
     db, a = ctx
     p1 = _paper(db, "k1", "있음")
-    db.add(PaperExtraction(paper_key="k1", subfield_id=a.subfield_id,
-                           tech_summary="이미 있음", model_ver=mapper.model_ver()))
+    db.add(PaperExtraction(paper_key="k1", tech_summary="이미 있음", model_ver=mapper.model_ver()))
     db.commit()
-    assert mapper.pending_papers(db, a, [p1]) == []
+    assert mapper.pending_papers(db, [p1]) == []
 
 
 def test_model_ver_includes_extraction_schema_version(ctx):
@@ -49,22 +48,27 @@ def test_pending_reextracts_when_schema_version_differs(ctx, monkeypatch):
     db, a = ctx
     p1 = _paper(db, "k1", "있음")
     old_ver = f"{mapper.settings.gemini_model}/{mapper.settings.thinking_map}/v1"
-    db.add(PaperExtraction(paper_key="k1", subfield_id=a.subfield_id,
-                           tech_summary="옛 스키마 결과", model_ver=old_ver))
+    db.add(PaperExtraction(paper_key="k1", tech_summary="옛 스키마 결과", model_ver=old_ver))
     db.commit()
 
-    assert [p.paper_key for p in mapper.pending_papers(db, a, [p1])] == ["k1"]
+    assert [p.paper_key for p in mapper.pending_papers(db, [p1])] == ["k1"]
     # 옛 행은 지워지지 않고 남아 있어야 한다.
     assert db.query(PaperExtraction).filter(PaperExtraction.model_ver == old_ver).count() == 1
 
 
-def test_pending_ignores_extraction_from_another_subfield(ctx):
+def test_pending_reuses_extraction_from_another_subfield(ctx):
+    """다른 세부기술이 이미 추출해 둔 논문은 재추출하지 않는다.
+
+    추출 프롬프트에 세부기술이 없으므로(test_map_prompt_stays_subfield_independent가 고정) 같은
+    논문의 추출 결과는 세부기술과 무관하게 같은 값이다. 세부기술마다 다시 돌리면
+    같은 입력에 같은 일을 시키고 두 번 과금하는 것이다 — 실측 11%가 그랬다.
+    """
     db, a = ctx
     p1 = _paper(db, "k1", "있음")
-    db.add(PaperExtraction(paper_key="k1", subfield_id=999,
-                           tech_summary="다른 분야", model_ver=mapper.model_ver()))
+    db.add(PaperExtraction(paper_key="k1", tech_summary="다른 세부기술이 만든 결과",
+                           model_ver=mapper.model_ver()))
     db.commit()
-    assert [p.paper_key for p in mapper.pending_papers(db, a, [p1])] == ["k1"]
+    assert mapper.pending_papers(db, [p1]) == []
 
 
 def test_build_requests_carries_paper_key_as_the_request_key(ctx):
@@ -116,7 +120,7 @@ def test_estimate_tokens_korean_estimates_higher_than_ascii(ctx):
 def test_save_results_writes_extractions(ctx):
     db, a = ctx
     _paper(db, "k1", "있음")
-    saved = mapper.save_results(db, a, [
+    saved = mapper.save_results(db, [
         {"key": "k1", "tech_summary": "TSV 피치 개선", "achievement_type": "공정",
          "metrics": [{"name": "피치", "value": "20", "unit": "um"}],
          "approach": "저온 본딩 공정 적용", "improvement": "기존 대비 피치 절반 축소"},
@@ -135,7 +139,7 @@ def test_save_results_defaults_approach_and_improvement_to_empty_when_missing(ct
     빈 문자열로 채워져야 한다."""
     db, a = ctx
     _paper(db, "k1", "있음")
-    mapper.save_results(db, a, [
+    mapper.save_results(db, [
         {"key": "k1", "tech_summary": "A", "achievement_type": "공정", "metrics": []},
     ])
     row = db.query(PaperExtraction).one()
@@ -147,8 +151,8 @@ def test_save_results_is_idempotent(ctx):
     db, a = ctx
     _paper(db, "k1", "있음")
     payload = [{"key": "k1", "tech_summary": "A", "achievement_type": "공정", "metrics": []}]
-    mapper.save_results(db, a, payload)
-    mapper.save_results(db, a, payload)
+    mapper.save_results(db, payload)
+    mapper.save_results(db, payload)
     assert db.query(PaperExtraction).count() == 1
 
 
@@ -226,3 +230,30 @@ def test_extraction_schema_version_is_pinned():
     않았다 — 정리하려면 전량 재추출이 필요해 사용자 승인을 받아 올렸다."""
     from app.services.mapper import EXTRACTION_SCHEMA_VERSION
     assert EXTRACTION_SCHEMA_VERSION == 3
+
+
+def test_map_prompt_stays_subfield_independent():
+    """추출 프롬프트에 세부기술이 섞이면 안 된다 — 캐시 공유의 전제다.
+
+    uq_extraction이 (paper_key, model_ver)라 같은 논문의 추출 결과가 모든 세부기술에
+    재사용된다(migration 0021). 그 재사용이 옳으려면 추출 입력이 세부기술과 무관해야
+    한다. 여기서 세부기술명·검색식 같은 것을 프롬프트에 넣게 되면 캐시 키를 되돌려야
+    하고, 안 되돌리면 A의 관점으로 뽑은 결과를 B가 자기 것인 양 쓴다.
+    """
+    import inspect
+
+    from app import prompts
+
+    # 입력을 만드는 함수는 title·abstract 외의 것을 받지 않는다.
+    assert list(inspect.signature(prompts.map_user_text).parameters) == ["title", "abstract"]
+    assert prompts.map_user_text("제목", "초록") == "제목: 제목\n\n초록: 초록"
+
+    # 지시문도 세부기술을 언급하지 않는다.
+    assert "세부기술" not in prompts.MAP_INSTRUCTION
+
+    # build_requests가 만드는 요청 본문에도 논문 밖의 정보가 실리지 않는다.
+    class _P:
+        paper_key, title, abstract = "k", "제목", "초록"
+
+    req = mapper.build_requests([_P()])[0]["request"]
+    assert req["contents"][0]["parts"][0]["text"] == prompts.map_user_text("제목", "초록")

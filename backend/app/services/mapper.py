@@ -4,7 +4,6 @@ from google.genai import types
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models.analysis import Analysis
 from app.models.paper import Paper, PaperExtraction
 from app.prompts import MAP_INSTRUCTION, MAP_SCHEMA, map_user_text
 
@@ -22,8 +21,12 @@ def model_ver() -> str:
     return f"{settings.gemini_model}/{settings.thinking_map}/v{EXTRACTION_SCHEMA_VERSION}"
 
 
-def pending_papers(db: Session, analysis: Analysis, papers: list[Paper]) -> list[Paper]:
-    """abstract가 있고 아직 이 세부기술로 추출되지 않은 논문만 남긴다."""
+def pending_papers(db: Session, papers: list[Paper]) -> list[Paper]:
+    """abstract가 있고 아직 추출되지 않은 논문만 남긴다.
+
+    캐시는 세부기술을 가리지 않는다 — 추출 프롬프트에 세부기술이 없으므로 다른
+    세부기술이 이미 추출해 둔 논문은 그대로 재사용한다(PaperExtraction 주석 참고).
+    """
     with_abstract = [p for p in papers if p.abstract]
     if not with_abstract:
         return []
@@ -33,7 +36,6 @@ def pending_papers(db: Session, analysis: Analysis, papers: list[Paper]) -> list
         row.paper_key
         for row in db.query(PaperExtraction.paper_key).filter(
             PaperExtraction.paper_key.in_(keys),
-            PaperExtraction.subfield_id == analysis.subfield_id,
             PaperExtraction.model_ver == model_ver(),
         )
     }
@@ -146,8 +148,8 @@ def token_capped_chunk(papers: list[Paper], requests: list[dict]) -> list[dict]:
     return capped
 
 
-def save_results(db: Session, analysis: Analysis, results: list[dict]) -> int:
-    """추출 결과를 저장한다. 같은 (paper_key, subfield, model_ver)는 덮어쓴다."""
+def save_results(db: Session, results: list[dict]) -> int:
+    """추출 결과를 저장한다. 같은 (paper_key, model_ver)는 덮어쓴다."""
     # 결과 1건마다 SELECT를 날리면 703건 배치에서 703번 질의가 폴링 루프 한 틱 안에
     # 몰린다. 기존 행을 한 번에 읽어 사전으로 들고 쓴다. model_ver()도 행마다
     # 문자열을 다시 만들 이유가 없어 루프 밖으로 뺀다.
@@ -156,7 +158,6 @@ def save_results(db: Session, analysis: Analysis, results: list[dict]) -> int:
         row.paper_key: row
         for row in db.query(PaperExtraction).filter(
             PaperExtraction.paper_key.in_([item["key"] for item in results]),
-            PaperExtraction.subfield_id == analysis.subfield_id,
             PaperExtraction.model_ver == ver,
         )
     } if results else {}
@@ -165,11 +166,7 @@ def save_results(db: Session, analysis: Analysis, results: list[dict]) -> int:
     for item in results:
         row = existing.get(item["key"])
         if row is None:
-            row = PaperExtraction(
-                paper_key=item["key"],
-                subfield_id=analysis.subfield_id,
-                model_ver=ver,
-            )
+            row = PaperExtraction(paper_key=item["key"], model_ver=ver)
             db.add(row)
             # 사전에도 넣어둔다 — 같은 배치에 같은 key가 두 번 오면 두 번째는 이 행을
             # 다시 찾아 덮어쓴다. 넣지 않으면 둘 다 신규로 보고 중복 행을 만든다.

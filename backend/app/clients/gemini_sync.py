@@ -66,6 +66,13 @@ async def generate(system: str, user: str, *, thinking: str, max_retries: int = 
         system_instruction=system,
         thinking_config=types.ThinkingConfig(thinking_level=thinking),
         max_output_tokens=settings.gemini_max_output_tokens,
+        # Flex 티어는 batch와 같은 반값이면서 batch의 최대 24시간 대기가 없다
+        # (표준 $0.25/$1.50 → Flex $0.125/$0.75, gemini-3.1-flash-lite 기준).
+        # 대가는 혼잡할 때 큐에 들어갈 수 있다는 것인데, 이 함수의 호출부(reduce·
+        # rollup·로드맵 점검·국가 비교)는 전부 잡 루프가 30초 틱으로 돌리고 화면은
+        # 폴링하는 구조라 몇 초~몇십 초 지연이 UX에 드러나지 않는다.
+        # 큐잉이 실제로 길어지면 이 한 줄을 지워 표준 티어로 되돌린다.
+        service_tier=types.ServiceTier.FLEX,
     )
 
     def _call():

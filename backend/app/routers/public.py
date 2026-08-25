@@ -727,8 +727,9 @@ def metric_drilldown(analysis_id: int, name: str, unit: str = "", db: Session = 
 
     want = (stats._metric_key(name), unit.strip())
 
-    # 이 분석에 실제로 링크된 논문만 본다 — paper_extractions는 세부기술 단위 캐시라
-    # 다른 연도 논문까지 들어 있다.
+    # 이 분석에 실제로 링크된 논문만 본다 — paper_extractions는 세부기술·연도를
+    # 가리지 않는 전역 캐시라(0021) 다른 연도·다른 세부기술 논문까지 들어 있다.
+    # 범위를 좁히는 것은 아래 AnalysisPaper 조인 하나뿐이다.
     # 각주(_footnoted_report)와 같은 이유로 컬럼만 고른다 — 전체 ORM 행을 실으면
     # abstract(논문당 1~2KB)까지 딸려와 5,000건짜리 분석에서 수 MB를 헛읽는다.
     titles = {
@@ -740,7 +741,6 @@ def metric_drilldown(analysis_id: int, name: str, unit: str = "", db: Session = 
     extractions = (
         db.query(PaperExtraction)
         .filter(
-            PaperExtraction.subfield_id == analysis.subfield_id,
             PaperExtraction.model_ver == mapper.model_ver(),
             PaperExtraction.paper_key.in_(titles.keys()) if titles else False,
         )

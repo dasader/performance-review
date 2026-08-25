@@ -7,7 +7,7 @@
 
 ```bash
 # 스택 기동 — api 컨테이너 entrypoint(docker-entrypoint.sh)가 uvicorn 전에
-# alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0015
+# alembic upgrade head를 자동 실행한다(M15, 수동 실행 불필요). 현재 head: 0021
 # 프론트엔드는 web 컨테이너 안에서 빌드돼 nginx가 정적 파일로 서빙한다 —
 # frontend/를 고쳤으면 반드시 --build로 다시 올려야 화면에 반영된다.
 docker compose up -d --build
@@ -304,8 +304,10 @@ H1 제목(`# {이름} {연도}년 성과 분석 보고서`)을 고정하게 한�
 영문식이 쓰인다 — 키 갱신 후 국문 검색식을 채워야 국내지가 잡힌다.
 
 `0010`은 분야·세부기술이 전부 새 id를 받으므로 기존 분석·보고서와 `paper_extractions`를 함께
-지운다. **추출 캐시는 `subfield_id`에 묶여 있어**(`uq_extraction`) 세부기술을 교체하면 어차피
-히트하지 않는다 — `papers`(검색 캐시)만 보존된다.
+지웠다. 당시 추출 캐시가 `subfield_id`에 묶여 있어 세부기술을 교체하면 어차피 히트하지 않았기
+때문이다. **`0021` 이후로는 그렇지 않다** — 캐시 키에서 `subfield_id`가 빠져 세부기술 체계를
+다시 개정해도 추출 결과가 그대로 살아남는다. 앞으로 세부기술을 갈아엎는 마이그레이션을 쓸 때
+`paper_extractions`를 따라 지우지 말 것(그 자체가 LLM 비용이다).
 
 검색식을 고칠 때는 `0010`을 편집하지 말고 새 마이그레이션에서 UPDATE한다(`0011`이 차세대 고성능
 센싱을 1,051건 → 259건으로 좁힌 예). `test_strategic_tech_seed.py`가 개수·괄호 균형과
@@ -339,13 +341,58 @@ KCI는 *검색 소스*라 빠지면 모집단이 조용히 줄어 결과가 틀�
 | 단계 | 키 | 파일 |
 |---|---|---|
 | ① 검색 | `hash(query + year + source)` | `app/services/search.py::query_hash` |
-| ② 추출 | `papers.paper_key` + `model_ver` | `app/services/mapper.py::model_ver`, `PaperExtraction` |
+| ② 추출 | `papers.paper_key` + `model_ver` (**세부기술은 키가 아니다**, 아래) | `app/services/mapper.py::model_ver`, `PaperExtraction` |
 | ③ 보고서 | `analyses(subfield_id, year)` | `Analysis` 행 자체가 캐시 |
 
 **`model_ver`**(`f"{gemini_model}/{thinking_map}/v{EXTRACTION_SCHEMA_VERSION}"`)이 바뀌면 이전 추출
 캐시는 자동으로 무효화된다 — `paper_extractions` 조회가 항상 `model_ver == mapper.model_ver()`로
 필터링하기 때문에, 모델·thinking 레벨·추출 스키마 버전 중 하나만 바뀌어도 같은 논문이 재추출된다
 (신규 행으로 쌓이지 덮어쓰지 않는다).
+
+### 추출 캐시는 세부기술을 가리지 않는다 (`0021`)
+
+추출 프롬프트(`prompts.MAP_INSTRUCTION` + `map_user_text(title, abstract)`)에는 세부기술이
+**전혀 들어가지 않는다.** 그래서 같은 논문의 추출 결과는 어느 세부기술에서 만들었든 같은 값이고,
+세부기술마다 다시 돌리는 것은 같은 입력에 같은 일을 시키고 두 번 과금하는 것이다.
+실측(2026-08-25): 206,744행 중 **22,718행(11.0%)이 그 중복**이었다. 중복끼리 텍스트가 달랐던
+것은 LLM 샘플링이 비결정적이기 때문이지 세부기술을 반영해서가 아니다(동일 요약 0.1%).
+분야가 겹치는 논문이 많은 과거연도를 넣을수록 이 비율은 커진다.
+
+**추출 프롬프트에 세부기술을 넣게 되면 캐시 키를 되돌려야 한다** — 그때는 같은 논문의 결과가
+세부기술마다 달라지므로 공유하면 A의 관점으로 뽑은 결과를 B가 자기 것인 양 쓰게 된다.
+`test_mapper.py::test_map_prompt_stays_subfield_independent`가 그 전제(입력이 title·abstract뿐)를,
+`test_pending_reuses_extraction_from_another_subfield`가 현재 동작을 고정한다.
+
+세부기술 단위로 좁혀야 하는 곳은 `AnalysisPaper` 조인으로 좁힌다 — 캐시는 연도도 가리지 않으므로
+`public.py`의 지표 드릴다운이 그 패턴이다.
+
+### 보고서는 Flex 티어로 나간다 — 표준가의 절반
+
+`gemini_sync.generate`가 `service_tier=ServiceTier.FLEX`로 호출한다. Flex는 batch와 같은 반값
+($0.125/$0.75, 표준 $0.25/$1.50 대비)이면서 batch의 최대 24시간 대기가 없다. 대가는 혼잡할 때
+큐잉될 수 있다는 것인데, 이 함수의 호출부(reduce·rollup·로드맵 점검·국가 비교)는 전부 잡 루프가
+30초 틱으로 돌리고 화면은 폴링하는 구조라 몇 초~몇십 초 지연이 UX에 드러나지 않는다.
+**추출(batch)은 이미 batch 티어라 해당 없다.** 큐잉이 실제로 길어지면 그 한 줄을 지워 표준으로
+되돌린다 — `test_gemini_clients.py::test_reduce_calls_use_the_flex_service_tier`가 고정한다.
+
+### 비용 실측 (2026-08-25)
+
+추정하지 말고 이 값을 쓴다. `count_tokens`와 실제 호출 `usage_metadata`로 잰 것이다.
+
+| 항목 | 실측 |
+|---|---|
+| 추출 요청 1건 입력 | 952토큰 (지시문+스키마 약 607 + 논문 345) |
+| 추출 요청 1건 출력 | 365토큰 (가시 253 + thinking 112, `THINKING_MAP=low`) |
+| `THINKING_MAP=minimal`일 때 출력 | 218토큰 (thinking 0) — 과금 출력 −40% |
+| reduce 입력 | 논문당 193토큰 |
+| 추출 누적(206,744건) | 약 $81 — **출력이 70%**(출력 단가가 입력의 6배) |
+
+**`GEMINI_BATCH_*_USD_PER_1M`을 낮춰 적어 두지 말 것.** 운영 `.env`에 0.0375/0.15(실제의
+1/4)가 들어가 있어 비용을 4.3배 과소평가하고 있었다. 다만 이 값을 읽는
+`mapper.estimate_llm_cost_usd`는 **현재 호출부가 없다**(죽은 코드) — 게이트로 동작하지 않으므로
+실제 지출을 막지도 못했다. Gemini 토큰·비용은 **아무 데도 기록되지 않는다**(추적되는 것은
+OpenAlex뿐). 비용 판단이 다시 필요해지면 batch 결과와 sync 응답의 `usage_metadata`를
+`openalex_usage`처럼 누적하는 것이 먼저다.
 
 ### 보고서 모델은 추출 모델과 분리돼 있다 — `GEMINI_MODEL_REDUCE`
 
