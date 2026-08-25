@@ -71,8 +71,61 @@ DECISION_LIST_LINE = """- achievement_type: 아래 질문을 **순서대로** �
   "성능이 향상되었다"는 것은 성과유형이 아닙니다 — 무엇을 만들어서 향상시켰는지로
   고르고, 향상 내용 자체는 improvement에 적으세요."""
 
+# D·E — C에 남은 혼동을 겨냥한다. 실측(n=400, C의 자기불일치 35건)에서 남은 혼동은
+# **딥러닝·소프트웨어 논문에서 아키텍처/알고리즘/시스템구현 셋이 동시에 참**인 데서
+# 나왔다(아키텍처↔알고리즘 7, 시스템구현↔아키텍처 6, 시스템구현↔알고리즘 5 = 51%).
+# 흔들린 논문은 IEL-YOLO(YOLOv11 기반) · Siamese network framework ·
+# LLM-based Evaluation Agent 같은 것들이다. 이 코퍼스는 AI 논문 비중이 높아
+# (알고리즘+시스템구현+아키텍처 = 약 47%) 이 경계가 곧 최대 변동원이다.
+#
+# D: 경계에 판정 규칙을 넣는다(분류 체계는 그대로).
+# E: 아키텍처를 알고리즘에 흡수한다(체계를 줄인다).
+#    — 존재하지 않는 범주는 혼동될 수 없다. 대신 정보를 잃고, 알고리즘 그룹이
+#      코퍼스의 약 3분의 1이 되어 3단 reduce에서 그룹 재분할(미검증 경로)에 걸린다.
+DECISION_LIST_D = """- achievement_type: 아래 질문을 **순서대로** 묻고, 처음으로 "예"가
+  나오는 유형을 고르세요. **둘 이상에 해당하는 논문이 많습니다 — 그럴 때는 앞선 것이
+  이깁니다.** 뒤의 것이 더 어울려 보여도 순서를 지키세요.
+  1. 새로운 물질·조성·소재를 만들었나? → 신소재
+     (물질 자체가 새로운 경우. 알려진 물질을 새 방법으로 만든 것은 3번으로.)
+  2. 새로운 소자·디바이스를 만들었나? → 신소자
+  3. 제조·합성·가공·측정 방법을 개선했나? → 공정
+  4. 동작하는 시스템·플랫폼·장비를 구축해 실증했나? → 시스템구현
+     (여러 구성요소를 통합해 실제 환경에서 운용한 경우. 모델이나 알고리즘 하나를
+      구현해 성능을 평가한 것만으로는 여기에 해당하지 않습니다 — 6번으로.)
+  5. 모델·회로·네트워크의 **구조 자체**를 새로 설계했나? → 아키텍처
+     (새로운 층·블록·연결 방식·회로 토폴로지를 제안한 경우. 기존 구조
+      (YOLO·ResNet·Transformer 등)를 가져다 쓰거나 조합·미세조정한 것은 6번으로.)
+  6. 계산 절차·학습 방법·제어 방법을 제안했나? → 알고리즘
+     (기존 구조를 쓴 학습·최적화·전처리·앙상블·파이프라인도 여기입니다.)
+  7. 현상을 규명·해석했거나 이론·모형을 제시했나? → 이론/해석
+     (수학적 해석·시뮬레이션 분석·리뷰·서베이. 다만 새로운 방법을 제안했다면
+      6번이 우선입니다.)
+  8. 위 어디에도 맞지 않으면 → 기타
+  "성능이 향상되었다"는 것은 성과유형이 아닙니다 — 무엇을 만들어서 향상시켰는지로
+  고르고, 향상 내용 자체는 improvement에 적으세요."""
+
+DECISION_LIST_E = """- achievement_type: 아래 질문을 **순서대로** 묻고, 처음으로 "예"가
+  나오는 유형을 고르세요. **둘 이상에 해당하는 논문이 많습니다 — 그럴 때는 앞선 것이
+  이깁니다.** 뒤의 것이 더 어울려 보여도 순서를 지키세요.
+  1. 새로운 물질·조성·소재를 만들었나? → 신소재
+     (물질 자체가 새로운 경우. 알려진 물질을 새 방법으로 만든 것은 3번으로.)
+  2. 새로운 소자·디바이스를 만들었나? → 신소자
+  3. 제조·합성·가공·측정 방법을 개선했나? → 공정
+  4. 동작하는 시스템·플랫폼·장비를 구축해 실증했나? → 시스템구현
+     (여러 구성요소를 통합해 실제 환경에서 운용한 경우. 모델이나 알고리즘 하나를
+      구현해 성능을 평가한 것만으로는 여기에 해당하지 않습니다 — 5번으로.)
+  5. 계산 절차·모델 구조·학습 방법·제어 방법을 제안했나? → 알고리즘
+     (신경망 구조, 회로 토폴로지, 학습·최적화·전처리·앙상블 전부 여기입니다.)
+  6. 현상을 규명·해석했거나 이론·모형을 제시했나? → 이론/해석
+     (수학적 해석·시뮬레이션 분석·리뷰·서베이. 다만 새로운 방법을 제안했다면
+      5번이 우선입니다.)
+  7. 위 어디에도 맞지 않으면 → 기타
+  "성능이 향상되었다"는 것은 성과유형이 아닙니다 — 무엇을 만들어서 향상시켰는지로
+  고르고, 향상 내용 자체는 improvement에 적으세요."""
+
 TYPES_NO_PERF = [t for t in MAP_SCHEMA["properties"]["achievement_type"]["enum"]
                  if t != "성능향상"]
+TYPES_E = [t for t in TYPES_NO_PERF if t != "아키텍처"]
 
 
 def _schema(types_list: list[str]) -> dict:
@@ -90,6 +143,8 @@ VARIANTS = {
     "A_현행": (MAP_INSTRUCTION, MAP_SCHEMA),
     "B_성능향상제거": (_instruction(DROP_PERF_LINE), _schema(TYPES_NO_PERF)),
     "C_결정리스트": (_instruction(DECISION_LIST_LINE), _schema(TYPES_NO_PERF)),
+    "D_경계규칙": (_instruction(DECISION_LIST_D), _schema(TYPES_NO_PERF)),
+    "E_아키텍처흡수": (_instruction(DECISION_LIST_E), _schema(TYPES_E)),
 }
 
 
@@ -204,6 +259,8 @@ async def main() -> None:
     ap.add_argument("--out", default="bench/results/achievement-type-ab.json")
     ap.add_argument("--variants", default=None,
                     help="쉼표 구분. 예: A_현행,C_결정리스트 (표본을 키워 짝지은 검정을 할 때)")
+    ap.add_argument("--base", default="A_현행",
+                    help="짝지은 검정의 기준 변형. 후속 개선을 잴 때는 직전 채택안을 준다.")
     args = ap.parse_args()
 
     key = next(l.split("=", 1)[1].strip() for l in (REPO / ".env").read_text().splitlines()
@@ -247,22 +304,31 @@ async def main() -> None:
             "실패": sum(1 for x in p1 + p2 if "_err" in x),
             "1회차 분포": dict(dist.most_common()),
             "혼동 쌍 상위": [{"쌍": f"{a} ↔ {b}", "건수": c} for (a, b), c in conf.most_common(6)],
+            # 자기 자신과 어긋난 논문 — 다음 변형을 설계할 근거다. 혼동 "쌍"만 세면
+            # 어느 경계가 문제인지는 알아도 왜 그런지는 알 수 없다.
+            "자기불일치 표본": [
+                {"제목": p["title"][:130], "1회": x.get("achievement_type"),
+                 "2회": y.get("achievement_type")}
+                for p, x, y in zip(papers, p1, p2)
+                if x.get("achievement_type") and y.get("achievement_type")
+                and x["achievement_type"] != y["achievement_type"]
+            ][:40],
         }
         v = report["variants"][name]
         print(f"    → 자기 일치 {v['자기 일치']} = {v['자기 일치율']}  95%CI {lo}~{hi}\n", flush=True)
 
-    # 짝지은 검정 — 기준(A)과 나머지를 논문 단위로 비교한다.
-    base = "A_현행"
-    if base in agree_flags:
-        report["짝지은 검정(vs A_현행)"] = {
+    # 짝지은 검정 — 기준 변형과 나머지를 논문 단위로 비교한다.
+    base = args.base if args.base in agree_flags else chosen[0]
+    if len(chosen) > 1:
+        report[f"짝지은 검정(vs {base})"] = {
             name: mcnemar(agree_flags[base], agree_flags[name])
             for name in chosen if name != base
         }
         # 유형이 옮겨간 논문 — "일관성이 올랐다"가 "분류가 맞아졌다"는 아니므로
         # 사람이 눈으로 볼 표본을 남긴다.
-        report["A→변형 이동 표본"] = {
+        report[f"{base}→변형 이동 표본"] = {
             name: [
-                {"제목": p["title"][:110], "A": a, name: c}
+                {"제목": p["title"][:110], base: a, name: c}
                 for p, a, c in zip(papers, first_pass[base], first_pass[name])
                 if a and c and a != c
             ][:25]
