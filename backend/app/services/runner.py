@@ -125,8 +125,19 @@ def resume_paused(db: Session) -> None:
     자정이 지나면 별도 컬럼 없이도 이 값이 자연히 0으로 리셋된다 — 이를 재개
     신호로 쓴다. ACTIVE_STATES에는 paused를 넣지 않는다: advance()가 paused를
     전진시키면 안 되고, 재개는 이 함수가 전담한다.
+
+    한도를 아직 넘지 않았어도 **가장 싼 분석 한 건조차 못 치를 잔액이면 되돌리지
+    않는다.** 예전에는 `>= 한도`만 봤는데, 실측(2026-08-24) 사용액이 $0.4990/$0.50에서
+    멈추자 이 게이트를 계속 통과해 25건이 30초마다 paused→pending→paused를 오갔다
+    (로그 1,003회). 되돌아간 각 건은 check_budget보다 **먼저** 도는 count_only를
+    실제로 한 번씩 호출하는데, 게이트에 막히면 record_usage까지 가지 못해 그 비용이
+    기록조차 되지 않는다. 게다가 그렇게 쌓인 전량이 UTC 자정 리셋 순간 한꺼번에
+    OpenAlex로 쏟아진 것이 504 무더기(분석 9건 동시 failed)의 방아쇠였다.
     """
-    if spent_today(db) >= settings.openalex_daily_budget_usd:
+    # 분석 한 건의 하한: count 1콜 + 최소 1페이지. 실제 견적은 search.collect가
+    # 건수를 보고 다시 계산하므로, 여기서는 "0건은 아니다"만 보장하면 된다.
+    min_cost = 2 * settings.openalex_search_cost_usd
+    if spent_today(db) + min_cost > settings.openalex_daily_budget_usd:
         return
     paused = db.query(Analysis).filter(Analysis.status == "paused").all()
     for analysis in paused:

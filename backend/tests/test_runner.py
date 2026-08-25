@@ -91,6 +91,29 @@ def test_resume_paused_stays_paused_when_budget_exhausted(ctx):
     assert a.error == "msg"
 
 
+def test_resume_paused_stays_paused_when_remainder_cannot_fund_one_analysis(ctx):
+    """한도를 아직 넘지 않았어도 가장 싼 분석 한 건조차 못 치를 잔액이면 두지 않는다.
+
+    실측(2026-08-24): 사용액이 $0.4990/$0.50에서 멈추자 게이트(`>= 한도`)를 계속
+    통과해 25건이 30초마다 paused→pending→paused를 오갔다(로그 1,003회). 그 각각이
+    check_budget보다 먼저 도는 count_only를 실제로 한 번씩 호출하는데, 게이트에서
+    막히면 record_usage까지 못 가 그 비용이 기록되지도 않는다. 그리고 UTC 자정에
+    예산이 리셋되는 순간 그 25건이 한꺼번에 OpenAlex로 쏟아진 것이 504 무더기의
+    방아쇠였다.
+    """
+    db, sf = ctx
+    a = Analysis(subfield_id=sf.id, year=2025, status="paused", query_hash="h", error="msg")
+    db.add(a)
+    db.commit()
+    # 한도까지 $0.001 남았다 — count 1콜 + 최소 1페이지($0.002)에 못 미친다.
+    budget.record_usage(db, settings.openalex_daily_budget_usd - 0.001, None)
+
+    runner.resume_paused(db)
+    db.refresh(a)
+    assert a.status == "paused"
+    assert a.error == "msg"
+
+
 async def test_extract_attempts_resets_when_progress_is_made(ctx, monkeypatch):
     db, sf = ctx
     a = Analysis(subfield_id=sf.id, year=2025, status="extracting", query_hash="h",

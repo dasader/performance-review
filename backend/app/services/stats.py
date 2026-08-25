@@ -9,6 +9,7 @@ searched_count / analyzed_count / no_abstract_count를 모두 노출해 보고�
 "국내 단독"으로 오인하지 않도록 분모에서 제외한다.
 """
 
+import math
 import re
 import statistics
 from collections import Counter, defaultdict
@@ -79,6 +80,26 @@ _E_NOTATION_RE = re.compile(r"-?\d+(?:\.\d+)?[eE][-+]?\d+")
 # 수준을 잘못 말한다(실측 42건). 되돌리려면 이 문자열에 ±를 더하면 된다.
 _NUMERIC_START_RE = re.compile(r"^\s*(?:약\s*)?[-+~<>≤≥≈]?\s*(?:\d|\.\d)")
 
+# float 상한(~1.8e308)을 넘는 지수는 값이 아니라 오독이다.
+_MAX_EXP10 = 300
+
+
+def _exp10(mantissa: float, exp: int) -> float | None:
+    """mantissa × 10^exp. float 범위 밖이면 None — 집계에서 빠지되 분모에는 남는다.
+
+    LLM이 넣는 지수에는 자릿수 제한이 없다. 실측(2026-08-23, 데이터·AI 보안 CN 2026):
+    추출값 "10^216742" 하나가 10.0 ** 216742에서 OverflowError를 내
+    stats.compute → runner._do_reduce를 통째로 죽였고, 검색 4,321건짜리 분석이
+    failed로 끝났다. 그 값은 paper_extractions 캐시에 남으므로 재실행해도 같은
+    자리에서 다시 죽는다 — 예외를 삼키는 것이 아니라 값 자체를 거르는 이유다.
+
+    지수 표기 두 분기(10^N, N × 10^M)가 **모두** 이 함수를 통과해야 한다.
+    한쪽만 막으면 다른 쪽 표기 하나로 같은 사고가 그대로 재현된다.
+    """
+    if not -_MAX_EXP10 <= exp <= _MAX_EXP10:
+        return None
+    return mantissa * 10.0 ** exp
+
 
 def _metric_value(raw: object) -> float | None:
     """값 문자열에서 대표 숫자를 뽑는다. 숫자가 없거나 값이 숫자로 시작하지 않으면
@@ -99,20 +120,28 @@ def _metric_value(raw: object) -> float | None:
         return None
 
     # 지수 표기부터. 위치가 가장 앞선 것을 고른다.
-    candidates: list[tuple[int, float]] = []
+    # 범위를 벗어난 지수는 후보에서 빼는 것이 아니라 **None인 채로** 넣는다 —
+    # 그래야 아래 "앞의 수" 규칙이 그대로 돌면서도, 그 지수가 승자일 때 값 전체를
+    # 버릴 수 있다. 그냥 빼면 _NUM_RE가 "10^216742"의 앞 "10"을 집어 10.0을 값으로
+    # 삼는다: 터지지 않을 뿐, 분포를 조용히 망가뜨리는 더 나쁜 결과다.
+    candidates: list[tuple[int, float | None]] = []
     m = _MANTISSA_EXP_RE.search(text)
     if m:
-        candidates.append((m.start(), float(m.group(1)) * 10 ** int(m.group(2))))
+        candidates.append((m.start(), _exp10(float(m.group(1)), int(m.group(2)))))
     m = _POWER10_RE.search(text)
     if m:
-        candidates.append((m.start(), 10.0 ** int(m.group(1))))
+        candidates.append((m.start(), _exp10(1.0, int(m.group(1)))))
     m = _E_NOTATION_RE.search(text)
     if m:
-        candidates.append((m.start(), float(m.group(0))))
+        # float("1e999")는 예외가 아니라 inf를 준다. 그대로 두면 stats_json에 실려
+        # json.dumps가 표준이 아닌 Infinity를 뱉는다 — _exp10과 같은 이유로 버린다.
+        e_value = float(m.group(0))
+        candidates.append((m.start(), e_value if math.isfinite(e_value) else None))
 
     plain = _NUM_RE.search(text)
     if candidates:
-        start, value = min(candidates)
+        # 값에 None이 섞이므로 위치로만 비교한다(튜플 비교는 start가 같을 때 터진다).
+        start, value = min(candidates, key=lambda c: c[0])
         # 평범한 숫자가 더 앞에 있으면 그것이 답이다(위 docstring의 "앞의 수" 규칙).
         # 단 그 숫자가 지수 표기의 일부라면(2 × 10^6의 2) 지수 쪽이 맞다.
         if plain and plain.start() < start:
