@@ -1,0 +1,150 @@
+{
+  "model": "deepseek-v4-flash:preview-cloud",
+  "concurrency": 2,
+  "papers": 60,
+  "think_none": {
+    "요청": 60,
+    "성공": 60,
+    "스키마 준수": 57,
+    "총 소요(초)": 103.8,
+    "출력토큰 합": 17657,
+    "처리량(tok/s)": 170.1,
+    "논문/분": 34.7,
+    "건당 지연 중앙값(초)": 3.3,
+    "건당 입력토큰 평균": 1065,
+    "건당 출력토큰 평균": 294,
+    "thinking 문자 평균": 0,
+    "코드펜스로 감쌈": "50/60",
+    "껍데기 없이 순수 JSON": "7/60",
+    "한국어 비율 평균": 0.561,
+    "metrics 타입위반 논문": "16/57",
+    "metrics 타입위반 필드수": 43,
+    "빈 이름 지표를 채운 논문": "2/57",
+    "achievement_type enum 이탈": "0/57",
+    "vs Gemini 성과유형 일치": "31/57",
+    "vs Gemini 수치유무 일치": "51/57",
+    "vs Gemini 수치 자카드": 0.552,
+    "vs Gemini 요약 유사도": 0.213,
+    "low↔none 성과유형 일치": "36/53",
+    "low↔none 수치 자카드": 0.637,
+    "low↔none 요약 유사도": 0.306
+  },
+  "think_low": {
+    "요청": 60,
+    "성공": 60,
+    "스키마 준수": 56,
+    "총 소요(초)": 380.5,
+    "출력토큰 합": 81270,
+    "처리량(tok/s)": 213.6,
+    "논문/분": 9.5,
+    "건당 지연 중앙값(초)": 11.1,
+    "건당 입력토큰 평균": 1065,
+    "건당 출력토큰 평균": 1354,
+    "thinking 문자 평균": 2223,
+    "코드펜스로 감쌈": "9/60",
+    "껍데기 없이 순수 JSON": "47/60",
+    "한국어 비율 평균": 0.585,
+    "metrics 타입위반 논문": "16/56",
+    "metrics 타입위반 필드수": 43,
+    "빈 이름 지표를 채운 논문": "0/56",
+    "achievement_type enum 이탈": "0/56",
+    "vs Gemini 성과유형 일치": "32/56",
+    "vs Gemini 수치유무 일치": "52/56",
+    "vs Gemini 수치 자카드": 0.64,
+    "vs Gemini 요약 유사도": 0.229,
+    "low↔none 성과유형 일치": "36/53",
+    "low↔none 수치 자카드": 0.637,
+    "low↔none 요약 유사도": 0.306
+  },
+  "errors": [],
+  "samples": [
+    {
+      "title": "Modeling HIV infection, treatment, rebound, and intervention in human immune organoids",
+      "gemini": "인간 편도 또는 비장 세포를 활용한 HIV 감염 면역 오가노이드 모델을 구축하여 HIV 감염, 바이러스 통합, 치료제 반응 및 치료 중단 후 리바운드 현상을 재현하는 데 성공했다.",
+      "ollama_low": "인간 편도선 또는 비장 세포로 면역 오가노이드 모델을 구축하여 생산적인 HIV 감염 및 CD4+ T 세포로의 바이러스 통합을 입증하였고, 프로테아제 억제제로 바이러스 생산을 완전히 억제하고 중단 후 며칠 내에 바이러스 반등이 일어남을 확인하였으며, 건강한 동종 NK 세포 전달을 통해 감염 세포 수, 온전한 바이러스 게놈, 새로 생성된 감염성 바이러스 입자 생산을 감소시켰다.",
+      "ollama_none": "인간 편도 또는 비장 세포를 이용한 면역 오가노이드 모델을 구축하여 HIV 감염 및 CD4+ T 세포로의 바이러스 통합을 재현하고, 프로테아제 억제제 처리로 바이러스 생산을 완전히 억제한 후 치료 중단 시 수일 내에 바이러스 반등이 일어남을 확인했다. 또한, 건강한 동종 NK 세포를 치료 중단 시점에 투여하여 감염 세포 수, 온전한 바이러스 게놈, 새로 생성된 감염성 바이러스 입자 생산을 감소시켰다.",
+      "types": [
+        "시스템구현",
+        "시스템구현",
+        "시스템구현"
+      ]
+    },
+    {
+      "title": "Prompt-Native Semantic Runtimes for Language Models: Inference-Time Semantic Governance, Provenance, Compression, and Do",
+      "gemini": "언어 모델의 문맥 창에 로드되는 구조화된 문서를 통해 추론 시점의 의미론적 행동을 제어하는 '프롬프트 네이티브 의미 런타임(prompt-native semantic runtimes)'을 개발했습니다. 이를 통해 모델 외부의 제어 없이도 모델 내부에서 증거 처리, 불확실성 표시, 상태 추적 및 압축에 강건한 생성 작업을 수행할 수 있습니다.",
+      "ollama_low": "본 논문은 prompt-native semantic runtimes라는 새로운 개념을 도입하여, 모델의 컨텍스트 윈도우 내에서 구조화된 문서를 통해 의미적 행동(증거 처리, 불확실성 표시, 상태 추적, 탐색 로직, 압축-견고 생성)을 제어할 수 있는 체계를 제시하였다. 또한 Crimson Hexagonal Archive(300개 이상의 DOI-앵커 문서)와 Space Ark family를 구현하고, cross-substrate behavioral diagnostics 방법으로 7개 상용 LLM에서 재현 가능한 행동 시그니처를 생성하였다.",
+      "ollama_none": null,
+      "types": [
+        "아키텍처",
+        "아키텍처",
+        null
+      ]
+    },
+    {
+      "title": "Ultraviolet Imaging of SR 12 c with HST/WFC3: Accretion and Variability of a Giant Planet at the End Stages of Growth",
+      "gemini": "허블 우주 망원경(HST)의 WFC3 장비를 사용하여 행성급 동반 천체인 SR 12 c의 자외선 및 가시광선 영상을 획득하고, 이를 통해 해당 천체의 강착 광도와 질량 강착률을 도출하였다.",
+      "ollama_low": "SR 12 c의 HST/WFC3를 이용한 0.2–0.7 μm UV-through-red optical imaging을 통해 강한 accretion 관련 연속체 과잉과 Balmer jump를 확인하고, 총 accretion luminosity (1.65×10⁻⁵ L⊙)와 질량 유입률 (8×10⁻¹² M⊙/yr)을 측정하였다.",
+      "ollama_none": "SR 12 c의 UV-가시광 영역(0.2–0.7 μm) 이미징을 통해 5000 Å 이하의 강한 강착 관련 연속체 초과와 3646 Å의 발머 점프를 명확히 관측하였으며, 총 강착 광도 1.65 × 10⁻⁵ L⊙ 및 질량 강착률 8 × 10⁻¹² M⊙ yr⁻¹을 도출하였다. 또한, UV부터 서브밀리미터(0.2–880 μm)까지 망라하는 가장 완전한 스펙트럼 에너지 분포(SED) 중 하나를 구축하였다.",
+      "types": [
+        "시스템구현",
+        "기타",
+        "성능향상"
+      ]
+    },
+    {
+      "title": "A Decomposition and Reconstruction Based Hybrid Time Series Model for Short-Term Wind Power Forecasting",
+      "gemini": "풍력 발전의 단기 예측 정확도를 높이기 위해 시계열 데이터를 분해하고 재구성하는 하이브리드 예측 모델을 제안하였다.",
+      "ollama_low": "CEEMDAN 분해와 DTW 기반 K-means 클러스터링을 통해 풍력 시계열을 세 가지 유형의 성분으로 분류하고, 각각 SARIMA, LSTM, BiLSTM 모델로 예측하는 하이브리드 모델을 제안하여 단기 풍력 발전 예측 정확도를 향상시켰다.",
+      "ollama_none": "완전집합경험적모드분해(CEEMDAN)로 풍력 시계열을 여러 성분으로 분해하고, K-means 클러스터링으로 성분을 세 가지 유형으로 묶은 뒤 각각 SARIMA, LSTM, BiLSTM 모델로 예측하는 하이브리드 모델을 제안하여 단기 풍력 발전량 예측 성능을 향상시켰다.",
+      "types": [
+        "알고리즘",
+        "알고리즘",
+        "알고리즘"
+      ]
+    },
+    {
+      "title": "A Review of Obstacle Avoidance Path Planning Technologies for Intelligent Vehicles",
+      "gemini": "지능형 차량을 위한 장애물 회피 경로 계획 기술의 전반적인 아키텍처와 인식, 의사결정, 제어 모듈에 걸친 핵심 알고리즘 연구 동향을 체계적으로 분석하였다.",
+      "ollama_low": "이 논문은 지능형 차량의 장애물 회피 경로 계획 기술에 대한 체계적인 리뷰를 제공하였으며, 새로운 기술적 성과를 제시하지 않았다.",
+      "ollama_none": "자율주행 시스템의 장애물 회피 경로 계획 기술에 대해 인지-판단-제어 세부 모듈의 핵심 알고리즘과 전체 아키텍처를 체계적으로 리뷰하고, 각 모듈(다중 모달 융합, V2X 협업, 그래프 탐색/지능형 최적화 알고리즘, 결정론적/휴리스틱 통합 제어)의 연구 현황과 발전 방향을 종합 정리하였다.",
+      "types": [
+        "기타",
+        "기타",
+        "기타"
+      ]
+    },
+    {
+      "title": "Construction of an industrial digital twin platform for multi-robot arm collaborative control",
+      "gemini": "산업용 디지털 트윈 플랫폼을 구축하여 다중 로봇 팔의 협업 제어를 위한 심층 강화학습 기반의 가상-실제 통합 프레임워크를 구현했다. 이를 통해 시뮬레이션 환경에서 학습된 복잡한 협업 정책을 실제 로봇 시스템으로 성공적으로 이전하여 실시간 동기화와 적응형 작업을 가능하게 했다.",
+      "ollama_low": "제안된 산업용 디지털 트윈 플랫폼은 다중 로봇 암 협업 제어를 위해 고충실도 가상 시뮬레이션 환경과 물리적 로봇 시스템을 양방향으로 동기화하고, 다중 에이전트 강화학습(MARL) 훈련 프레임워크를 통합하여 협업 정책을 안전하고 비용 효율적으로 학습 및 최적화한 후 현실에 전이(Sim-to-Real)함으로써 과제 일반화 가능성을 입증하였다.",
+      "ollama_none": "다중 로봇(MARL) 협업 제어를 위한 산업용 디지털 트윈 플랫폼을 설계·구축하고, 강화학습 기반의 협업 제어 정책을 시뮬레이션에서 안전하게 학습한 후 실제 로봇으로 성공적으로 전이(sim-to-real transfer)하여 정밀한 협업 작업을 수행했다.",
+      "types": [
+        "시스템구현",
+        "시스템구현",
+        "시스템구현"
+      ]
+    },
+    {
+      "title": "CVH3D: A Multimodal Approach To Cross-View Image Geo-Localization With 3D Point Clouds",
+      "gemini": "3D 포인트 클라우드 데이터를 포함한 대규모 데이터셋 CVH3D와 전역적 하드 네거티브 마이닝(GHNM) 전략을 도입하여 지상-항공 뷰 간의 이미지 위치 추정 성능을 개선했다.",
+      "ollama_low": "CVH3D 데이터셋(108K개의 다중 모드 지리 태그가 부착된 triplets)을 구축하고, ratio 기반 Global Hard Negative Mining (GHNM) 전략을 제안하여 Ground view와 Aerial-3D 매칭의 top-1% recall rate를 80.21%로 달성했다.",
+      "ollama_none": "108K 규모의 지리 태깅된 다중 모달(지상·항공·3D 포인트 클라우드) 데이터셋(CVH3D)을 구축하고, 항공-3D 소스의 학습된 특징 유사도 기반 Global Hard Negative Mining(GHNM) 전략을 제안하여, 지상 영상과 항공·3D 정합에서 Top-1% 재현율을 69.97%에서 80.21%로 향상시켰다.",
+      "types": [
+        "시스템구현",
+        "알고리즘",
+        "성능향상"
+      ]
+    },
+    {
+      "title": "Personalized nutrition for healthy aging: precision diets based on genomic, metabolic, and microbiome profiles",
+      "gemini": "개인별 유전체, 대사체, 장내 미생물 프로파일을 통합적으로 활용하여 노년기 건강 증진을 위한 맞춤형 정밀 영양 전략을 제시하였다.",
+      "ollama_low": "오믹스 기술을 활용한 개인화된 영양 접근법의 개념, 기술적 기반, 임상 적용을 2020~2025년 증거를 중심으로 검토하고, 인공지능 및 실시간 모니터링 도구 등 미래 방향을 제시하였다.",
+      "ollama_none": "이 리뷰 논문은 개인의 유전체, 대사체, 마이크로바이옴 프로파일을 활용하여 맞춤형 식이 중재를 설계하는 정밀 영양학의 개념과 기술적 기반을 체계적으로 정리했다.",
+      "types": [
+        "기타",
+        "기타",
+        "기타"
+      ]
+    }
+  ]
+}
