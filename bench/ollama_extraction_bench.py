@@ -291,10 +291,16 @@ async def main():
     ap.add_argument("--n", type=int, default=40)
     ap.add_argument("--dsn", default="postgresql://perfrev:perfrev@localhost:5403/perfrev")
     ap.add_argument("--out", default="bench/results/ollama-latest.json")
+    # 모델을 .env가 아니라 인자로 받는다 — 여러 모델을 비교하려면 .env를 고쳐가며
+    # 돌릴 이유가 없고, 그러다 보면 어느 결과가 어느 모델이었는지 잃는다.
+    ap.add_argument("--model", default=None, help="기본값은 .env의 OLLAMA_MODEL")
+    ap.add_argument("--concurrency", type=int, default=None,
+                    help="기본값은 .env의 OLLAMA_CONCURRENCY. 계정 한도를 같이 쓰는 "
+                         "다른 서비스가 있으므로 올릴 때는 그쪽 몫을 남길 것")
     args = ap.parse_args()
 
-    model = env("OLLAMA_MODEL")
-    conc = int(env("OLLAMA_CONCURRENCY", "2"))
+    model = args.model or env("OLLAMA_MODEL")
+    conc = args.concurrency or int(env("OLLAMA_CONCURRENCY", "2"))
     papers = fetch_papers(args.n, args.dsn)
     print(f"모델 {model} · 동시 {conc} · 논문 {len(papers)}건\n", flush=True)
 
