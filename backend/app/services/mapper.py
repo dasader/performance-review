@@ -18,8 +18,13 @@ EXTRACTION_SCHEMA_VERSION = 3
 
 def model_ver() -> str:
     """모델·thinking 설정·추출 스키마 버전이 바뀌면 캐시를 무효화해야 하므로
-    버전 문자열에 함께 넣는다."""
-    return f"{settings.gemini_model}/{settings.thinking_map}/v{EXTRACTION_SCHEMA_VERSION}"
+    버전 문자열에 함께 넣는다.
+
+    settings.gemini_model이 아니라 settings.extract_model인 이유: LLM provider를
+    임시로 갈아끼웠을 때(2026-08 Ollama) 캐시 네임스페이스가 갈라져야 한다. 그러지
+    않으면 새 모델로 돌려도 옛 Gemini 추출이 캐시 히트해 재추출이 아예 일어나지 않고,
+    원복 시에는 반대로 Ollama 추출이 Gemini 것으로 오인된다."""
+    return f"{settings.extract_model}/{settings.thinking_map}/v{EXTRACTION_SCHEMA_VERSION}"
 
 
 def pending_papers(db: Session, analysis: Analysis, papers: list[Paper]) -> list[Paper]:

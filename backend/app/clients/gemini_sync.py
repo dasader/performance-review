@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from google import genai
 from google.genai import types
 
+from app.clients import ollama
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,11 @@ def _is_rate_limit(e: Exception) -> bool:
 
 async def generate(system: str, user: str, *, thinking: str, max_retries: int = 4) -> str:
     """단일 동기 생성 호출. RPM 버킷 통과 후 발사하고, 429는 지수 백오프."""
+    if settings.llm_provider == "ollama":
+        # 임시 LLM 교체(2026-08). 호출부(reducer·comparison)를 건드리지 않으려고
+        # 여기서 넘긴다 — 원복은 .env의 LLM_PROVIDER=gemini 한 줄.
+        return await ollama.generate(system, user, thinking=thinking)
+
     config = types.GenerateContentConfig(
         system_instruction=system,
         thinking_config=types.ThinkingConfig(thinking_level=thinking),

@@ -8,6 +8,7 @@ from google.genai import types
 
 # 클라이언트 지연 생성과 스레드풀은 gemini_sync가 이미 갖고 있다 — 같은 것을 두 벌
 # 두면 "키 없이도 컨테이너는 떠야 한다"는 불변식이 두 곳으로 갈라진다.
+from app.clients import ollama
 from app.clients.gemini_sync import _executor, _get_client
 from app.config import settings
 
@@ -58,6 +59,8 @@ async def submit_async(requests: list[dict], analysis_id: int | None = None) -> 
     """submit()의 async 래퍼(C4). submit()은 최대 1,000건 JSONL 업로드를 동기로
     하므로, async def 안에서 그냥 부르면 그동안 FastAPI 프로세스 전체(헬스체크,
     관리자 화면 등)가 멈춘다. gemini_sync.py가 이미 쓰는 스레드풀을 재사용한다."""
+    if settings.llm_provider == "ollama":
+        return await ollama.submit_async(requests, analysis_id)
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, submit, requests, analysis_id)
 
@@ -65,6 +68,8 @@ async def submit_async(requests: list[dict], analysis_id: int | None = None) -> 
 async def poll_async(job_name: str) -> tuple[str, list[dict] | None]:
     """poll()의 async 래퍼(C4) — 이유는 submit_async와 동일. poll()은 결과 파일
     전체 다운로드 + JSON 파싱을 동기로 한다."""
+    if settings.llm_provider == "ollama":
+        return await ollama.poll_async(job_name)
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, poll, job_name)
 

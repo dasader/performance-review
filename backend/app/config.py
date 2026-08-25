@@ -21,6 +21,26 @@ class Settings(BaseSettings):
     # 상한에 포함되어 과금/차감된다.
     gemini_max_output_tokens: int = 16000
 
+    # ── 임시 LLM 교체: Ollama Cloud (2026-08~, 약 1개월 뒤 gemini로 원복) ──
+    # "gemini" | "ollama". "ollama"면 추출(map)과 보고서 합성(reduce)이 모두
+    # app/clients/ollama.py로 나간다 — gemini_sync/gemini_batch가 첫 줄에서 넘긴다.
+    # 원복은 이 값을 "gemini"로 되돌리는 것으로 끝난다(코드 변경 불필요).
+    llm_provider: str = "gemini"
+    ollama_api_key: str = ""
+    ollama_model: str = "deepseek-v4-flash:0731"
+    ollama_base_url: str = "https://ollama.com"
+    # Ollama Cloud는 동시 3콜까지 실제로 병렬 처리한다. 실측(2026-08-25)에서 4·8을
+    # 줘도 처리량이 2.0 req/s로 같았던 것이 그 증거다(초과분은 서버측에서 큐잉되고,
+    # 16에서는 1.3 req/s로 오히려 떨어진다). 429는 관측되지 않았다.
+    ollama_concurrency: int = 3
+    # 추출 1건의 응답 상한. 청크는 asyncio.gather로 마지막 한 건까지 기다리므로,
+    # 상한이 없으면 드물게 나오는 아주 느린 한 건이 청크 전체를 붙잡는다(실측:
+    # 3건 중 2건은 3초 안에 끝나고 1건이 120초를 넘겨도 응답이 없었다). 초과분은
+    # 버리고 다음 틱에 재시도한다 — 이미 저장된 추출은 캐시에 남아 손실이 없다.
+    ollama_extract_timeout_seconds: float = 180.0
+    # 보고서 합성 1건의 응답 상한. 실측 54.6초/11,608자라 넉넉히 잡는다.
+    ollama_reduce_timeout_seconds: float = 600.0
+
     openalex_api_key: str
     openalex_per_page: int = 100
     openalex_daily_budget_usd: float = 0.5
@@ -92,8 +112,18 @@ class Settings(BaseSettings):
     visitor_salt: str = "change-me-in-prod"
 
     @property
+    def extract_model(self) -> str:
+        """추출(map)에 실제로 쓰는 모델. mapper.model_ver()에 들어가 추출 캐시 키가
+        된다 — provider를 바꾸면 캐시 네임스페이스가 통째로 갈라지므로, Ollama로
+        돌린 추출이 기존 Gemini 추출을 덮어쓰지 않고 원복 시 예전 캐시가 그대로
+        살아난다(신규 행으로 쌓일 뿐 지워지지 않는다)."""
+        return self.ollama_model if self.llm_provider == "ollama" else self.gemini_model
+
+    @property
     def reduce_model(self) -> str:
         """보고서 합성에 실제로 쓰는 모델. 미설정이면 추출과 같은 모델."""
+        if self.llm_provider == "ollama":
+            return self.ollama_model
         return self.gemini_model_reduce or self.gemini_model
 
     model_config = SettingsConfigDict(env_file=".env")

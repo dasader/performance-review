@@ -518,6 +518,71 @@ SQLAlchemy가 FK를 해석하려면 관련 모델 클래스가 전부 import되�
 `import app.models  # noqa: F401`로 이를 강제한다. **새 모델을 추가하면 이 파일에도 반드시 추가할 것** —
 빠뜨리면 Alembic autogenerate가 해당 테이블을 못 보거나 FK 해석이 조용히 깨진다.
 
+## 임시 LLM 교체 — Ollama Cloud (2026-08-25 ~, 약 1개월)
+
+1개월짜리 Ollama Cloud 키로 `deepseek-v4-flash:0731`을 쓰는 **한시적 교체**다.
+원복 기준점은 태그 **`gemini-baseline-2026-08-25`**.
+
+**원복은 `.env` 한 줄이다** — `LLM_PROVIDER=gemini`. 코드는 그대로 둬도 되고,
+완전히 걷어내려면 `git revert` 또는 위 태그와 대조한다. `llm_provider`가 `gemini`면
+`app/clients/ollama.py`는 import만 될 뿐 한 줄도 실행되지 않는다.
+
+교체 지점은 **3곳뿐**이고 호출부(`runner`·`reducer`·`comparison`·`mapper.build_requests`)는
+한 줄도 바뀌지 않았다 — `gemini_sync.generate`, `gemini_batch.submit_async`,
+`gemini_batch.poll_async`가 각자 첫 줄에서 `app/clients/ollama.py`로 넘긴다.
+
+**추출 캐시는 provider별로 갈린다.** `mapper.model_ver()`가 `settings.gemini_model`이
+아니라 `settings.extract_model`(provider에 따라 갈리는 프로퍼티)을 쓴다. 안 그러면
+새 모델로 돌려도 옛 Gemini 추출이 캐시 히트해 **재추출이 아예 일어나지 않는다**.
+갈라 놓은 덕에 원복하면 기존 Gemini 추출 22,000여 건이 그대로 다시 히트한다
+(Ollama 추출은 신규 행으로 쌓일 뿐 지워지지 않는다).
+
+### Gemini와 다른 두 가지가 `ollama.py`의 구조를 정한다
+
+**① 구조화 출력이 없다.** `format`에 JSON Schema를 줘도, OpenAI 호환
+`/v1/chat/completions`의 `response_format: json_schema`를 줘도 **그냥 무시하고**
+마크다운 산문을 뱉는다(2026-08-25 실측, 둘 다). 듣는 것은 native `/api/chat`의
+`format: "json"`뿐인데 이건 "JSON이기만 하면 되는" 모드라 스키마는 강제하지 못한다.
+그래서 **스키마를 프롬프트(`_JSON_HINT`)로 알려주고** 형태만 `format: "json"`으로
+보장받는다 — 실측으로 enum·필수 필드까지 지킨다. **`prompts.MAP_SCHEMA`를 고치면
+`_JSON_HINT`도 함께 고쳐야 한다**(`test_ollama.py::test_json_hint_covers_every_map_schema_field`가 고정).
+
+간헐적으로 깨진 응답이 와도 그 논문 한 편만 버린다(`parse_extraction` → `None`).
+추출 캐시에 안 들어갔으니 `mapper.pending_papers`가 다음 틱에 다시 집어 온다 —
+`gemini_batch._download_results`가 개별 실패를 건너뛰는 것과 같은 철학이다.
+
+**② batch API가 없다.** 대신 건당 수 초라 백그라운드 asyncio 태스크로 청크를 돌리고
+batch와 같은 submit/poll 인터페이스만 흉내낸다. 잡 테이블(`_jobs`)은 **메모리에만
+산다** — 컨테이너가 재시작하면 비는데, 그때 `poll_async`는 `failed`가 아니라
+**결과 0건 성공**을 돌려준다. `failed`로 올리면 분석이 통째로 죽어 관리자가 손으로
+되살려야 하지만, 0건 성공이면 `_do_extract`가 "pending이 줄지 않았다"를 보고
+다음 틱에 같은 청크를 재제출한다(최대 `MAX_EXTRACT_ATTEMPTS`회).
+
+**thinking 레벨은 이름이 그대로 통한다.** Ollama의 유효값이
+`low|medium|high|max|true|false`라 `THINKING_MAP=low`·`THINKING_REDUCE=high`를
+그대로 넘긴다(잘못된 값은 400으로 즉시 거부되므로 조용히 무시될 걱정은 없다).
+
+### 실측 성능 (2026-08-25, 추출 24건 × 동시성 3)
+
+| 항목 | 값 |
+|---|---|
+| 처리량 | **0.12 req/s**(≈ 시간당 430건) — 느린 꼬리 포함 |
+| 지연 | 중앙값 7.9초 · p90 12.2초 · **max 154.7초** |
+| JSON 파싱 실패 | 실제 `_JSON_HINT`로는 **0/24**. 스키마를 축약한 힌트로는 2/24가 깨졌다 — 힌트를 줄이지 말 것 |
+
+**동시성은 3을 넘길 이유가 없다.** Ollama Cloud가 실제로 병렬 처리하는 수가 3이고,
+4·8을 줘도 처리량이 2.0 req/s로 같았다(초과분은 서버측 큐잉, 16에서는 1.3으로 하락).
+
+**느린 한 건이 청크 전체를 붙잡는다** — `asyncio.gather`는 마지막 한 건까지 기다린다.
+그래서 추출에 `OLLAMA_EXTRACT_TIMEOUT_SECONDS`(180초)와 **재시도 2회 상한**을 둔다.
+여기서 많이 재시도하면 타임아웃까지 쓴 한 건이 백오프까지 반복해 청크를 12분씩
+붙잡는다 — 진짜 재시도는 30초 뒤 잡 루프가 해 준다. 보고서 합성은 실측 54.6초/
+11,608자라 `OLLAMA_REDUCE_TIMEOUT_SECONDS`(600초)로 따로 잡는다.
+
+**이 처리량이면 전량 재추출(22,000여 건)은 비현실적이다** — 산술적으로 50시간이 넘는다.
+`model_ver`가 갈렸으므로 돌리는 분석은 전부 재추출 대상이 되니, **세부기술·연도를
+좁혀서** 실행한다.
+
 ## Gemini 클라이언트 — 지연 생성
 
 `app/clients/gemini_sync.py`, `app/clients/gemini_batch.py`는 `genai.Client()`를 모듈 로드 시점이
