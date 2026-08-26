@@ -98,7 +98,7 @@ def profile(recs, papers) -> dict:
     ap = [str(r.get("approach") or "") for r, _ in ok]
     im = [str(r.get("improvement") or "") for r, _ in ok]
     mcounts, grounded, ungrounded, unjudged, blank_name = [], 0, 0, 0, 0
-    blank_fair = blank_miss = 0        # 값 빈 행: 정당한 공백 / 누락 후보
+    blank_maybe = 0                    # 값이 빈 행 중 초록에 수치가 있던 논문의 것
     exp_need = exp_kept = 0
     for r, p in ok:
         ms = r.get("metrics") or []
@@ -113,13 +113,12 @@ def profile(recs, papers) -> dict:
             v = value_in_abstract(val, p["abstract"])
             if v is None:
                 unjudged += 1
-                # 초록에 단위 붙은 수치가 아예 없으면 비운 것이 옳다. 있는데도
-                # 비웠으면 놓쳤을 가능성이 크다 — 둘을 한 숫자로 세면 표기 습관과
-                # 누락이 구분되지 않는다.
+                # 정당한 공백인지 누락인지는 **여기서 판정하지 않는다.**
+                # 논문에 수치가 있다는 것과 *이 지표*에 수치가 있다는 것은 다르고,
+                # 그 둘을 섞으면 양방향으로 틀린다(실측 확인). 행 단위 판정은
+                # blank_metric_audit.py가 동료 모델을 신탁으로 써서 한다.
                 if has_numbers:
-                    blank_miss += 1
-                else:
-                    blank_fair += 1
+                    blank_maybe += 1
             elif v:
                 grounded += 1
             else:
@@ -142,8 +141,7 @@ def profile(recs, papers) -> dict:
         "수치 근거 있음": f"{grounded}/{judged}" if judged else "-",
         "수치 근거율": round(grounded / judged, 3) if judged else None,
         "수치 판정불가(숫자 없음)": unjudged,
-        "└ 정당한 공백(초록에 수치 없음)": blank_fair,
-        "└ 누락 후보(초록에 수치 있음)": blank_miss,
+        "└ 초록에 수치가 있던 논문의 빈 행": blank_maybe,
         "지수 붙은 지표": exp_need,
         "└ 지수 보존": f"{exp_kept}/{exp_need}" if exp_need else "-",
         "성과유형 분포": dict(Counter(r.get("achievement_type") for r, _ in ok).most_common()),
