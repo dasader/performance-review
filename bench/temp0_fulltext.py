@@ -55,6 +55,29 @@ def repetition(text: str) -> float:
 
 _NUM = re.compile(r"\d+(?:\.\d+)?")
 
+# 초록에 "수치처럼 보이는 것"이 있는가 — 숫자 + 단위/기호.
+# 빈 값 행이 정당한 공백인지 누락인지 가르는 기준이다.
+METRIC_LIKE = re.compile(
+    r"\d+(?:\.\d+)?\s*(?:%|배|nm|µm|um|mm|cm|K\b|°C|eV|V\b|A\b|mA|W\b|Hz|GHz|"
+    r"s\b|ms|min|h\b|일|dB|mol|M\b|g/|kg|J\b|Ω|ohm|F\b|S/|fold|×|x10)")
+
+_ABS_EXP_AFTER = re.compile(r"^[\s^±\-–−\d.]{0,12}(?:[×x*]\s*10|10\s*[\^−\-–])\s*[−\-–]?\s*\d")
+_VAL_EXP = re.compile(r"(?:10\^|[×x*]\s*10|[eE][+\-−]?\d|\^\s*[−\-]?\d)")
+
+
+def exponent_kept(value: str, unit: str, abstract: str) -> bool | None:
+    """원문에서 이 값에 ×10ⁿ이 붙어 있었는가, 그렇다면 추출물이 보존했는가.
+
+    붙어 있지 않았으면 판정 대상이 아니다(None). 같은 숫자가 초록 다른 자리에도
+    나오면 오탐이 생기므로 **손실률의 상한**을 준다."""
+    n = _NUM.search(value or "")
+    if not n:
+        return None
+    for mm in re.finditer(re.escape(n.group(0)), abstract):
+        if _ABS_EXP_AFTER.match(abstract[mm.end():mm.end() + 20]):
+            return bool(_VAL_EXP.search(f"{value}{unit or ''}"))
+    return None
+
 
 def value_in_abstract(value: str, abstract: str) -> bool | None:
     """metrics[].value의 숫자가 초록에 있는가. 숫자가 없는 값은 판정하지 않는다(None).
@@ -75,21 +98,36 @@ def profile(recs, papers) -> dict:
     ap = [str(r.get("approach") or "") for r, _ in ok]
     im = [str(r.get("improvement") or "") for r, _ in ok]
     mcounts, grounded, ungrounded, unjudged, blank_name = [], 0, 0, 0, 0
+    blank_fair = blank_miss = 0        # 값 빈 행: 정당한 공백 / 누락 후보
+    exp_need = exp_kept = 0
     for r, p in ok:
         ms = r.get("metrics") or []
         mcounts.append(len(ms))
+        has_numbers = bool(METRIC_LIKE.search(p["abstract"]))
         for m in ms:
             if not isinstance(m, dict):
                 continue
             if not str(m.get("name") or "").strip():
                 blank_name += 1
-            v = value_in_abstract(str(m.get("value") or ""), p["abstract"])
+            val = str(m.get("value") or "")
+            v = value_in_abstract(val, p["abstract"])
             if v is None:
                 unjudged += 1
+                # 초록에 단위 붙은 수치가 아예 없으면 비운 것이 옳다. 있는데도
+                # 비웠으면 놓쳤을 가능성이 크다 — 둘을 한 숫자로 세면 표기 습관과
+                # 누락이 구분되지 않는다.
+                if has_numbers:
+                    blank_miss += 1
+                else:
+                    blank_fair += 1
             elif v:
                 grounded += 1
             else:
                 ungrounded += 1
+            e = exponent_kept(val, str(m.get("unit") or ""), p["abstract"])
+            if e is not None:
+                exp_need += 1
+                exp_kept += 1 if e else 0
     judged = grounded + ungrounded
     return {
         "유효": len(ok),
@@ -104,6 +142,10 @@ def profile(recs, papers) -> dict:
         "수치 근거 있음": f"{grounded}/{judged}" if judged else "-",
         "수치 근거율": round(grounded / judged, 3) if judged else None,
         "수치 판정불가(숫자 없음)": unjudged,
+        "└ 정당한 공백(초록에 수치 없음)": blank_fair,
+        "└ 누락 후보(초록에 수치 있음)": blank_miss,
+        "지수 붙은 지표": exp_need,
+        "└ 지수 보존": f"{exp_kept}/{exp_need}" if exp_need else "-",
         "성과유형 분포": dict(Counter(r.get("achievement_type") for r, _ in ok).most_common()),
     }
 
