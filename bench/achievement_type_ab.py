@@ -150,13 +150,18 @@ VARIANTS = {
 
 # ── 호출 ─────────────────────────────────────────────────────────────────────
 
-async def one(client, sem, instruction, schema, title, abstract):
+async def one(client, sem, instruction, schema, title, abstract, temperature=None):
+    # temperature를 넘기지 않으면 API 기본값(3.x 계열 1.0). 자기 일치는 "같은 입력에
+    # 같은 답이 나올 확률"이라 이 값이 지표를 직접 움직인다 — Ollama 후보와 나란히
+    # 놓을 때는 양쪽에 같은 값을 박아야 비교가 성립한다.
+    kw = {} if temperature is None else {"temperature": temperature}
     cfg = types.GenerateContentConfig(
         system_instruction=instruction,
         response_mime_type="application/json",
         response_schema=schema,
         thinking_config=types.ThinkingConfig(thinking_level=THINKING),
         max_output_tokens=16000,
+        **kw,
     )
 
     def call():
@@ -174,10 +179,11 @@ async def one(client, sem, instruction, schema, title, abstract):
                 await asyncio.sleep(2 ** attempt)
 
 
-async def pass_over(client, sem, instruction, schema, papers, label):
+async def pass_over(client, sem, instruction, schema, papers, label, temperature=None):
     t0 = time.monotonic()
     out = await asyncio.gather(*[
-        one(client, sem, instruction, schema, p["title"], p["abstract"]) for p in papers
+        one(client, sem, instruction, schema, p["title"], p["abstract"], temperature)
+        for p in papers
     ])
     print(f"    {label}: {len(papers)}건 {time.monotonic() - t0:.0f}초", flush=True)
     return out
@@ -259,6 +265,8 @@ async def main() -> None:
     ap.add_argument("--out", default="bench/results/achievement-type-ab.json")
     ap.add_argument("--variants", default=None,
                     help="쉼표 구분. 예: A_현행,C_결정리스트 (표본을 키워 짝지은 검정을 할 때)")
+    ap.add_argument("--temperature", type=float, default=None,
+                    help="명시하지 않으면 API 기본값(3.x 계열 1.0)")
     ap.add_argument("--base", default="A_현행",
                     help="짝지은 검정의 기준 변형. 후속 개선을 잴 때는 직전 채택안을 준다.")
     args = ap.parse_args()
@@ -270,16 +278,18 @@ async def main() -> None:
     papers = fetch(args.n, args.dsn)
     chosen = ([v.strip() for v in args.variants.split(",")] if args.variants
               else list(VARIANTS))
-    print(f"{MODEL} · thinking={THINKING} · 논문 {len(papers)}건 · "
+    temp_label = "API 기본값" if args.temperature is None else args.temperature
+    print(f"{MODEL} · thinking={THINKING} · temperature={temp_label} · 논문 {len(papers)}건 · "
           f"변형 {len(chosen)}개({', '.join(chosen)}) × 2회\n")
-    report = {"model": MODEL, "thinking": THINKING, "papers": len(papers), "variants": {}}
+    report = {"model": MODEL, "thinking": THINKING, "temperature": args.temperature,
+              "papers": len(papers), "variants": {}}
     agree_flags: dict[str, list[bool]] = {}
     first_pass: dict[str, list[str | None]] = {}
     for name in chosen:
         instruction, schema = VARIANTS[name]
         print(f"  [{name}]", flush=True)
-        p1 = await pass_over(client, sem, instruction, schema, papers, "1회차")
-        p2 = await pass_over(client, sem, instruction, schema, papers, "2회차")
+        p1 = await pass_over(client, sem, instruction, schema, papers, "1회차", args.temperature)
+        p2 = await pass_over(client, sem, instruction, schema, papers, "2회차", args.temperature)
 
         # 논문별 자기일치 여부 — 짝지은 검정(mcnemar)의 입력이다.
         agree_flags[name] = [

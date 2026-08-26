@@ -142,7 +142,7 @@ def compare(x: dict | None, y: dict | None) -> dict | None:
 
 # ── 호출 ─────────────────────────────────────────────────────────────────────
 
-async def call(client, model, title, abstract, think, sem):
+async def call(client, model, title, abstract, think, sem, temperature=None):
     body = {
         "model": model,
         "messages": [
@@ -153,6 +153,12 @@ async def call(client, model, title, abstract, think, sem):
         "format": MAP_SCHEMA,
         "think": think,
     }
+    # 기본값 None이면 아무것도 싣지 않는다 — 제공자 기본 temperature 그대로.
+    # 자기 일치는 "같은 입력에 같은 답이 나올 확률"이라 temperature가 직접 그 값을
+    # 움직인다. 제공자마다 기본값이 다르면(Gemini 1.0, Ollama 서버 0.8) 모델 간
+    # 비교가 그 차이에 오염되므로, 비교할 때는 여기에 같은 값을 박아 넣는다.
+    if temperature is not None:
+        body["options"] = {"temperature": temperature}
     async with sem:
         t0 = time.monotonic()
         try:
@@ -186,14 +192,15 @@ async def call(client, model, title, abstract, think, sem):
     }
 
 
-async def run_condition(papers, model, think, concurrency, label):
+async def run_condition(papers, model, think, concurrency, label, temperature=None):
     sem = asyncio.Semaphore(concurrency)
     limits = httpx.Limits(max_connections=concurrency + 2)
     headers = {"Authorization": f"Bearer {env('OLLAMA_API_KEY')}"}
     t0 = time.monotonic()
     async with httpx.AsyncClient(timeout=300.0, headers=headers, limits=limits) as client:
         results = await asyncio.gather(*[
-            call(client, model, p["title"], p["abstract"], think, sem) for p in papers
+            call(client, model, p["title"], p["abstract"], think, sem, temperature)
+            for p in papers
         ])
     elapsed = time.monotonic() - t0
     print(f"  [{label}] {len(papers)}건 완료 — {elapsed:.1f}초", flush=True)
