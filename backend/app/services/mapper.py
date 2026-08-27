@@ -78,6 +78,25 @@ def build_requests(papers: list[Paper]) -> list[dict]:
                     response_mime_type="application/json",
                     response_schema=MAP_SCHEMA,
                     thinking_config=types.ThinkingConfig(thinking_level=settings.thinking_map),
+                    # temperature를 지정하지 않으면 API 기본값 1.0으로 돈다. 그 상태에서
+                    # 같은 논문·같은 프롬프트의 achievement_type이 17% 어긋났고
+                    # (전수 19,904쌍에서 자기 일치 0.830), 그 값은 reducer.group_for_reduce의
+                    # 3단 reduce 그룹 분할 키이자 stats.by_achievement_type의 집계 축이라
+                    # 보고서의 구조와 통계가 함께 흔들렸다.
+                    #
+                    # 0으로 두면 200/200 완전 재현이다(실측 2026-08-26). 오랫동안 범주
+                    # 정의가 겹쳐서라고 진단했으나 원인은 이쪽이었다.
+                    #
+                    # greedy 디코딩의 반복·퇴화는 논문 400건으로 확인했다 — 3-gram
+                    # 반복률이 평균 0이고 최대값은 오히려 temperature 1.0(0.064)보다
+                    # 낮다(0.045). 수치 근거율·metrics 건수도 같고 approach 채움은
+                    # 늘었다. 서술이 7% 짧아지는데 수식어가 준 것이지 내용이 아니다.
+                    #
+                    # **캐시 키(model_ver)에는 넣지 않았다.** 넣으면 기존 추출 17.2만 건이
+                    # 전량 무효화되어 약 $67.6이 든다. 대신 이후 추출분부터 결정적이 되고
+                    # 기존 행은 그대로 남는다 — 코퍼스가 한동안 섞인다는 뜻이다.
+                    # 그 혼재가 문제가 되면 그때 model_ver에 넣어 전량 재추출한다.
+                    temperature=0,
                 ).model_dump(by_alias=True, exclude_none=True, mode="json"),
             },
         }

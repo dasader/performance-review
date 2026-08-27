@@ -232,6 +232,25 @@ def test_extraction_schema_version_is_pinned():
     assert EXTRACTION_SCHEMA_VERSION == 3
 
 
+def test_extraction_requests_pin_temperature_to_zero():
+    """추출은 temperature 0으로 나가야 한다 — 지우면 API 기본값 1.0으로 되돌아간다.
+
+    1.0에서는 같은 논문·같은 프롬프트의 achievement_type이 17% 어긋난다(전수
+    19,904쌍에서 자기 일치 0.830). 그 값은 reducer.group_for_reduce의 3단 reduce
+    그룹 분할 키이자 stats.by_achievement_type의 집계 축이라 보고서의 구조와 통계가
+    함께 흔들린다. 0에서는 200/200 완전 재현이다(실측 2026-08-26).
+
+    되돌리기 쉽고(한 줄) 되돌려도 아무것도 깨지지 않아 조용히 사라질 수 있는
+    항목이라 여기서 못박는다. greedy 퇴화는 논문 400건으로 확인했다 — 3-gram
+    반복률 최대값이 오히려 temperature 1.0보다 낮았다."""
+    from app.models import Paper
+    from app.services.mapper import build_requests
+
+    papers = [Paper(paper_key="k1", title="T", abstract="A", year=2026)]
+    cfg = build_requests(papers)[0]["request"]["generationConfig"]
+    assert cfg["temperature"] == 0
+
+
 def test_map_prompt_stays_subfield_independent():
     """추출 프롬프트에 세부기술이 섞이면 안 된다 — 캐시 공유의 전제다.
 
