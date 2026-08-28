@@ -1,0 +1,1025 @@
+{
+  "model": "gemini-3.1-flash-lite",
+  "thinking": "low",
+  "papers": 1000,
+  "variants": {
+    "C_결정리스트": {
+      "자기 일치": "891/1000",
+      "자기 일치율": 0.891,
+      "95% 신뢰구간": [
+        0.87,
+        0.909
+      ],
+      "저장된 v3와 일치": "692/1000",
+      "enum 이탈": 0,
+      "실패": 0,
+      "1회차 분포": {
+        "이론/해석": 295,
+        "알고리즘": 276,
+        "시스템구현": 143,
+        "신소재": 104,
+        "공정": 79,
+        "아키텍처": 47,
+        "신소자": 36,
+        "기타": 20
+      },
+      "혼동 쌍 상위": [
+        {
+          "쌍": "시스템구현 ↔ 알고리즘",
+          "건수": 11
+        },
+        {
+          "쌍": "아키텍처 ↔ 알고리즘",
+          "건수": 10
+        },
+        {
+          "쌍": "알고리즘 ↔ 이론/해석",
+          "건수": 10
+        },
+        {
+          "쌍": "시스템구현 ↔ 아키텍처",
+          "건수": 10
+        },
+        {
+          "쌍": "신소자 ↔ 신소재",
+          "건수": 8
+        },
+        {
+          "쌍": "공정 ↔ 시스템구현",
+          "건수": 7
+        }
+      ],
+      "자기불일치 표본": [
+        {
+          "제목": "Prompt-Native Semantic Runtimes for Language Models: Inference-Time Semantic Governance, Provenance, Compression, and Document-Lev",
+          "1회": "아키텍처",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "A First Case Report of Autoimmune Acquired Factor V Deficiency After Severe Acute Respiratory Syndrome Coronavirus 2 mRNA Vaccinat",
+          "1회": "이론/해석",
+          "2회": "기타"
+        },
+        {
+          "제목": "A small-scale CRISPR mutant library in rapeseed of commercial cultivar Zhongshuang 11",
+          "1회": "시스템구현",
+          "2회": "공정"
+        },
+        {
+          "제목": "The Role of Insulin in the Proliferation and Differentiation of Bovine Muscle Satellite (Stem) Cells for Cultured Meat Production",
+          "1회": "기타",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "Textual overlap rather than domain alignment: A comparative study of fine-tuning strategies for specialised machine translation wi",
+          "1회": "알고리즘",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "LHD fig_h2 #54780.1 (analyzed)",
+          "1회": "공정",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "LHD fig_h2 #122076.1 (analyzed)",
+          "1회": "공정",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "Neuromorphic Parameter Estimation for Power Converter Health Monitoring Using Spiking Neural Networks",
+          "1회": "아키텍처",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "GLAD: A Graph-LLM augmented framework for out-of-scope intent detection",
+          "1회": "알고리즘",
+          "2회": "아키텍처"
+        },
+        {
+          "제목": "Ultralow and tunable thermal conductivity of parylene C for thermal insulation in advanced packaging",
+          "1회": "공정",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "BeamFormer Artifact — MobiSys 2026",
+          "1회": "알고리즘",
+          "2회": "기타"
+        },
+        {
+          "제목": "Development and optimization of sustainable mineralized cemented tailings based backfill after injecting and stirring CO2 through ",
+          "1회": "공정",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "Model Experimental Study on Aerodynamic Performance of A Horizontal Axis Wind Turbine with L-shaped Tip Winglets under Pitching Mo",
+          "1회": "신소자",
+          "2회": "공정"
+        },
+        {
+          "제목": "Novel One-Pot Detection of Tumor mRNA Vaccine by the Target Serving as crRNA of the Split Cas12a System and Synergistically Trigge",
+          "1회": "시스템구현",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "MultiTurnPSB: Evaluating Multi-Turn Jailbreak Attacks an dClassifier-Based Defenses for Medical AI Safety",
+          "1회": "이론/해석",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "Circadian timing optimizes allo-HSCT to prevent aGVHD: a breakthrough in chrono-immunotherapy",
+          "1회": "공정",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Urban Air Mobility Risk Assessment and Safety Control over Large-Scale Public Events: A City Marathon Case Study",
+          "1회": "알고리즘",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "Delivery routes and circular mRNA vaccine architecture synergistically shape in vivo immune profiles",
+          "1회": "이론/해석",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Rethinking Acylsugar‐Based Resistance: Breaking the Growth‐Defense Trade‐Off Through Precision Metabolic Engineering",
+          "1회": "알고리즘",
+          "2회": "공정"
+        },
+        {
+          "제목": "Genome integration and expression of β-glucosidase in Priestia megaterium enhanced poly(3-hydroxybutyrate) production from cellobi",
+          "1회": "기타",
+          "2회": "공정"
+        },
+        {
+          "제목": "Operando Detection of Void Formation during Lithium Stripping in Solid-State Batteries Using Single-Frequency Impedance Analysis",
+          "1회": "공정",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Performance optimization of metal hydride reactors through radial thermal resistance regulation with graded-porosity metal foam",
+          "1회": "시스템구현",
+          "2회": "아키텍처"
+        },
+        {
+          "제목": "[CAR-T cell therapy bridging to allogeneic hematopoietic stem cell transplantation for diffuse large B-cell Richter syndrome: a ca",
+          "1회": "시스템구현",
+          "2회": "기타"
+        },
+        {
+          "제목": "SCALER: A Stream-Aware Accelerator with Hierarchical Memory for Sparse LU Factorization on HBM FPGAs",
+          "1회": "시스템구현",
+          "2회": "아키텍처"
+        },
+        {
+          "제목": "HYBRID-CONTROLLED IPOS LLC CONVERTER FOR FUEL CELL APPLICATIONS",
+          "1회": "시스템구현",
+          "2회": "아키텍처"
+        },
+        {
+          "제목": "VGAC: Predictive Queue Intelligence for GPU Cluster Observability",
+          "1회": "시스템구현",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "A Synergistic Framework of Nonlinear Acoustic Computing and Reinforcement Learning for Real-World Human-Robot Interaction",
+          "1회": "알고리즘",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "Design and Experimental Analysis of Heat‐Pipe‐Integrated Heat Exchanger for Heat Pipe Nuclear Microreactor",
+          "1회": "시스템구현",
+          "2회": "아키텍처"
+        },
+        {
+          "제목": "Vertically Integrated Silicon–Carbon Nanotube Architectures for High-Capacity and Robust Lithium-Ion Battery Anodes",
+          "1회": "신소자",
+          "2회": "신소재"
+        },
+        {
+          "제목": "Spatial patterns of cerebral blood flow in Alzheimer's disease identified by the Subtype and Stage Inference algorithm",
+          "1회": "알고리즘",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "AI Agents vs. Human Investigators: Balancing Automation, Security, and Expertise in Cyber Forensic Analysis",
+          "1회": "시스템구현",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "A Real-Synthetic Mixed Object Detection Dataset for Autonomous Driving in Chinese Rural Scenes",
+          "1회": "시스템구현",
+          "2회": "기타"
+        },
+        {
+          "제목": "Performance of Small Language Model Pretraining on FABRIC: An Empirical Study",
+          "1회": "알고리즘",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "PUFiM: A Robust and Efficient FeFET-Based Security Solution Merging Physical Unclonable Function with Compute-in-Memory for Edge A",
+          "1회": "시스템구현",
+          "2회": "신소자"
+        },
+        {
+          "제목": "Microfluidics-Based Engineering of Molecular Self-Assembly and Manufacturing for Artificial Cell Systems",
+          "1회": "시스템구현",
+          "2회": "공정"
+        },
+        {
+          "제목": "Abstract 2433: BAP1 loss confers ferroptosis resistance to cholangiocarcinoma via TLCD1-mediated membrane phospholipid remodeling",
+          "1회": "이론/해석",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "Abstract 6902: Remodeling of cancer cell architecture by chemotherapy.",
+          "1회": "알고리즘",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "Intrusion detection with Quasi-Recurrent Scaled Residual Networks: a deep learning approach for cloud security",
+          "1회": "아키텍처",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Extrusion-shaped PEI@B/MC-M560 adsorbents for direct air capture: Balancing mechanical strength and CO2 adsorption efficiency",
+          "1회": "공정",
+          "2회": "신소재"
+        },
+        {
+          "제목": "Shigella Vaccines: A Light at the End of a Long Tunnel",
+          "1회": "신소재",
+          "2회": "신소자"
+        }
+      ]
+    },
+    "D_경계규칙": {
+      "자기 일치": "863/1000",
+      "자기 일치율": 0.863,
+      "95% 신뢰구간": [
+        0.84,
+        0.883
+      ],
+      "저장된 v3와 일치": "615/1000",
+      "enum 이탈": 0,
+      "실패": 0,
+      "1회차 분포": {
+        "알고리즘": 375,
+        "이론/해석": 264,
+        "시스템구현": 104,
+        "공정": 103,
+        "신소재": 61,
+        "신소자": 36,
+        "기타": 33,
+        "아키텍처": 24
+      },
+      "혼동 쌍 상위": [
+        {
+          "쌍": "시스템구현 ↔ 알고리즘",
+          "건수": 20
+        },
+        {
+          "쌍": "알고리즘 ↔ 이론/해석",
+          "건수": 20
+        },
+        {
+          "쌍": "기타 ↔ 이론/해석",
+          "건수": 16
+        },
+        {
+          "쌍": "공정 ↔ 알고리즘",
+          "건수": 15
+        },
+        {
+          "쌍": "공정 ↔ 신소재",
+          "건수": 14
+        },
+        {
+          "쌍": "아키텍처 ↔ 알고리즘",
+          "건수": 12
+        }
+      ],
+      "자기불일치 표본": [
+        {
+          "제목": "ASOptimizer: optimizing chemical diversity of antisense oligonucleotides through deep learning",
+          "1회": "시스템구현",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "A First Case Report of Autoimmune Acquired Factor V Deficiency After Severe Acute Respiratory Syndrome Coronavirus 2 mRNA Vaccinat",
+          "1회": "이론/해석",
+          "2회": "기타"
+        },
+        {
+          "제목": "A small-scale CRISPR mutant library in rapeseed of commercial cultivar Zhongshuang 11",
+          "1회": "알고리즘",
+          "2회": "공정"
+        },
+        {
+          "제목": "Tailoring electrolyte solvation structure to enhance rate capability, cycle life, and safety in Prussian-blue-based sodium-ion bat",
+          "1회": "신소재",
+          "2회": "공정"
+        },
+        {
+          "제목": "GA Enniskillen 1 coring services (digital dataset)",
+          "1회": "공정",
+          "2회": "기타"
+        },
+        {
+          "제목": "From Field to Market: Evolution of Strawberry-Harvesting Techniques and Research Progress in Intelligent Robotic Systems",
+          "1회": "기타",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "Charge transfer between the MgH2 and TiO2 surface of the MgH2/TiO2/Ni3ZnC0.7 composite with good cyclic reliability",
+          "1회": "신소재",
+          "2회": "공정"
+        },
+        {
+          "제목": "Ultralow and tunable thermal conductivity of parylene C for thermal insulation in advanced packaging",
+          "1회": "이론/해석",
+          "2회": "공정"
+        },
+        {
+          "제목": "How Attention Variants Keep LLMs From Collapsing",
+          "1회": "아키텍처",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "BeamFormer Artifact — MobiSys 2026",
+          "1회": "알고리즘",
+          "2회": "기타"
+        },
+        {
+          "제목": "Advanced computer vision for extracting georeferenced vehicle trajectories from drone imagery",
+          "1회": "시스템구현",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Development and optimization of sustainable mineralized cemented tailings based backfill after injecting and stirring CO2 through ",
+          "1회": "시스템구현",
+          "2회": "공정"
+        },
+        {
+          "제목": "Urban Air Mobility Risk Assessment and Safety Control over Large-Scale Public Events: A City Marathon Case Study",
+          "1회": "알고리즘",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "Genome integration and expression of β-glucosidase in Priestia megaterium enhanced poly(3-hydroxybutyrate) production from cellobi",
+          "1회": "알고리즘",
+          "2회": "공정"
+        },
+        {
+          "제목": "Unveiling the functional potential of Cr2MnAl Heusler alloy: A combined experimental and theoretical approach",
+          "1회": "이론/해석",
+          "2회": "신소재"
+        },
+        {
+          "제목": "Beyond crystallization control: Functionalized boron nitride as an interface modifier for high efficiency perovskite solar cells",
+          "1회": "공정",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Heterologous Reconstruction of the Mogroside Biosynthetic Pathway in Nicotiana tabacum",
+          "1회": "시스템구현",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "py-spinnaker2",
+          "1회": "시스템구현",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Modulation of iPSC-derived NCMSC cell state by TD-198946 enhances scaffold-free cartilage biofabrication",
+          "1회": "알고리즘",
+          "2회": "공정"
+        },
+        {
+          "제목": "Performance optimization of metal hydride reactors through radial thermal resistance regulation with graded-porosity metal foam",
+          "1회": "공정",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "SCALER: A Stream-Aware Accelerator with Hierarchical Memory for Sparse LU Factorization on HBM FPGAs",
+          "1회": "알고리즘",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "Role of Thiophene-Based Halogenated Non-Fused Ring Containing Acceptor Molecules for Efficient Organic Photovoltaics",
+          "1회": "신소재",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Amino-bisphosphonates enhance CD8+ T cell responses to vaccine antigens through an ATRAID-dependent mechanism involving the stroma",
+          "1회": "알고리즘",
+          "2회": "기타"
+        },
+        {
+          "제목": "Calibration strategy and uncertainty analysis of the ITER neutron activation system for deuterium–deuterium plasma operation *",
+          "1회": "공정",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "AI-Driven Predictive Maintenance Model for Automotive Components Using CAE AND Industrial Engineering Principles",
+          "1회": "시스템구현",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "AI Agents vs. Human Investigators: Balancing Automation, Security, and Expertise in Cyber Forensic Analysis",
+          "1회": "이론/해석",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Mechanical Solution for Existing Conductors",
+          "1회": "공정",
+          "2회": "신소재"
+        },
+        {
+          "제목": "CT-based Opportunistic Screening for Adding Clinical Value: How I Do It",
+          "1회": "알고리즘",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "Bifrost: Hybrid TEE-FHE Inference for Privacy-Preserving Transformer and LLM Serving",
+          "1회": "시스템구현",
+          "2회": "아키텍처"
+        },
+        {
+          "제목": "LHD fig_h2 #189727.1 (analyzed)",
+          "1회": "공정",
+          "2회": "기타"
+        },
+        {
+          "제목": "CT-Bench: Benchmarking Large Language Models on Chinese Text-to-Table Generation",
+          "1회": "알고리즘",
+          "2회": "기타"
+        },
+        {
+          "제목": "Coordination reconfigured Ni single-atoms for scaled photothermal COx free hydrogen production from ammonia",
+          "1회": "알고리즘",
+          "2회": "신소재"
+        },
+        {
+          "제목": "FAR: Function-preserving Attention Replacement for IMC-friendly Inference",
+          "1회": "알고리즘",
+          "2회": "아키텍처"
+        },
+        {
+          "제목": "Market Segmentation Strategies for mRNA COVID-19 Vaccines in Canada: Best Practices in Biomedical Product Development",
+          "1회": "기타",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Intrusion detection with Quasi-Recurrent Scaled Residual Networks: a deep learning approach for cloud security",
+          "1회": "아키텍처",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Interphase modification and H2O/HF elimination with bis(trimethylsilyl) sulfate bifunctional electrolyte additive for the elevated",
+          "1회": "알고리즘",
+          "2회": "공정"
+        },
+        {
+          "제목": "Development of Efficient Catalyst Layers for Proton Exchange Membrane Water Electrolysis: The Role of Catalyst Supports",
+          "1회": "이론/해석",
+          "2회": "기타"
+        },
+        {
+          "제목": "Multi-Scale Dual-agent Attention with Dynamic Adaptive Robustness for Voltage Prediction",
+          "1회": "알고리즘",
+          "2회": "아키텍처"
+        },
+        {
+          "제목": "Abstract MPTU05: Explainable Stroke Risk Prediction Using Machine Learning and Large Language Models: Toward a Mobile-Enabled Clin",
+          "1회": "알고리즘",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "Ocean particle measurement technology using the Event-based Vision Sensor (EVS)",
+          "1회": "시스템구현",
+          "2회": "알고리즘"
+        }
+      ]
+    },
+    "E_아키텍처흡수": {
+      "자기 일치": "883/1000",
+      "자기 일치율": 0.883,
+      "95% 신뢰구간": [
+        0.862,
+        0.901
+      ],
+      "저장된 v3와 일치": "592/1000",
+      "enum 이탈": 0,
+      "실패": 0,
+      "1회차 분포": {
+        "알고리즘": 402,
+        "이론/해석": 277,
+        "공정": 110,
+        "시스템구현": 82,
+        "신소재": 62,
+        "신소자": 45,
+        "기타": 22
+      },
+      "혼동 쌍 상위": [
+        {
+          "쌍": "알고리즘 ↔ 이론/해석",
+          "건수": 27
+        },
+        {
+          "쌍": "시스템구현 ↔ 알고리즘",
+          "건수": 24
+        },
+        {
+          "쌍": "공정 ↔ 신소재",
+          "건수": 12
+        },
+        {
+          "쌍": "기타 ↔ 이론/해석",
+          "건수": 10
+        },
+        {
+          "쌍": "신소자 ↔ 신소재",
+          "건수": 6
+        },
+        {
+          "쌍": "공정 ↔ 알고리즘",
+          "건수": 6
+        }
+      ],
+      "자기불일치 표본": [
+        {
+          "제목": "fo22Alfaro/AOTS-GROK.LIBRE-EJE.DEL1: AOTS⁶ v1.0.0 - Alfredo Jhovany Alfaro Garcia - Ontological Toroidal System",
+          "1회": "시스템구현",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "A small-scale CRISPR mutant library in rapeseed of commercial cultivar Zhongshuang 11",
+          "1회": "기타",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "The Role of Insulin in the Proliferation and Differentiation of Bovine Muscle Satellite (Stem) Cells for Cultured Meat Production",
+          "1회": "이론/해석",
+          "2회": "공정"
+        },
+        {
+          "제목": "Charge transfer between the MgH2 and TiO2 surface of the MgH2/TiO2/Ni3ZnC0.7 composite with good cyclic reliability",
+          "1회": "공정",
+          "2회": "신소재"
+        },
+        {
+          "제목": "In vivo CRISPR knockout screen identifies Polr1a as a key driver and a potential therapeutic target for melanoma metastasis",
+          "1회": "이론/해석",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "A phase 1, first-in-human, open label, dose escalating study of B440, an oral cancer vaccine using a WT1-expressing Bifidobacteriu",
+          "1회": "신소자",
+          "2회": "신소재"
+        },
+        {
+          "제목": "Ultralow and tunable thermal conductivity of parylene C for thermal insulation in advanced packaging",
+          "1회": "공정",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "Uncertainty Quantification for the HPCMP CREATE Sage Surrogate Modeling Software",
+          "1회": "알고리즘",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "BeamFormer Artifact — MobiSys 2026",
+          "1회": "기타",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "CRISPR/Cas9-mediated editing of eukaryotic elongation factor 1B gamma (eEF1Bγ) reduces Tobacco etch virus accumulation in Nicotian",
+          "1회": "알고리즘",
+          "2회": "공정"
+        },
+        {
+          "제목": "Unveiling the functional potential of Cr2MnAl Heusler alloy: A combined experimental and theoretical approach",
+          "1회": "신소재",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "LHD fig_h2 #94773.1 (analyzed)",
+          "1회": "공정",
+          "2회": "기타"
+        },
+        {
+          "제목": "MedSci Skills: Claude Code Skills for the Medical Research Lifecycle",
+          "1회": "알고리즘",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "A Generative AI–Driven Vendor-Neutral Framework for Safe and Trustworthy Autonomous ERP Systems",
+          "1회": "시스템구현",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "[CAR-T cell therapy bridging to allogeneic hematopoietic stem cell transplantation for diffuse large B-cell Richter syndrome: a ca",
+          "1회": "이론/해석",
+          "2회": "기타"
+        },
+        {
+          "제목": "Role of Thiophene-Based Halogenated Non-Fused Ring Containing Acceptor Molecules for Efficient Organic Photovoltaics",
+          "1회": "신소재",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "VGAC: Predictive Queue Intelligence for GPU Cluster Observability",
+          "1회": "시스템구현",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Integrating Envirotyping and Phenomics for AI-Enabled Multi-Environment Genomic Prediction in Crop Breeding",
+          "1회": "알고리즘",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "Tannic-Ca2+ complex-induced rapid fabrication of anti-freezing and adhesive hydrogels for high-performance strain sensing",
+          "1회": "신소재",
+          "2회": "공정"
+        },
+        {
+          "제목": "Amino-bisphosphonates enhance CD8+ T cell responses to vaccine antigens through an ATRAID-dependent mechanism involving the stroma",
+          "1회": "이론/해석",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Integrated digital system solution for superconducting quantum computing based on mK-generated single flux quantum pulse patterns ",
+          "1회": "신소자",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Genetics and evolution of the GoP1 gene regulating yellow pollen coloration enhancing pollinator attraction in cotton",
+          "1회": "이론/해석",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Vertically Integrated Silicon–Carbon Nanotube Architectures for High-Capacity and Robust Lithium-Ion Battery Anodes",
+          "1회": "신소자",
+          "2회": "공정"
+        },
+        {
+          "제목": "Experimental and numerical analysis of boron diffusion in eutectic melt under uniform radiative heating of B4C-SS control rod comp",
+          "1회": "이론/해석",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "AI Agents vs. Human Investigators: Balancing Automation, Security, and Expertise in Cyber Forensic Analysis",
+          "1회": "시스템구현",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "PUFiM: A Robust and Efficient FeFET-Based Security Solution Merging Physical Unclonable Function with Compute-in-Memory for Edge A",
+          "1회": "시스템구현",
+          "2회": "신소자"
+        },
+        {
+          "제목": "Porous polybenzimidazole membrane with enhanced phosphoric acid retention derived from incorporation of confined metal organic fra",
+          "1회": "신소재",
+          "2회": "공정"
+        },
+        {
+          "제목": "Bifrost: Hybrid TEE-FHE Inference for Privacy-Preserving Transformer and LLM Serving",
+          "1회": "알고리즘",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "Microfluidics-Based Engineering of Molecular Self-Assembly and Manufacturing for Artificial Cell Systems",
+          "1회": "이론/해석",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Squeezing-Enhanced Two-Phase Estimation with N-Particle W-type States",
+          "1회": "알고리즘",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "Governed Hyperautomation for CRM and ERP: A Reference Pattern for Safe Low-Code, RPA, and Generative AI at Enterprise Scale",
+          "1회": "알고리즘",
+          "2회": "시스템구현"
+        },
+        {
+          "제목": "Bifurcation Analysis Framework of Spiking Neuron Models",
+          "1회": "알고리즘",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "Research Ethics of Brain Pioneers:",
+          "1회": "이론/해석",
+          "2회": "기타"
+        },
+        {
+          "제목": "Modeling-driven requirements for Error Field Control Coil application to initial JT-60SA plasmas",
+          "1회": "이론/해석",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Solution-Processed Zn-Doped In 2 S 3 Electron Transport Layers for Quantum Dot Light-Emitting Diodes",
+          "1회": "신소자",
+          "2회": "신소재"
+        },
+        {
+          "제목": "Market Segmentation Strategies for mRNA COVID-19 Vaccines in Canada: Best Practices in Biomedical Product Development",
+          "1회": "이론/해석",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Constructing Superionic Heterointerface via Multiphase Engineering to Achieve Stable Oxyhalide‐Based All‐Solid‐State Batteries",
+          "1회": "신소재",
+          "2회": "공정"
+        },
+        {
+          "제목": "The Architecture of Intelligent Governance (AIG): A Conceptual Framework for Integration AI, Quantum Computing, and Global Resourc",
+          "1회": "알고리즘",
+          "2회": "이론/해석"
+        },
+        {
+          "제목": "Interphase modification and H2O/HF elimination with bis(trimethylsilyl) sulfate bifunctional electrolyte additive for the elevated",
+          "1회": "공정",
+          "2회": "알고리즘"
+        },
+        {
+          "제목": "Extrusion-shaped PEI@B/MC-M560 adsorbents for direct air capture: Balancing mechanical strength and CO2 adsorption efficiency",
+          "1회": "공정",
+          "2회": "신소재"
+        }
+      ]
+    }
+  },
+  "짝지은 검정(vs C_결정리스트)": {
+    "D_경계규칙": {
+      "b(A만 일치)": 107,
+      "c(C만 일치)": 79,
+      "불일치쌍": 186,
+      "p": 0.0474,
+      "판정": "유의(p<0.05)"
+    },
+    "E_아키텍처흡수": {
+      "b(A만 일치)": 87,
+      "c(C만 일치)": 79,
+      "불일치쌍": 166,
+      "p": 0.5871,
+      "판정": "유의하지 않음"
+    }
+  },
+  "C_결정리스트→변형 이동 표본": {
+    "D_경계규칙": [
+      {
+        "제목": "Prompt-Native Semantic Runtimes for Language Models: Inference-Time Semantic Governance, Provenance, Compressi",
+        "C_결정리스트": "아키텍처",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "CVH3D: A Multimodal Approach To Cross-View Image Geo-Localization With 3D Point Clouds",
+        "C_결정리스트": "시스템구현",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "A small-scale CRISPR mutant library in rapeseed of commercial cultivar Zhongshuang 11",
+        "C_결정리스트": "시스템구현",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "The Role of Insulin in the Proliferation and Differentiation of Bovine Muscle Satellite (Stem) Cells for Cultu",
+        "C_결정리스트": "기타",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "Zebrafish knockout models of atxn1a , atxn1b , and atxn1l reveal distinct and shared phenotypic and transcript",
+        "C_결정리스트": "시스템구현",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "LLM-based Intelligent Evaluation Agent with Knowledge Graph Construction for Human-Machine Interactive Learnin",
+        "C_결정리스트": "시스템구현",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "GA Enniskillen 1 coring services (digital dataset)",
+        "C_결정리스트": "시스템구현",
+        "D_경계규칙": "공정"
+      },
+      {
+        "제목": "From Field to Market: Evolution of Strawberry-Harvesting Techniques and Research Progress in Intelligent Robot",
+        "C_결정리스트": "이론/해석",
+        "D_경계규칙": "기타"
+      },
+      {
+        "제목": "Neuromorphic Parameter Estimation for Power Converter Health Monitoring Using Spiking Neural Networks",
+        "C_결정리스트": "아키텍처",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "Autonomous vehicle surveillance through fuzzy C-means segmentation and DeepSORT on aerial images",
+        "C_결정리스트": "시스템구현",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "Sovereignty of Event: Toward Event-Level Governance in AI Systems",
+        "C_결정리스트": "시스템구현",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "In vivo CRISPR knockout screen identifies Polr1a as a key driver and a potential therapeutic target for melano",
+        "C_결정리스트": "이론/해석",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "Abstract 6834: Modeling the role of homeostatic T-cell reconstitution in durable response to CAR T-cell therap",
+        "C_결정리스트": "이론/해석",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "Ultralow and tunable thermal conductivity of parylene C for thermal insulation in advanced packaging",
+        "C_결정리스트": "공정",
+        "D_경계규칙": "이론/해석"
+      },
+      {
+        "제목": "Uncertainty Quantification for the HPCMP CREATE Sage Surrogate Modeling Software",
+        "C_결정리스트": "시스템구현",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "How Attention Variants Keep LLMs From Collapsing",
+        "C_결정리스트": "이론/해석",
+        "D_경계규칙": "아키텍처"
+      },
+      {
+        "제목": "Digital Implant Dentistry: The Past, the Present, the Future",
+        "C_결정리스트": "이론/해석",
+        "D_경계규칙": "기타"
+      },
+      {
+        "제목": "Hyaluronic Acid Microparticles Promote Uniform Differentiation and Survival of Stem Cells in Spheroid Cultures",
+        "C_결정리스트": "신소재",
+        "D_경계규칙": "공정"
+      },
+      {
+        "제목": "Development and optimization of sustainable mineralized cemented tailings based backfill after injecting and s",
+        "C_결정리스트": "공정",
+        "D_경계규칙": "시스템구현"
+      },
+      {
+        "제목": "Model Experimental Study on Aerodynamic Performance of A Horizontal Axis Wind Turbine with L-shaped Tip Wingle",
+        "C_결정리스트": "신소자",
+        "D_경계규칙": "공정"
+      },
+      {
+        "제목": "Novel One-Pot Detection of Tumor mRNA Vaccine by the Target Serving as crRNA of the Split Cas12a System and Sy",
+        "C_결정리스트": "시스템구현",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "MultiTurnPSB: Evaluating Multi-Turn Jailbreak Attacks an dClassifier-Based Defenses for Medical AI Safety",
+        "C_결정리스트": "이론/해석",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "Circadian timing optimizes allo-HSCT to prevent aGVHD: a breakthrough in chrono-immunotherapy",
+        "C_결정리스트": "공정",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "Delivery routes and circular mRNA vaccine architecture synergistically shape in vivo immune profiles",
+        "C_결정리스트": "이론/해석",
+        "D_경계규칙": "알고리즘"
+      },
+      {
+        "제목": "Engineering a Virus‐Derived X Family DNA Polymerase FvPolX for de novo DNA Synthesis",
+        "C_결정리스트": "신소재",
+        "D_경계규칙": "알고리즘"
+      }
+    ],
+    "E_아키텍처흡수": [
+      {
+        "제목": "Modeling HIV infection, treatment, rebound, and intervention in human immune organoids",
+        "C_결정리스트": "시스템구현",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "Prompt-Native Semantic Runtimes for Language Models: Inference-Time Semantic Governance, Provenance, Compressi",
+        "C_결정리스트": "아키텍처",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "CVH3D: A Multimodal Approach To Cross-View Image Geo-Localization With 3D Point Clouds",
+        "C_결정리스트": "시스템구현",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "ASOptimizer: optimizing chemical diversity of antisense oligonucleotides through deep learning",
+        "C_결정리스트": "시스템구현",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "A small-scale CRISPR mutant library in rapeseed of commercial cultivar Zhongshuang 11",
+        "C_결정리스트": "시스템구현",
+        "E_아키텍처흡수": "기타"
+      },
+      {
+        "제목": "The Role of Insulin in the Proliferation and Differentiation of Bovine Muscle Satellite (Stem) Cells for Cultu",
+        "C_결정리스트": "기타",
+        "E_아키텍처흡수": "이론/해석"
+      },
+      {
+        "제목": "Zebrafish knockout models of atxn1a , atxn1b , and atxn1l reveal distinct and shared phenotypic and transcript",
+        "C_결정리스트": "시스템구현",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "LLM-based Intelligent Evaluation Agent with Knowledge Graph Construction for Human-Machine Interactive Learnin",
+        "C_결정리스트": "시스템구현",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "Tailoring electrolyte solvation structure to enhance rate capability, cycle life, and safety in Prussian-blue-",
+        "C_결정리스트": "신소재",
+        "E_아키텍처흡수": "공정"
+      },
+      {
+        "제목": "GA Enniskillen 1 coring services (digital dataset)",
+        "C_결정리스트": "시스템구현",
+        "E_아키텍처흡수": "공정"
+      },
+      {
+        "제목": "Neuromorphic Parameter Estimation for Power Converter Health Monitoring Using Spiking Neural Networks",
+        "C_결정리스트": "아키텍처",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "Charge transfer between the MgH2 and TiO2 surface of the MgH2/TiO2/Ni3ZnC0.7 composite with good cyclic reliab",
+        "C_결정리스트": "신소재",
+        "E_아키텍처흡수": "공정"
+      },
+      {
+        "제목": "Autonomous vehicle surveillance through fuzzy C-means segmentation and DeepSORT on aerial images",
+        "C_결정리스트": "시스템구현",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "Sovereignty of Event: Toward Event-Level Governance in AI Systems",
+        "C_결정리스트": "시스템구현",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "Abstract 6834: Modeling the role of homeostatic T-cell reconstitution in durable response to CAR T-cell therap",
+        "C_결정리스트": "이론/해석",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "A phase 1, first-in-human, open label, dose escalating study of B440, an oral cancer vaccine using a WT1-expre",
+        "C_결정리스트": "신소재",
+        "E_아키텍처흡수": "신소자"
+      },
+      {
+        "제목": "Uncertainty Quantification for the HPCMP CREATE Sage Surrogate Modeling Software",
+        "C_결정리스트": "시스템구현",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "How Attention Variants Keep LLMs From Collapsing",
+        "C_결정리스트": "이론/해석",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "BeamFormer Artifact — MobiSys 2026",
+        "C_결정리스트": "알고리즘",
+        "E_아키텍처흡수": "기타"
+      },
+      {
+        "제목": "Hyaluronic Acid Microparticles Promote Uniform Differentiation and Survival of Stem Cells in Spheroid Cultures",
+        "C_결정리스트": "신소재",
+        "E_아키텍처흡수": "공정"
+      },
+      {
+        "제목": "Advanced computer vision for extracting georeferenced vehicle trajectories from drone imagery",
+        "C_결정리스트": "시스템구현",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "Blockchain-Based Reputation Management in Cyber-Physical Multi-Agent Systems Using Soulbound Tokens",
+        "C_결정리스트": "시스템구현",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "Model Experimental Study on Aerodynamic Performance of A Horizontal Axis Wind Turbine with L-shaped Tip Wingle",
+        "C_결정리스트": "신소자",
+        "E_아키텍처흡수": "공정"
+      },
+      {
+        "제목": "Novel One-Pot Detection of Tumor mRNA Vaccine by the Target Serving as crRNA of the Split Cas12a System and Sy",
+        "C_결정리스트": "시스템구현",
+        "E_아키텍처흡수": "알고리즘"
+      },
+      {
+        "제목": "Intensively Quantized Integrated Fuzzy Neural Network for High-Accuracy Image Classification",
+        "C_결정리스트": "아키텍처",
+        "E_아키텍처흡수": "알고리즘"
+      }
+    ]
+  }
+}

@@ -27,3 +27,8 @@ __pycache__/
 # Node
 node_modules/
 dist/
+
+# 논문 집필용 자료 정리 — 저장소가 아니라 개인 연구 노트다.
+# bench/results/*.json이 원시 측정치라면 이쪽은 그것을 논문 서술로 옮긴 것이라
+# 커밋하지 않는다(초안·미검증 해석이 섞이는 곳).
+/paper-research/

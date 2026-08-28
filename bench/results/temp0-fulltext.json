@@ -1,0 +1,2977 @@
+{
+  "papers": 60,
+  "조건별": {
+    "gemini t=1.0": {
+      "유효": 60,
+      "요약 길이 평균": 113,
+      "요약 3-gram 반복률": 0.0,
+      "요약 최대 반복률": 0.0,
+      "approach 채움": "59/60",
+      "improvement 채움": "45/60",
+      "metrics 건수 평균": 1.28,
+      "metrics 0건 논문": "32/60",
+      "metrics 빈 이름": 0,
+      "수치 근거 있음": "71/72",
+      "수치 근거율": 0.986,
+      "수치 판정불가(숫자 없음)": 5,
+      "성과유형 분포": {
+        "기타": 15,
+        "알고리즘": 14,
+        "시스템구현": 12,
+        "이론/해석": 9,
+        "신소재": 6,
+        "아키텍처": 2,
+        "공정": 2
+      }
+    },
+    "gemini t=0.0": {
+      "유효": 60,
+      "요약 길이 평균": 112,
+      "요약 3-gram 반복률": 0.0,
+      "요약 최대 반복률": 0.0,
+      "approach 채움": "60/60",
+      "improvement 채움": "42/60",
+      "metrics 건수 평균": 1.22,
+      "metrics 0건 논문": "32/60",
+      "metrics 빈 이름": 0,
+      "수치 근거 있음": "67/68",
+      "수치 근거율": 0.985,
+      "수치 판정불가(숫자 없음)": 5,
+      "성과유형 분포": {
+        "시스템구현": 15,
+        "알고리즘": 14,
+        "기타": 13,
+        "이론/해석": 9,
+        "신소재": 7,
+        "아키텍처": 1,
+        "성능향상": 1
+      }
+    },
+    "deepseek-v4-pro:0813 t=0.0": {
+      "유효": 60,
+      "요약 길이 평균": 139,
+      "요약 3-gram 반복률": 0.0,
+      "요약 최대 반복률": 0.0,
+      "approach 채움": "58/60",
+      "improvement 채움": "41/60",
+      "metrics 건수 평균": 1.28,
+      "metrics 0건 논문": "33/60",
+      "metrics 빈 이름": 0,
+      "수치 근거 있음": "66/67",
+      "수치 근거율": 0.985,
+      "수치 판정불가(숫자 없음)": 10,
+      "성과유형 분포": {
+        "이론/해석": 19,
+        "시스템구현": 13,
+        "알고리즘": 13,
+        "신소재": 6,
+        "성능향상": 5,
+        "기타": 3,
+        "아키텍처": 1
+      }
+    }
+  },
+  "요약 유사도": {
+    "gemini t=0.0 ↔ t=1.0": 0.421,
+    "gemini t=0.0 ↔ deepseek-v4-pro:0813 t=0.0": 0.3
+  },
+  "성과유형 일치": {
+    "gemini t=0.0 ↔ t=1.0": 49,
+    "gemini t=0.0 ↔ deepseek-v4-pro:0813 t=0.0": 38
+  },
+  "원시": [
+    {
+      "title": "Modeling HIV infection, treatment, rebound, and intervention in human immune organoids",
+      "gemini t=1.0": {
+        "tech_summary": "인체 편도 또는 비장 세포를 이용한 HIV 감염 면역 오가노이드 모델을 구축하여 바이러스 감염, 증식, 치료제 반응 및 반등 현상을 성공적으로 재현하였다. 또한 치료 중단 시 NK 세포를 투여하여 HIV 저장소를 표적으로 삼아 감염 세포와 바이러스 생성을 감소시키는 전략을 검증하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "인체 편도 또는 비장 세포를 활용하여 HIV 감염, 증식, 치료 반응, 반등 및 NK 세포 투여를 통한 저장소 제거가 가능한 면역 오가노이드 플랫폼을 개발하였다.",
+        "improvement": "기존 림프 조직 외식편(LT explants) 모델이 짧은 수명으로 인해 장기적인 치료 개입 평가가 어려웠던 한계를 극복하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "인간 편도 또는 비장 세포를 활용한 HIV 감염 면역 오가노이드 모델을 구축하여 바이러스 감염, 증식, 치료 반응 및 치료 중단 후 반등 과정을 재현하였다. 또한, 치료 중단 시 동종 NK 세포를 투입하여 HIV 저장소를 표적으로 삼아 감염 세포 수와 바이러스 생성을 감소시키는 치료 전략을 검증하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "인간 편도 또는 비장 세포를 사용하여 HIV 감염 및 CD4+ T 세포 내 바이러스 통합이 가능한 면역 오가노이드 모델을 구축하고, 치료 중단 시 동종 NK 세포를 전달하는 방식을 사용하였다.",
+        "improvement": "기존의 림프 조직 절편(LT explants) 모델은 수명이 짧아 장기적인 치료 개입 평가가 어려웠으나, 본 면역 오가노이드 모델은 이를 보완하여 장기적인 치료 전략 평가를 가능하게 하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "인간 편도 또는 비장 세포로 HIV 감염 면역 오가노이드 모델을 구축하여 CD4+ T 세포로의 생산적 HIV 감염과 바이러스 통합을 재현하고, 프로테아제 억제제 처리 시 바이러스 생산이 완전히 억제되며 중단 시 수일 내 바이러스 반등이 일어나는 것을 확인했다. 또한 건강한 동종 NK 세포 투여로 감염 세포 수, 온전한 바이러스 게놈, 신규 감염성 바이러스 입자 생성을 감소시켰다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "인간 편도 또는 비장 세포를 이용한 면역 오가노이드 모델",
+        "improvement": "기존 림프조직 외식편(explant) 모델의 짧은 수명 한계를 극복하여 장기 치료 중재 평가가 가능한 플랫폼을 제공"
+      }
+    },
+    {
+      "title": "Prompt-Native Semantic Runtimes for Language Models: Inference-Time Semantic Governance, Provenance, Compression, and Document-Level Process Teaching",
+      "gemini t=1.0": {
+        "tech_summary": "프롬프트 내부에 포함되는 구조화된 문서를 통해 거대언어모델의 추론 시점 의미적 거버넌스를 제어하는 '프롬프트 네이티브 시맨틱 런타임'을 개발했습니다. 모델의 외부가 아닌 문맥 창 내에 존재하는 환경을 구축하여 증거 처리, 불확실성 표시, 상태 추적 및 압축에 강건한 생성 제어를 달성했습니다.",
+        "achievement_type": "아키텍처",
+        "metrics": [],
+        "approach": "모델이 사용하는 외부 도구가 아닌, 모델이 거주하는 환경으로서의 의미론적 런타임 문서와 네 가지 유형 계층을 가진 인식 막(epistemic membrane)을 사용했습니다.",
+        "improvement": "기존의 외부 관리 방식인 에이전트 운영체제(AIOS), 메모리 운영체제(MemGPT, MemOS), 오케스트레이션 프레임워크와 달리 모델의 가중치 수정 없이 추론 시점의 제어 가능성과 구조화된 불확실성 처리를 구현했습니다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "언어 모델의 컨텍스트 윈도우 내에 구조화된 문서를 로드하여 추론 시 의미론적 거버넌스, 증거 처리, 불확실성 표시, 상태 추적 및 압축에 강건한 생성을 수행하는 프롬프트 네이티브 의미론적 런타임을 구현했습니다.",
+        "achievement_type": "아키텍처",
+        "metrics": [],
+        "approach": "모델 외부에서 도구나 메모리를 관리하는 기존 방식과 달리, 모델이 사용하는 도구가 아닌 모델이 거주하는 환경으로서의 '의미론적 런타임 문서'라는 새로운 제어 객체를 도입했습니다.",
+        "improvement": "기존의 AIOS, MemGPT, MemOS 등 모델 외부에서 연산이나 메모리를 관리하는 방식과 달리, 모델의 컨텍스트 윈도우 내에서 직접 의미론적 행동을 제어함으로써 가중치 업데이트 없이 추론 시 제어 가능성을 확보했습니다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "대형 언어 모델의 추론 시 의미적 거버넌스를 위한 프롬프트-네이티브 의미 런타임 개념을 제시하고, 300개 이상의 DOI 고정 문서로 구성된 Crimson Hexagonal Archive 코퍼스와 Space Ark 런타임 구현을 통해 검증했다. Claude와 ChatGPT에서 크로스 모델 이식성, 가중치 갱신 없는 추론 시 제어 가능성, 구조화된 불확실성 처리, 실행과 confabulation 간 반증 가능한 경계를 확인했다.",
+        "achievement_type": "아키텍처",
+        "metrics": [],
+        "approach": "모델 외부에서 계산·도구·메모리를 관리하는 기존 AIOS, MemGPT, MemOS, 오케스트레이션 프레임워크와 달리, 컨텍스트 윈도우에 로드되는 구조화된 문서 자체가 의미 런타임 역할을 수행하도록 설계했다.",
+        "improvement": "기존 에이전트 운영체제·메모리 운영체제·오케스트레이션 프레임워크가 모델 외부에서 관리하는 방식과 달리, 모델이 도구로 사용하는 것이 아니라 거주하는 환경으로서 의미 런타임 문서를 도입해 추론 시 의미적 거버넌스를 모델 내부 컨텍스트만으로 수행한다."
+      }
+    },
+    {
+      "title": "Ultraviolet Imaging of SR 12 c with HST/WFC3: Accretion and Variability of a Giant Planet at the End Stages of Growth",
+      "gemini t=1.0": {
+        "tech_summary": "허블 우주 망원경(HST)의 WFC3 장비를 사용하여 거대 행성 SR 12 c의 가스 강착 현상을 관측하고, 해당 행성의 총 강착 광도와 질량 강착률을 도출하였다.",
+        "achievement_type": "기타",
+        "metrics": [
+          {
+            "name": "강착 광도",
+            "value": "1.65",
+            "unit": "L_sun",
+            "target": "SR 12 c"
+          },
+          {
+            "name": "질량 강착률",
+            "value": "8",
+            "unit": "M_sun/yr",
+            "target": "SR 12 c"
+          },
+          {
+            "name": "H 알파 방출선 강도 변화",
+            "value": "90",
+            "unit": "%",
+            "target": "5년 전 대비"
+          }
+        ],
+        "approach": "허블 우주 망원경(HST)의 WFC3 장비를 이용한 0.2~0.7 μm 대역의 자외선-적색 광학 이미징을 수행하였다.",
+        "improvement": "기존 관측 자료와 결합하여 UV부터 서브 밀리미터 파장(0.2~880 μm)에 이르는 가장 완벽한 수준의 젊은 거대 행성 분광 에너지 분포(SED)를 구축하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "허블 우주 망원경의 WFC3 장비를 사용하여 거대 행성 SR 12 c의 자외선-가시광선 이미징을 수행하고, 이를 통해 행성의 강착 광도와 질량 강착률을 도출하였다.",
+        "achievement_type": "기타",
+        "metrics": [
+          {
+            "name": "강착 광도",
+            "value": "1.65 ± 0.19",
+            "unit": "L_sun",
+            "target": "SR 12 c"
+          },
+          {
+            "name": "질량 강착률",
+            "value": "8 ± 2",
+            "unit": "M_sun/yr",
+            "target": "SR 12 c"
+          },
+          {
+            "name": "H α 방출선 강도 감소율",
+            "value": "90",
+            "unit": "%",
+            "target": "SR 12 c"
+          }
+        ],
+        "approach": "허블 우주 망원경의 Wide Field Camera 3(WFC3)를 사용하여 0.2–0.7 μm 파장 대역의 자외선-가시광선 이미징을 수행하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "허블우주망원경 WFC3의 자외선-가시광 영상으로 젊은 거대행성 SR 12 c의 강착 광도 1.65±0.19×10⁻⁵ L⊙와 질량 강착률 8±2×10⁻¹² M⊙ yr⁻¹을 도출하고, 0.2–880 μm에 이르는 분광에너지분포를 구축하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [
+          {
+            "name": "강착 광도",
+            "value": "1.65e-5",
+            "unit": "Lsun",
+            "target": "SR 12 c"
+          },
+          {
+            "name": "질량 강착률",
+            "value": "8e-12",
+            "unit": "Msun/yr",
+            "target": "SR 12 c"
+          }
+        ],
+        "approach": "허블우주망원경 WFC3를 이용한 0.2–0.7 μm 자외선-가시광 영상 관측과 분광에너지분포 분석을 통해 강착 관련 지표를 측정하였다.",
+        "improvement": "기존 관측과 결합하여 젊은 거대행성 중 가장 완전한 수준의 자외선~서브밀리미터(0.2–880 μm) 분광에너지분포를 구축하였다."
+      }
+    },
+    {
+      "title": "A Decomposition and Reconstruction Based Hybrid Time Series Model for Short-Term Wind Power Forecasting",
+      "gemini t=1.0": {
+        "tech_summary": "풍력 발전의 단기 예측 정확도를 높이기 위해, 데이터를 분해 및 재구성하고 각 성분 특성에 맞는 예측 모델을 결합한 하이브리드 시계열 예측 모델을 개발했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "완전 앙상블 경험적 모드 분해(CEEMDAN)로 데이터를 분해하고, 동적 시간 워핑(DTW) 기반의 K-평균 클러스터링을 거쳐 SARIMA, LSTM, BiLSTM을 조합하여 각 성분을 예측했다.",
+        "improvement": "기존의 전형적인 3가지 예측 모델들과 비교했을 때, 제안한 모델이 더 우수한 예측 성능을 보임을 입증했다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "풍력 발전의 단기 예측 정확도를 높이기 위해 시계열 데이터를 분해하고 재구성하는 하이브리드 예측 모델을 개발하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "완전 앙상블 경험적 모드 분해(CEEMDAN)로 시계열을 분해하고, 동적 시간 워핑(DTW) 기반의 K-평균 군집화로 성분을 분류한 뒤, SARIMA, LSTM, BiLSTM 모델을 각각 적용하여 예측하였다.",
+        "improvement": "제안된 모델은 기존의 세 가지 일반적인 예측 모델 대비 우수한 예측 성능을 보였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "풍력 발전 전력의 단기 예측 정확도를 높이기 위해 분해-재구성 기반 하이브리드 시계열 모델을 제안하고, 기존 대표 모델 3종과의 비교 실험에서 더 나은 예측 성능을 달성했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "완전 적응형 잡음 집적 경험적 모드 분해(CEEMDAN)로 풍력 시계열을 분해하고, 동적 시간 워핑(DTW) 기반 K-평균 군집화로 성분을 3개 클래스로 묶은 뒤 SARIMA, LSTM, BiLSTM이 각 클래스를 예측하는 구조를 사용했다.",
+        "improvement": "기존의 세 가지 대표 모델과 비교하여 예측 성능에서 우수함을 보였다."
+      }
+    },
+    {
+      "title": "A Review of Obstacle Avoidance Path Planning Technologies for Intelligent Vehicles",
+      "gemini t=1.0": {
+        "tech_summary": "지능형 차량의 장애물 회피 경로 계획 기술에 대해 인식, 의사결정, 제어 모듈을 중심으로 최신 연구 동향과 기술적 발전을 체계적으로 분석하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "다중 모달 퓨전, V2X 협력, 차량-도로-클라우드 통합, 그래프 탐색 알고리즘, 지능형 최적화 기법, 결정론적 방법과 휴리스틱 전략의 결합 등 다양한 기술적 접근법을 종합적으로 고찰하였다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "지능형 차량의 장애물 회피 경로 계획 기술을 인식, 의사결정, 제어의 세 가지 핵심 모듈로 분류하여 최신 연구 동향과 기술적 발전 과정을 체계적으로 정리하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "다중 모달 융합, V2X 협력, 차량-도로-클라우드 통합, 그래프 탐색 알고리즘, 지능형 최적화 방법, 결정론적 방법과 휴리스틱 전략의 통합 기법들을 분석하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "지능형 차량의 장애물 회피 경로 계획 기술에 대해 환경 인식, 경로 의사결정, 모션 제어의 세 가지 핵심 모듈로 나누어 기술 발전 동향을 체계적으로 분석하고, 모듈 간 협업 측면에서의 진전과 향후 과제를 제시하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "환경 인식에서는 다중모드 융합, V2X 협업, 차-도로-클라우드 통합 기술을, 경로 의사결정에서는 그래프 탐색 알고리즘과 지능형 최적화 기법을, 모션 제어에서는 결정론적 방법과 휴리스틱 전략의 통합을 분석하였다.",
+        "improvement": "환경 인식의 강건성과 전역 인지 능력이 향상되었고, 경로 의사결정의 실시간성과 최적성이 균형을 이루었으며, 모션 제어의 궤적 추적 정확도와 적응성이 향상되었다."
+      }
+    },
+    {
+      "title": "Construction of an industrial digital twin platform for multi-robot arm collaborative control",
+      "gemini t=1.0": {
+        "tech_summary": "산업용 로봇 다수의 협동 제어를 위해 강화학습 기반의 디지털 트윈 플랫폼을 구축하고, 가상 환경에서 최적화된 제어 정책을 실제 로봇 시스템으로 전송하는 sim-to-real 프레임워크를 구현했다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "ROS 및 MoveIt! 환경에서 Dofbot 로봇팔, Intel RealSense, Jetson nano 등을 활용한 물리 계층과 디지털 트윈 계층을 통합하고, 다중 에이전트 강화학습(MARL) 알고리즘을 적용하여 협동 제어 정책을 학습시켰다.",
+        "improvement": "기존의 물리적 시행착오 비용이 높고 동적 환경에 대한 적응력이 부족했던 방식과 달리, 가상 환경에서 정책을 사전 학습하여 물리 시스템 훈련에 소요되는 시간과 비용을 절감하고 높은 작업 일반화 성능을 확보했다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "다중 로봇 팔의 협업 제어를 위한 산업용 디지털 트윈 플랫폼을 구축하고, 다중 에이전트 강화학습(MARL)을 통합하여 가상 환경에서 최적화된 제어 정책을 실제 로봇으로 전송하는 시스템을 구현하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "ROS 및 MoveIt! 기반의 디지털 트윈 환경 내에 다중 에이전트 심층 결정론적 정책 경사(MADDPG) 알고리즘을 통합하여 로봇의 협업 정책을 학습시켰다.",
+        "improvement": "기존의 물리적 시행착오 방식 대비 가상 환경에서의 학습을 통해 시간과 비용을 절감하고, 동적 환경에서의 작업 일반화 및 적응 능력을 향상시켰다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "강화학습 기반의 산업용 디지털 트윈 플랫폼을 설계·구현하여 다중 로봇팔의 협업 제어를 가상 환경에서 학습하고 실물 로봇으로 전이하는 폐루프 시스템을 구축하였다. 실험을 통해 실시간 양방향 동기화와 sim-to-real 정책 전이를 검증하고, 작업 조건 변화에 대한 일반화 가능성도 확인하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "ROS 및 MoveIt! 기반의 디지털 트윈 환경에 다중 에이전트 강화학습(MARL) 프레임워크를 통합하고, 개선된 multi-agent deep deterministic policy gradient 알고리즘을 적용하여 각 로봇팔이 독립 에이전트로 협업 정책을 학습하도록 구성하였다.",
+        "improvement": "기존 다중 로봇 시스템의 낮은 협업 효율, 물리적 시행착오에 따른 높은 비용, 동적 환경에서의 적응성 부족을 극복하고, 시뮬레이션에서 최적화된 정책을 실물 로봇에 전이함으로써 시간·비용·운영 위험을 크게 줄였다."
+      }
+    },
+    {
+      "title": "CVH3D: A Multimodal Approach To Cross-View Image Geo-Localization With 3D Point Clouds",
+      "gemini t=1.0": {
+        "tech_summary": "CVH3D라는 3D 포인트 클라우드 데이터를 포함한 10만 8천 개의 다중 모달 데이터셋을 구축하고, 글로벌 하드 네거티브 마이닝(GHNM) 전략을 제안하여 교차 뷰 이미지 위치 인식 성능을 향상했다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "재현율(Recall)",
+            "value": "69.97",
+            "unit": "%",
+            "target": "Ground vs Aerial view matching baseline"
+          },
+          {
+            "name": "재현율(Recall)",
+            "value": "80.21",
+            "unit": "%",
+            "target": "Ground view vs Aerial-3D matching"
+          }
+        ],
+        "approach": "3D 포인트 클라우드 데이터를 포함한 다중 모달 데이터셋 구축과 함께, 각 모달리티의 학습된 특징 유사도를 기반으로 학습 예제를 추출하는 비율 기반의 글로벌 하드 네거티브 마이닝(GHNM) 전략을 사용했다.",
+        "improvement": "기존 지상-항공 이미지 매칭 방식 대비 지상-항공-3D 매칭 방식을 도입하여 top-1% 재현율을 69.97%에서 80.21%로 개선했다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "교차 시점 이미지 위치 추정을 위해 3D 포인트 클라우드 데이터를 포함한 대규모 데이터셋인 CVH3D를 구축하고, 학습 예제 선별을 위한 비율 기반의 Global Hard Negative Mining(GHNM) 전략을 제안하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "상위 1% 재현율(Recall)",
+            "value": "69.97",
+            "unit": "%",
+            "target": "기존 지상-항공 뷰 매칭 베이스라인"
+          },
+          {
+            "name": "상위 1% 재현율(Recall)",
+            "value": "80.21",
+            "unit": "%",
+            "target": "제안된 지상-항공-3D 뷰 매칭"
+          }
+        ],
+        "approach": "108K개의 다중 모달 지오태깅된 삼중항으로 구성된 CVH3D 데이터셋을 구축하고, 항공 및 3D 소스에서 학습 예제를 추출하기 위해 각 모달리티의 학습된 특징 유사도에 기반한 비율 기반 Global Hard Negative Mining(GHNM) 전략을 사용하였다.",
+        "improvement": "기존의 제한된 시야각(FoV)을 가진 파노라마 이미지 기반의 벤치마크 방식과 달리, 3D 포인트 클라우드 데이터를 통합하여 실제 환경과 유사한 조건에서 지상-항공-3D 뷰 매칭을 수행함으로써 상위 1% 재현율을 69.97%에서 80.21%로 향상시켰다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "지상 뷰 이미지와 항공 뷰 이미지 및 3D 포인트 클라우드를 결합한 대규모 멀티모달 데이터셋 CVH3D를 구축하고, 이를 활용한 매칭 기법으로 top-1% 재현율을 기존 69.97%에서 80.21%로 향상시켰다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "top-1% 재현율",
+            "unit": "%",
+            "value": 80.21,
+            "target": "Ground view vs Aerial-3D matching"
+          },
+          {
+            "name": "top-1% 재현율",
+            "unit": "%",
+            "value": 69.97,
+            "target": "baseline Ground vs Aerial view matching"
+          }
+        ],
+        "approach": "3D 포인트 클라우드를 포함한 108K 멀티모달 지오태그 트리플렛 데이터셋과 모달리티별 특징 유사도 기반의 비율 기반 Global Hard Negative Mining(GHNM) 전략을 사용했다.",
+        "improvement": "기존 Ground vs Aerial 뷰 매칭 대비 Ground view vs Aerial-3D 매칭에서 top-1% 재현율이 69.97%에서 80.21%로 향상되었다."
+      }
+    },
+    {
+      "title": "Personalized nutrition for healthy aging: precision diets based on genomic, metabolic, and microbiome profiles",
+      "gemini t=1.0": {
+        "tech_summary": "개인별 유전체, 대사체, 장내 미생물 프로필을 통합하여 고령 인구의 건강 수명을 연장하고 노쇠를 예방하는 맞춤형 식단 전략을 제시함.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "개인 맞춤형 식단 설계를 위해 유전체학(genomics), 대사체학(metabolomics), 장내 미생물군집(gut microbiome) 데이터를 분석하는 오믹스 기술을 활용함.",
+        "improvement": "기존의 인구 집단 기반 식이 지침이 가진 영양 필요량, 대사 반응의 이질성 해결 문제를 개인별 정밀 데이터 분석을 통해 보완함."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "개인별 유전체, 대사체, 장내 미생물 프로파일을 통합 분석하여 노년층의 건강한 노화를 위한 맞춤형 식단 전략을 제시하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "개인별 유전체, 대사체, 장내 미생물 프로파일을 활용한 정밀 영양 모델을 적용하였다.",
+        "improvement": "기존의 인구 집단 기반 식이 지침이 가진 영양 요구량 및 대사 반응의 이질성 대응 한계를 극복하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "유전체, 대사체, 장내 미생물 프로파일을 활용하여 개인별 식이 중재를 맞춤화하는 정밀 영양 접근법의 개념적 기반, 기술적 구현 요소, 임상 적용 사례를 2020-2025년 증거를 중심으로 종합적으로 고찰하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "개인의 유전체, 대사체, 장내 미생물군집 프로파일을 통합적으로 활용하는 정밀 영양 모델",
+        "improvement": "인구집단 기반의 일반적 식이 지침이 노년층의 대사 반응과 건강 궤적의 이질성을 반영하지 못하는 한계를 극복하고 개인 맞춤형 전략으로 전환할 수 있는 가능성을 제시하였다."
+      }
+    },
+    {
+      "title": "ASOptimizer: optimizing chemical diversity of antisense oligonucleotides through deep learning",
+      "gemini t=1.0": {
+        "tech_summary": "ASO 서열과 화학적 변형을 최적화하기 위한 딥러닝 기반의 ASOptimizer 웹 서버를 개발하였다. 사용자가 제공한 ASO 서열을 바탕으로 핵산 내 변형 가능한 위치를 체계적으로 탐색하여 유망한 변형 패턴의 순위 목록을 제공한다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "딥러닝 기반의 계산 프레임워크를 적용하여 ASO 서열과 화학적 변형을 체계적으로 탐색하는 웹 서버를 구축하였다.",
+        "improvement": "기존에 자원 집약적이고 시간이 많이 소요되던 수동 ASO 설계 방식을 개선하여, 전문 지식 없이도 누구나 쉽게 사용할 수 있는 직관적인 인터페이스를 제공한다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "ASO의 서열 및 화학적 변형을 최적화하기 위한 딥러닝 기반의 계산 프레임워크인 ASOptimizer 웹 서버를 구축하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "사용자가 제공한 ASO 서열을 입력받아 핵산 내 변형 위치를 체계적으로 탐색하고 유망한 변형 패턴의 순위를 제공하는 딥러닝 모델을 웹 서버 형태로 구현하였다.",
+        "improvement": "기존의 수동적인 ASO 설계 방식이 가진 자원 집약적이고 시간이 많이 소요되는 문제를 해결하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "ASOptimizer라는 딥러닝 기반 계산 프레임워크를 구축하고, 이를 웹 서버로 제공하여 사용자가 입력한 ASO 서열에 대해 핵산 내 화학적 변형 위치를 체계적으로 탐색하고 유망한 변형 패턴의 순위 목록을 반환하도록 하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "딥러닝 기반 계산 프레임워크를 사용하여 ASO 서열과 화학적 변형을 최적화한다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "Indirect comparison of mRNA-1010 versus enhanced influenza vaccines in adults aged 65 years and older during the 2024-2025 US influenza season",
+      "gemini t=1.0": {
+        "tech_summary": "mRNA 기반 인플루엔자 백신인 mRNA-1010과 기존 고용량 인플루엔자 백신 간의 의료기관 방문이 필요한 인플루엔자 감염 예방 효과를 간접적으로 비교 분석하여 두 백신이 대등한 효능을 보임을 확인하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [
+          {
+            "name": "상대백신효과(rVE)",
+            "value": "12.82",
+            "unit": "%",
+            "target": "mRNA-1010 vs 강화된 백신(EVs)"
+          }
+        ],
+        "approach": "표준 용량의 유정란 기반 인플루엔자 백신을 공통 비교군으로 설정하고, Bucher 방법을 이용한 고정형 간접 치료 비교(ITC)와 타겟 임상시험 에뮬레이션 및 역확률 가중치(IPW) 기법을 적용하였다.",
+        "improvement": "기존에 직접적인 비교 연구가 없었던 mRNA-1010과 현재 승인된 강화된 인플루엔자 백신 간의 예방 효과를 간접 비교를 통해 대등함을 입증하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "mRNA-1010 인플루엔자 백신과 기존의 고용량 인플루엔자 백신(EV) 간의 의학적 치료가 필요한 인플루엔자 감염 예방 효과를 간접 비교 분석하여 두 백신이 대등한 수준임을 확인하였다.",
+        "achievement_type": "성능향상",
+        "metrics": [
+          {
+            "name": "상대 백신 효과(rVE)",
+            "value": "12.82",
+            "unit": "%",
+            "target": "65세 이상 성인의 mRNA-1010 대비 고용량 인플루엔자 백신(EV)"
+          }
+        ],
+        "approach": "표준 용량의 계란 기반 인플루엔자 백신을 앵커로 사용하는 Bucher 방법을 통한 고정 간접 치료 비교(ITC)와 목표 시험 에뮬레이션 및 역확률 가중치(IPW) 기법을 적용하였다.",
+        "improvement": "기존의 고용량 인플루엔자 백신(EV)과 비교하여 mRNA-1010 백신이 의학적 치료가 필요한 인플루엔자 감염 예방에 있어 대등한 효과를 보임을 입증하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "65세 이상 성인에서 mRNA 기반 인플루엔자 백신 mRNA-1010의 의료기관 방문 인플루엔자에 대한 상대 백신 효과를 간접비교로 추정하여, 기존 강화 인플루엔자 백신과 유사한 효과(상대 백신 효과 12.82%, 95% CI -36.91~44.49%)를 확인하였다.",
+        "achievement_type": "성능향상",
+        "metrics": [
+          {
+            "name": "상대 백신 효과(rVE)",
+            "value": "12.82",
+            "unit": "%",
+            "target": "65세 이상 성인의 의료기관 방문 인플루엔자"
+          }
+        ],
+        "approach": "표준용량 유정란 기반 인플루엔자 백신을 공통 앵커로 사용한 Bucher 방법 기반 anchored indirect treatment comparison과 역확률 가중치를 적용하였다.",
+        "improvement": "직접 비교 증거가 없는 상황에서 mRNA-1010이 허가된 강화 인플루엔자 백신과 의료기관 방문 인플루엔자에 대해 유사한 효과를 보임을 간접비교로 제시하였다."
+      }
+    },
+    {
+      "title": "A Standing Support Mobility Robot for Enhancing Independence in Elderly Daily Living",
+      "gemini t=1.0": {
+        "tech_summary": "기립 자세를 유지하며 이동성을 지원하는 로봇 'Moby'를 개발하여 노인의 일상 생활에서 독립성과 안전성을 향상시켰다. ROS 기반의 수동 및 자율 모드 제어 시스템과 NAV2, LiDAR 통합을 통해 직관적이고 안전한 이동 지원 기능을 구현했다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "ROS(Robot Operating System) 제어 프레임워크와 NAV2 및 LiDAR를 통합하여 수동 및 자율 이동 기능을 갖춘 기립 지원 모빌리티 로봇을 설계하였다.",
+        "improvement": "기존의 좌식형 이동 보조 기구와 달리 사용자의 기립 자세를 유지함으로써 신체적 부담을 줄이고 자연스러운 사회적 상호작용 및 자기효능감을 증진시켰다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "노인들의 일상생활 독립성과 안전을 향상시키기 위해 기립 자세를 유지하며 이동을 보조하는 'Moby' 로봇을 개발하였다. 이 로봇은 수동 및 자율 주행 모드를 지원하며, 효과적인 기립 보조 기능을 제공한다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "Robot Operating System(ROS) 기반의 제어 시스템과 NAV2 및 LiDAR를 통합하여 직관적인 상호작용과 견고한 내비게이션 기능을 구현하였다.",
+        "improvement": "기존의 좌식 이동 보조 기구와 달리 사용자의 기립 자세를 유지함으로써 신체적 부담을 줄이고 자연스러운 눈높이에서의 사회적 상호작용을 가능하게 하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "고령자의 기립 자세를 유지하면서 수동 및 자율 주행이 가능한 기립 지지형 이동 로봇 'Moby'를 개발하고, NASA-TLX 및 시간 비교 실험을 통해 설계 기준의 타당성과 이점을 검증하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "ROS, NAV2, LiDAR를 통합하고 수동·자율 운전 모드를 갖춘 맞춤형 제어 시스템을 적용하여 기립 자세 보조 및 이동 지원을 구현하였다.",
+        "improvement": "기존 착석형 이동 보조기와 달리 직립 자세를 유지하여 신체 부담을 줄이고 눈높이 사회적 상호작용과 자기효능감을 높였으며, 수동 및 이동 지원 기능을 겸비하였다."
+      }
+    },
+    {
+      "title": "SIGMAS: Second-Order Interaction-based Grouping for Overlapping Multi-Agent Swarms",
+      "gemini t=1.0": {
+        "tech_summary": "다중 에이전트 군집 환경에서 에이전트 궤적 데이터로부터 잠재적인 그룹 구조를 자동으로 추론하는 SIGMAS 프레임워크를 개발하였다. 2차 상호작용과 학습 가능한 게이팅 메커니즘을 통해 개별 및 집단 역학을 통합적으로 모델링하여 그룹 식별 성능을 높였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "에이전트 간의 2차 상호작용을 모델링하고 학습 가능한 게이팅 메커니즘을 도입한 자기지도 학습 프레임워크를 사용하였다.",
+        "improvement": "기존의 직접적인 쌍방 상호작용 모델링 방식을 넘어, 에이전트들이 타인과 상호작용하는 유사성을 포착하여 중첩된 군집 역학 환경에서도 강인한 그룹 추론이 가능하도록 개선하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "다중 에이전트 군집 내에서 에이전트 궤적을 기반으로 잠재적 그룹 구조를 추론하는 SIGMAS 프레임워크를 제안하였다. 이는 2차 상호작용을 모델링하고 학습 가능한 게이팅 메커니즘을 통해 개별 및 집단 역학을 적응적으로 균형 있게 처리한다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "에이전트 간의 직접적인 쌍별 상호작용을 넘어 2차 상호작용을 모델링하고, 학습 가능한 게이팅 메커니즘을 도입하여 자기지도 학습 방식으로 그룹 구조를 추론하였다.",
+        "improvement": "기존의 직접적인 쌍별 상호작용 모델링 방식과 달리, 에이전트들이 다른 에이전트들과 유사하게 상호작용하는 방식을 포착함으로써 중첩된 군집 역학 환경에서도 강건한 그룹 추론을 가능하게 하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "SIGMAS라는 자기지도 학습 프레임워크를 제안하여, 에이전트 궤적만으로 중첩된 다중 에이전트 스웜의 잠재 그룹 구조를 직접 추론한다. 2차 상호작용 모델링과 학습 가능한 게이팅 메커니즘을 통해 개별 및 집단 역학을 적응적으로 결합하여 그룹 예측을 수행한다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "직접적인 쌍별 상호작용을 넘어 에이전트 간 2차 상호작용을 모델링하고, 학습 가능한 게이팅 메커니즘으로 개별 및 집단 역학을 적응적으로 균형화하는 자기지도 학습 프레임워크를 사용했다.",
+        "improvement": "기존 다중 에이전트 도메인과 달리 소수의 대규모 그룹으로 구성된 스웜에서 지도 없이 잠재 그룹 구조를 추론하는 새로운 과제를 설정하고, 중첩된 스웜 역학 하에서도 강건하게 그룹 구조를 복원한다."
+      }
+    },
+    {
+      "title": "fo22Alfaro/AOTS-GROK.LIBRE-EJE.DEL1: AOTS⁶ v1.0.0 - Alfredo Jhovany Alfaro Garcia - Ontological Toroidal System",
+      "gemini t=1.0": {
+        "tech_summary": "6차원 토로이달 매니폴드(T⁶) 구조에 SHA-256 암호학적 신원을 내장한 분산형 온톨로지 시스템인 AOTS⁶를 개발하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "6차원 토로이달 매니폴드(T⁶)를 기반으로 SHA-256 암호학적 신원을 내장하는 프레임워크를 설계하였다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "6차원 토로이달 매니폴드(T⁶) 구조 내에 SHA-256 암호화 식별자를 내장한 분산형 온톨로지 시스템인 AOTS⁶를 개발하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "6차원 토로이달 매니폴드(T⁶) 구조와 SHA-256 암호화 식별자를 결합한 독자적인 프레임워크를 설계하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "6차원 토로이달 다양체(T⁶)에 SHA-256 암호학적 신원을 내장한 분산 온톨로지 시스템 AOTS⁶를 구현하고, IPFS·OpenTimestamps·Bitcoin 블록체인 앵커·GitHub 커밋 체인으로 저작권 증거를 확보했다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "6차원 토로이달 다양체(T⁶) 구조에 SHA-256 암호학적 신원을 내장하는 방식",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "Real-Time AI-Driven Energy and Flexibility Management for a Technical Virtual Power Plant",
+      "gemini t=1.0": {
+        "tech_summary": "가상 발전소(TVPP)의 실시간 에너지 및 유연성 자체 스케줄링을 위한 AI 기반 프레임워크를 개발하였으며, 이는 다중 에이전트 심층 강화학습(MADRL)과 선형 계획법(LP)을 결합한 2단계 접근 방식을 사용한다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "전기차 충전소와 에너지 저장 장치 제어에는 다중 에이전트 근접 정책 최적화(MAPPO) 기반의 MADRL을, 나머지 시스템 운영에는 선형 계획법(LP)을 적용하고 피드백 메커니즘을 통해 상호 연동하였다.",
+        "improvement": "기존 방식 대비 가상 발전소의 운영 효율성과 수익성을 향상시켰다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "기술 가상 발전소(TVPP)의 실시간 에너지 및 유연성 자가 스케줄링을 위한 AI 기반 프레임워크를 개발하여 수익성을 극대화했다. 다중 에이전트 심층 강화학습(MADRL)과 선형 계획법(LP)을 결합한 2단계 최적화 방식을 통해 분산 자원을 효율적으로 운영한다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "다중 에이전트 근접 정책 최적화(MAPPO)를 활용한 다중 에이전트 심층 강화학습(MADRL)과 선형 계획법(LP)을 결합하고, 사전 학습 및 전이 학습을 통해 학습 효율을 높였다.",
+        "improvement": "기존 방식 대비 운영 효율성과 수익성 측면에서 우수한 성능을 보였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "전기차 충전소, 에너지저장장치, 태양광, 풍력, 분산발전기를 통합한 기술적 가상발전소(TVPP)의 실시간 에너지 및 유연성 자가 스케줄링을 위한 AI 기반 프레임워크를 개발하고, IEEE-33 버스 테스트 시스템에서 기존 방식 대비 우수한 운영 효율성과 수익성을 입증했다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "딥러닝 기반 단기 유연성 예측과 다중 에이전트 심층 강화학습(MAPPO, CTDE) 및 선형계획법(LP)의 2단계 최적화를 결합하고, 전이학습으로 학습 효율을 높였다.",
+        "improvement": "IEEE-33 버스 테스트 시스템 평가에서 기존 접근법 대비 운영 효율성과 수익성이 우수함을 보였다."
+      }
+    },
+    {
+      "title": "A First Case Report of Autoimmune Acquired Factor V Deficiency After Severe Acute Respiratory Syndrome Coronavirus 2 mRNA Vaccination at the Time of Initiating Haemodialysis",
+      "gemini t=1.0": {
+        "tech_summary": "SARS-CoV-2 mRNA 백신 접종 후 자가면역성 후천성 제5인자 결핍증(AiFVD)이 발생한 첫 사례를 보고하였으며, 이는 백신과 해당 질환 간의 잠재적 연관성을 시사한다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "SARS-CoV-2 mRNA 백신 접종 후 발생한 자가면역성 후천성 제5인자 결핍증(AiFVD) 사례를 세계 최초로 보고하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "SARS-CoV-2 백신 접종 후 혈액 검사를 통해 프로트롬빈 시간-국제정상화비율(PT-INR) 및 활성화 부분 트롬보플라스틴 시간(aPTT)의 연장과 제5인자(FV) 활성 감소를 확인하고, 제5인자 억제제 양성 반응을 통해 진단하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "SARS-CoV-2 mRNA 백신 접종 후 발생한 자가면역성 후천성 제5인자 결핍증(AiFVD)의 첫 사례를 보고하고, 항응고제 없이 혈액투석을 지속할 수 있음을 확인하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "A small-scale CRISPR mutant library in rapeseed of commercial cultivar Zhongshuang 11",
+      "gemini t=1.0": {
+        "tech_summary": "유채 품종 '중솽 11호(ZS11)'를 기반으로 326개의 독립적인 T0 라인을 포함하는 소규모 CRISPR 돌연변이 라이브러리를 구축하고, BnFAB1B 및 BnEDA32 유전자의 기능을 검증하여 종자 오일 함량 조절 가능성을 확인했다.",
+        "achievement_type": "공정",
+        "metrics": [
+          {
+            "name": "양성률",
+            "value": "94.2",
+            "unit": "%",
+            "target": "ZS11 형질전환 및 재생"
+          },
+          {
+            "name": "돌연변이 빈도",
+            "value": "68.4",
+            "unit": "%",
+            "target": "ZS11 CRISPR 편집 결과"
+          }
+        ],
+        "approach": "최적화된 ZS11 형질전환 및 재생 프로토콜을 사용하여 CRISPR 라이브러리를 구축하고, 표현형 분석 및 유전자 녹아웃 검증을 수행했다.",
+        "improvement": "기존의 유채 CRISPR 라이브러리 컬렉션을 확장하고 상업적으로 중요한 품종인 ZS11 기반의 추가적인 유전자 기능 검증 데이터를 제공한다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "유채 품종 Zhongshuang 11(ZS11)을 기반으로 한 소규모 CRISPR 돌연변이 라이브러리를 구축하고, 이를 통해 종자 오일 함량 및 식물 높이와 관련된 핵심 유전자를 발굴 및 검증하였다.",
+        "achievement_type": "기타",
+        "metrics": [
+          {
+            "name": "양성률",
+            "value": "94.2",
+            "unit": "%",
+            "target": "ZS11 형질전환 및 재생"
+          },
+          {
+            "name": "돌연변이 발생 빈도",
+            "value": "68.4",
+            "unit": "%",
+            "target": "ZS11 CRISPR 라이브러리"
+          }
+        ],
+        "approach": "최적화된 ZS11 형질전환 및 재생 프로토콜을 사용하여 326개의 독립적인 T0 라인을 생성하고 표현형 분석을 수행하였다.",
+        "improvement": "기존의 유채 CRISPR 라이브러리 컬렉션이 작았던 한계를 극복하여, 상업용 품종인 ZS11을 기반으로 한 확장된 돌연변이 라이브러리를 구축하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "상업용 유채 품종 Zhongshuang 11(ZS11)을 기반으로 326개 독립 T0 계통의 소규모 CRISPR 돌연변이 라이브러리를 구축하고, 종자유 함량(SOC)과 초장 변이에 관여하는 후보 유전자 BnFAB1B와 BnEDA32를 기능 검증하였다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "형질전환 양성률",
+            "target": "ZS11 T0 계통",
+            "unit": "%"
+          },
+          {
+            "name": "돌연변이 유발 빈도",
+            "target": "ZS11 CRISPR 라이브러리",
+            "unit": "%"
+          }
+        ],
+        "approach": "최적화된 ZS11 형질전환 및 재분화 프로토콜을 이용해 CRISPR 녹아웃 컬렉션을 구축하고, 녹아웃 컬렉션에서 선별한 후보 유전자를 기능 검증하였다.",
+        "improvement": "기존 고처리량 CRISPR 라이브러리 컬렉션이 소규모이고 후보 유전자 검증이 미비했던 한계를 보완하여, 상업용 우량 품종 ZS11 기반의 녹아웃 컬렉션과 새로운 유전자 자원을 확보하였다."
+      }
+    },
+    {
+      "title": "Reinforcement learning whale optimization algorithm-based optimal equivalent circuit models for photovoltaic cells and modules",
+      "gemini t=1.0": {
+        "tech_summary": "강화학습을 결합한 개선된 고래 최적화 알고리즘(RLEWOA)을 제안하여 태양광 셀 및 모듈의 등가 회로 모델에서 미지의 매개변수를 높은 정확도로 추출해냈다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "순위 기반 차분 돌연변이 연산자를 설계하여 탐색 능력을 강화하고, 강화학습을 통합하여 위치 업데이트 전략을 최적화함으로써 탐색과 활용의 균형을 맞췄다.",
+        "improvement": "기존 고래 최적화 알고리즘(WOA)이 가진 낮은 탐색 능력과 조기 수렴 문제를 해결하여 다른 비교 알고리즘들보다 향상된 정확도를 달성했다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "태양광 셀 및 모듈의 등가 회로 모델 파라미터를 정확하게 추출하기 위해 강화학습과 순위 기반 차분 변이 연산자를 결합한 개선된 고래 최적화 알고리즘(RLEWOA)을 개발하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "순위 기반 차분 변이 연산자를 도입하여 탐색 능력을 강화하고, 강화학습을 통합하여 위치 업데이트 전략을 최적화함으로써 탐색과 활용의 균형을 맞추었다.",
+        "improvement": "기존 고래 최적화 알고리즘(WOA)이 가진 낮은 탐색 능력과 조기 수렴 문제를 해결하여, 다른 알고리즘 대비 태양광 셀 모델 파라미터 추출의 정확도를 크게 향상시켰다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "태양광 셀 및 모듈의 등가회로 모델 파라미터를 고정밀로 추출하기 위해 강화학습 기반 고래 최적화 알고리즘(RLEWOA)을 제안하고, 9개 사례에서 기존 알고리즘 대비 높은 정확도를 달성했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "개선된 순위 기반 차분 돌연변이 연산자로 탐색 능력을 강화하고, 강화학습을 통합하여 단계별로 적합한 위치 갱신 전략을 선택하도록 설계했다.",
+        "improvement": "기존 고래 최적화 알고리즘(WOA)의 조기 수렴 문제를 해결하여 탐색-활용 균형을 개선하고, 다른 알고리즘 대비 파라미터 추출 정확도를 유의미하게 높였다."
+      }
+    },
+    {
+      "title": "The Role of Insulin in the Proliferation and Differentiation of Bovine Muscle Satellite (Stem) Cells for Cultured Meat Production",
+      "gemini t=1.0": {
+        "tech_summary": "소 근육 위성 세포(MSC)의 증식 및 분화를 촉진하는 핵심 인자로서 인슐린의 역할을 규명하였으며, 이를 통해 태아 소 혈청(FBS) 사용량을 줄일 수 있는 배양 조건을 제시하였다.",
+        "achievement_type": "공정",
+        "metrics": [],
+        "approach": "TGF-β, HGF, PDGF, 인슐린, IGF-1, EGF 등 6종의 성장 인자와 IL-2 사이토카인을 적용하여 소 MSC의 증식률, 분화율 및 관련 mRNA와 단백질 발현을 분석하였다.",
+        "improvement": "기존의 태아 소 혈청(FBS) 의존도를 낮추면서도 세포 증식 및 분화 마커(Ki67, PCNA, MYOD, MYOG, MYH 등)의 발현을 효과적으로 유지 및 증진시켰다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "인슐린이 소 근육 위성 세포(MSC)의 증식과 분화를 효과적으로 촉진함을 확인하였으며, 이를 통해 배양육 생산을 위한 태아 소 혈청(FBS) 사용량을 줄일 수 있는 가능성을 제시하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "TGF-β, HGF, PDGF, 인슐린, IGF-1, EGF 및 IL-2 등 6가지 성장 인자와 사이토카인을 소 근육 위성 세포에 적용하여 증식률, 분화율, 관련 mRNA 및 단백질 발현을 분석하였다.",
+        "improvement": "인슐린은 낮은 농도의 태아 소 혈청(FBS) 환경에서 발생하는 세포 증식 및 분화 마커의 감소를 억제하여 FBS 의존도를 낮추는 효과를 보였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "소 혈청(FBS) 대체를 목표로 소 근육 위성(줄기)세포(MSC)의 증식과 분화를 촉진하는 물질을 평가하여, 인슐린이 세포 증식률과 Ki67·PCNA 발현, 근관 형성·크레아틴 키나아제 활성 및 MYOD·MYOG·MYH 발현을 가장 효과적으로 증가시키고 저농도 FBS로 인한 증식·분화 지표 감소를 억제함을 확인했다.",
+        "achievement_type": "성능향상",
+        "metrics": [],
+        "approach": "6종 성장인자(TGF-β, HGF, PDGF, insulin, IGF-1, EGF)와 사이토카인 IL-2를 소 근육 위성세포의 증식 및 분화 단계에 각각 처리하여 효과를 비교 평가했다.",
+        "improvement": "기존 FBS 의존 배양 대비 인슐린 처리를 통해 FBS 사용량을 줄이면서도 근육 위성세포의 증식과 분화를 촉진할 수 있음을 보였다."
+      }
+    },
+    {
+      "title": "Advances in large DNA fragment assembly for microbial cell factory engineering",
+      "gemini t=1.0": {
+        "tech_summary": "미생물 세포 공장 엔지니어링을 위한 대형 DNA 조각 조립 기술의 최신 발전 상황을 체계적으로 정리하고, 다양한 조립 방법론과 그 응용 사례를 요약하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "시험관 내(in vitro) 및 생체 내(in vivo) 다중 유전자 조립 방법, 합성 게놈 및 신염색체 구축을 포함한 게놈 규모 기술들을 분석하였다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "미생물 세포 공장 엔지니어링을 위한 대형 DNA 조각 조립 기술의 최신 발전 현황을 체계적으로 정리하고, 이를 활용한 대사 경로 구축 및 게놈 규모의 합성 기술을 분석하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "체외(in vitro) 및 체내(in vivo) 다중 유전자 조립 방법과 합성 게놈 및 네오크로모좀 구축을 포함한 게놈 규모 기술들을 체계적으로 비교 분석하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "대형 DNA 단편 조립 방법들을 체계적으로 비교·정리하고, 이종 경로 구축, 숙주 대사 재프로그래밍, 복합 생합성 네트워크 확장 등 미생물 세포 공장 엔지니어링에의 적용 성과를 제시하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "Deep eutectic solvent–mediated assembly of a biopolymer–inorganic S-scheme Sn0.98Fe0.02O/γ-Al2O3/CeO2/α-MoO3 composite with enhanced interface coupling for dual catalytic applications",
+      "gemini t=1.0": {
+        "tech_summary": "바이오폴리머 기반의 Sn0.98Fe0.02O/γ-Al2O3/CeO2/α-MoO3 S-scheme 이종접합 복합체를 합성하여 비스페놀 A(BPA) 제거와 수소 생산을 동시에 수행하는 이중 광촉매 성능을 달성하였다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "분해 효율",
+            "value": "98.36",
+            "unit": "%",
+            "target": "비스페놀 A(BPA)"
+          },
+          {
+            "name": "수소 생산 속도",
+            "value": "4.76",
+            "unit": "mmol/g/h",
+            "target": "광촉매"
+          }
+        ],
+        "approach": "구아검 유래 활성탄(GGAC)과 염화콜린-요소 기반 심층 공융 용매(DES)를 친환경 템플릿 및 안정화제로 사용하여 S-scheme 이종접합 구조를 합성하였다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "구아검 유래 활성탄과 심층 공융 용매를 활용한 친환경 합성법으로 Sn0.98Fe0.02O/γ-Al2O3/CeO2/α-MoO3 S-scheme 이종접합 광촉매를 개발하여 비스페놀 A(BPA) 분해와 수소 생산을 동시에 달성하였다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "분해 효율",
+            "value": "98.36",
+            "unit": "%",
+            "target": "BPA"
+          },
+          {
+            "name": "반응 속도 상수",
+            "value": "0.083",
+            "unit": "min-1",
+            "target": "BPA 분해 반응"
+          },
+          {
+            "name": "수소 생산율",
+            "value": "4.76",
+            "unit": "mmol/g/h",
+            "target": "광촉매"
+          }
+        ],
+        "approach": "구아검 유래 활성탄과 염화콜린-요소 기반 심층 공융 용매를 템플릿 및 안정화제로 사용하여 S-scheme 이종접합 구조를 합성하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "구아검 유래 활성탄과 염화콜린-요소 딥유테틱 용매를 이용해 S-scheme Sn0.98Fe0.02O/γ-Al2O3/CeO2/α-MoO3 이종접합 광촉매를 합성하고, 이를 통해 BPA 분해 효율 98.36±2.09%와 가시광 수소 생산 4.76 mmol/g/h를 동시에 달성했다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "분해 효율",
+            "value": "98.36",
+            "unit": "%",
+            "target": "BPA"
+          },
+          {
+            "name": "수소 생산 속도",
+            "value": "4.76",
+            "unit": "mmol/g/h",
+            "target": ""
+          },
+          {
+            "name": "반응 속도 상수",
+            "value": "0.083",
+            "unit": "1/min",
+            "target": "BPA 분해"
+          }
+        ],
+        "approach": "구아검 유래 활성탄(GGAC)과 염화콜린-요소 딥유테틱 용매를 친환경 주형 및 안정화제로 사용하여 S-scheme SFO/ACM 이종접합을 합성하고, 퍼옥시모노설페이트(PMS) 활성화와 결합하였다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "Piilonenite-(Nd), NaNd(CO 3 ) 2 ⋅ 3H 2 O, a new neodymium-dominant carbonate mineral from Mont Saint-Hilaire, Quebec, Canada",
+      "gemini t=1.0": {
+        "tech_summary": "캐나다 몬트생틸레르에서 새로운 네오디뮴 기반 탄산염 광물인 필로네나이트-(Nd)(Piilonenite-(Nd))를 발견하고 그 화학적 조성 및 결정 구조를 규명하였다.",
+        "achievement_type": "기타",
+        "metrics": [
+          {
+            "name": "밀도",
+            "value": "3.21",
+            "unit": "g/cm3",
+            "target": "필로네나이트-(Nd)"
+          },
+          {
+            "name": "격자상수",
+            "value": "6.7914",
+            "unit": "Å",
+            "target": "a축"
+          },
+          {
+            "name": "격자상수",
+            "value": "17.135",
+            "unit": "Å",
+            "target": "b축"
+          },
+          {
+            "name": "격자상수",
+            "value": "6.4360",
+            "unit": "Å",
+            "target": "c축"
+          }
+        ],
+        "approach": "싱크로트론 데이터를 활용하여 해당 광물의 결정 구조를 해석하고 정밀 분석하였다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "캐나다 몽생틸레르에서 발견된 새로운 네오디뮴 우점 탄산염 광물인 'Piilonenite-(Nd)'를 발견하고 그 결정 구조와 화학적 조성을 규명하였다.",
+        "achievement_type": "기타",
+        "metrics": [
+          {
+            "name": "밀도",
+            "value": "3.21",
+            "unit": "g/cm3",
+            "target": "Piilonenite-(Nd)"
+          },
+          {
+            "name": "굴절률",
+            "value": "1.546",
+            "unit": "",
+            "target": "Piilonenite-(Nd) (alpha)"
+          },
+          {
+            "name": "굴절률",
+            "value": "1.616",
+            "unit": "",
+            "target": "Piilonenite-(Nd) (beta)"
+          },
+          {
+            "name": "굴절률",
+            "value": "1.638",
+            "unit": "",
+            "target": "Piilonenite-(Nd) (gamma)"
+          },
+          {
+            "name": "격자상수",
+            "value": "6.7914",
+            "unit": "Angstrom",
+            "target": "Piilonenite-(Nd) (a)"
+          },
+          {
+            "name": "격자상수",
+            "value": "17.135",
+            "unit": "Angstrom",
+            "target": "Piilonenite-(Nd) (b)"
+          },
+          {
+            "name": "격자상수",
+            "value": "6.4360",
+            "unit": "Angstrom",
+            "target": "Piilonenite-(Nd) (c)"
+          }
+        ],
+        "approach": "싱크로트론 데이터를 사용하여 광물의 결정 구조를 해석하고 정밀화하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "몽생틸레르에서 발견된 새로운 네오디뮴 우세 탄산염 광물인 piilonenite-(Nd)의 물리적·화학적·결정학적 특성을 규명하고, 이상적인 화학식 NaNd(CO3)2⋅3H2O를 확립했다. 싱크로트론 데이터를 기반으로 독특한 층상 결정 구조를 해석 및 정밀화했다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "밀도",
+            "value": "3.21",
+            "unit": "g/cm3",
+            "target": "piilonenite-(Nd)"
+          },
+          {
+            "name": "격자 부피",
+            "value": "749.0",
+            "unit": "A3",
+            "target": "piilonenite-(Nd)"
+          }
+        ],
+        "approach": "싱크로트론 X선 회절 데이터를 이용해 결정 구조를 해석하고 정밀화했으며, 분말 X선 회절, 적외선 분광 분석, 화학 조성 분석을 통해 광물의 특성을 규명했다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "Zebrafish knockout models of atxn1a , atxn1b , and atxn1l reveal distinct and shared phenotypic and transcriptomic alterations",
+      "gemini t=1.0": {
+        "tech_summary": "CRISPR/Cas9 기술을 사용하여 atxn1a, atxn1b, atxn1l 제브라피쉬 녹아웃(KO) 모델을 구축하고, 각 유전자의 발달, 행동 및 전사체 변화를 규명하여 ATXN1 패밀리 유전자의 공통적 기능과 특수화된 역할을 확인하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "CRISPR/Cas9 유전자 편집 기술을 사용하여 제브라피쉬에서 atxn1a, atxn1b, atxn1l 유전자를 각각 결실시킨 녹아웃 모델을 생성하고 행동 분석 및 RNA-seq 분석을 수행하였다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "CRISPR/Cas9을 사용하여 atxn1a, atxn1b, atxn1l 유전자가 결손된 제브라피쉬 모델을 최초로 구축하고, 이들 유전자의 발달, 행동 및 전사체 수준에서의 고유한 기능과 공통적인 역할을 규명하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "CRISPR/Cas9 유전자 가위 기술을 활용하여 atxn1a, atxn1b, atxn1l 유전자를 각각 결손시킨 제브라피쉬 모델을 생성하고, 행동 분석 및 RNA-seq 전사체 분석을 수행하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "CRISPR/Cas9을 이용해 제브라피시의 ataxin-1 패밀리 유전자 atxn1a, atxn1b, atxn1l에 대한 최초의 녹아웃 모델을 제작하고, 이들 모델에서 발달, 행동, 전사체 수준의 공통적 및 유전자 특이적 표현형 변화를 규명했다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "CRISPR/Cas9 유전자 편집으로 제브라피시 녹아웃 모델을 제작하고 RNA-seq 및 weighted gene co-expression network analysis(WGCNA)를 수행",
+        "improvement": "ATXN1 패밀리 유전자 3종에 대한 최초의 제브라피시 녹아웃 모델을 구축하여 기존에 불완전하게 이해되던 정상 생리적 기능을 유전자별로 비교 분석함"
+      }
+    },
+    {
+      "title": "Development of electron-flow-strengthened azo dyes with a wide color reproduction range for application in the color conversion layers of microdisplays",
+      "gemini t=1.0": {
+        "tech_summary": "마이크로디스플레이 색 변환층에 적용 가능한 넓은 색 재현 범위를 가진 새로운 적색 아조 염료를 개발하였다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "투과도",
+            "value": "99",
+            "unit": "%",
+            "target": "스핀 코팅된 색 변환 필름"
+          },
+          {
+            "name": "색 재현 범위",
+            "value": "111",
+            "unit": "%",
+            "target": "National Television System Committee(NTSC) 색 좌표 기준"
+          }
+        ],
+        "approach": "디아조 성분에 강한 전자 흡인기를 도입하여 분자 내 전자 흐름을 제어하고 몰 흡광 계수를 향상시켰다.",
+        "improvement": "기존 대비 적색 아조 염료의 흡수 파장을 적색 편이시키고 황색 색상 조정 염료를 추가하여 NTSC 기준 111%까지 색 재현 범위를 확장하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "마이크로디스플레이 색변환층에 적용 가능한 넓은 색재현 범위를 가진 새로운 적색 아조 염료를 개발하고, 이를 통해 광학적 특성과 광안정성을 동시에 향상시켰다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "투과율",
+            "value": "99",
+            "unit": "%",
+            "target": "스핀 코팅된 필름"
+          },
+          {
+            "name": "색재현 범위",
+            "value": "111",
+            "unit": "%",
+            "target": "NTSC 색좌표 기준"
+          }
+        ],
+        "approach": "디아조 성분에 강한 전자 끌개 그룹을 도입하여 분자 내 전자 흐름을 제어하고, 구조적으로 유사한 황색 색조 조정 염료를 혼합하여 색재현 범위를 확장하였다.",
+        "improvement": "기존 대비 분자 내 전자 흐름 제어를 통해 몰 흡광 계수를 개선하고, 적색 편이를 유도하여 더 넓은 색재현 범위를 확보하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "마이크로픽셀 백색 유기발광다이오드용 색변환층에 적용 가능한 신규 적색 아조 염료를 개발하고, 이를 저온 경화 바인더와 배합하여 99%의 높은 투과율을 갖는 색변환 필름을 제작하였다. 또한 황색 색보정 염료를 도입하여 색재현 범위를 NTSC 색좌표 기준 111%까지 확장하고 광안정성을 동시에 확보하였다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "투과율",
+            "value": 99,
+            "unit": "%",
+            "target": "스핀코팅 색변환 필름"
+          },
+          {
+            "name": "색재현율",
+            "value": 111,
+            "unit": "%",
+            "target": "NTSC 색좌표 기준"
+          }
+        ],
+        "approach": "디아조 성분에 강한 전자 흡인성 그룹을 도입하여 분자 내 전자 흐름을 제어하고, 구조적으로 유사한 황색 색보정 염료를 혼합하였다.",
+        "improvement": "기존 색변환층 대비 색재현 범위를 NTSC 색좌표 기준 111%까지 확장하고, 광안정성 시험에서 투과율 변화가 미미하여 광학 특성과 광안정성을 동시에 향상시켰다."
+      }
+    },
+    {
+      "title": "Blue carbon storage in surface sediments of seagrasses and mangroves for Mauritian inventories",
+      "gemini t=1.0": {
+        "tech_summary": "모리셔스의 잘피와 복원된 맹그로브 서식지의 표층 퇴적물 내 유기탄소 저장량 및 매장 속도를 정량화하여 국가 탄소 격리 능력을 평가했다. 복원된 맹그로브 생태계에서 수령에 따른 유기탄소 축적 변화를 규명하고 초기 단계 대비 탄소 격리 성과를 확인했다.",
+        "achievement_type": "기타",
+        "metrics": [
+          {
+            "name": "유기탄소 저장량",
+            "value": "10.8",
+            "unit": "Mg C/ha",
+            "target": "잘피(Syringodium isoetifolium 및 Halodule uninervis)"
+          },
+          {
+            "name": "유기탄소 매장 속도",
+            "value": "0.58",
+            "unit": "Mg OC/ha/year",
+            "target": "13-17년생 맹그로브(Rhizophora mucronata)"
+          },
+          {
+            "name": "순 탄소 이득",
+            "value": "14.3",
+            "unit": "Mg C/ha",
+            "target": "맹그로브 복원 프로그램"
+          },
+          {
+            "name": "순 탄소 이득",
+            "value": "265.9",
+            "unit": "Mg CO2eq/ha",
+            "target": "맹그로브 복원 프로그램"
+          }
+        ],
+        "approach": "잘피 서식지와 수령별로 구분된 복원 맹그로브 서식지의 표층 퇴적물을 분석하고, 맹그로브의 경우 수령에 따른 퇴적물 내 유기탄소의 시간적 증가 추이를 측정하여 탄소 매장 속도를 산출했다.",
+        "improvement": "기존 연구 대비 잘피의 탄소 저장량이 지역적 추정치를 상회함을 확인했으며, 맹그로브 복원 초기 단계와 비교하여 노령 맹그로브에서 유기물 함량은 4배, 탄소 저장량은 2배 증가하는 성과를 확인했다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "모리셔스 남부의 해초 서식지와 연령별로 복원된 맹그로브 퇴적물의 유기탄소(OC) 저장량을 정량화하고, 맹그로브 생육 연령에 따른 유기탄소 매립률 변화를 분석하였다.",
+        "achievement_type": "기타",
+        "metrics": [
+          {
+            "name": "유기탄소 저장량",
+            "value": "10.8",
+            "unit": "Mg/ha",
+            "target": "해초 서식지(Syringodium isoetifolium 및 Halodule uninervis)"
+          },
+          {
+            "name": "유기탄소 매립률",
+            "value": "0.58",
+            "unit": "Mg/ha/year",
+            "target": "13-17년생 맹그로브(Rhizophora mucronata)"
+          },
+          {
+            "name": "순 탄소 획득량",
+            "value": "14.3",
+            "unit": "Mg/ha",
+            "target": "복원된 맹그로브"
+          }
+        ],
+        "approach": "해초 서식지와 연령별로 구분된 복원 맹그로브의 표층 퇴적물 내 유기탄소 저장량을 측정하고, 맹그로브의 연령에 따른 퇴적물 내 유기탄소 증가 추이를 분석하였다.",
+        "improvement": "복원된 맹그로브의 경우, 초기 단계 대비 노령 맹그로브에서 유기물 함량은 4배, 유기탄소 저장량은 약 2배 증가하는 명확한 시간적 경향성을 확인하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "모리셔스 남부 해안의 해초 서식지와 연령별 복원 맹그로브 표층 퇴적물에서 유기탄소 저장량을 정량화하고, 맹그로브의 유기탄소 매몰률을 수령에 따라 추정하였다. 복원된 Rhizophora mucronata 맹그로브는 수령이 증가함에 따라 유기물 함량과 유기탄소 저장량이 2차 함수 관계로 증가하여 초기 단계 대비 최대 4배 높은 유기물과 약 2배 높은 유기탄소 저장량을 보였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [
+          {
+            "name": "유기탄소 저장량",
+            "unit": "Mg C/ha",
+            "value": 10.8,
+            "target": "해초 서식지(Syringodium isoetifolium, Halodule uninervis) 표층 퇴적물"
+          },
+          {
+            "name": "유기탄소 매몰률",
+            "unit": "Mg OC/ha/year",
+            "value": 0.58,
+            "target": "13-17년생 복원 맹그로브(Rhizophora mucronata)"
+          },
+          {
+            "name": "순탄소증가량",
+            "unit": "Mg C/ha",
+            "value": 14.3,
+            "target": "복원 맹그로브 전체 복원 프로그램"
+          },
+          {
+            "name": "이산화탄소환산량",
+            "unit": "Mg CO2eq/ha",
+            "value": 265.9,
+            "target": "복원 맹그로브 전체 복원 프로그램"
+          }
+        ],
+        "approach": "연령이 다른 복원 맹그로브 임분의 표층 퇴적물에서 유기탄소의 시간적 증가를 이용하여 유기탄소 매몰률을 추정하고, 해초 서식지와 식생 유무에 따른 퇴적물 특성을 비교 분석하였다.",
+        "improvement": "복원 맹그로브의 노령 임분은 초기 단계 대비 유기물 함량이 4배, 유기탄소 저장량이 약 2배 높았으며, 13-17년생의 유기탄소 매몰률은 0-3년생 대비 약 50% 수준으로 감소하는 경향을 보였다."
+      }
+    },
+    {
+      "title": "Textual overlap rather than domain alignment: A comparative study of fine-tuning strategies for specialised machine translation with large language models",
+      "gemini t=1.0": {
+        "tech_summary": "Qwen3-14B 모델을 활용하여 특수 분야(정치 담론) 번역에서 파인튜닝 전략(FPFT 및 PEFT)의 효과를 비교 분석하였으며, 번역 성능 향상이 데이터 도메인 유사성보다는 훈련 데이터와 평가 데이터 간의 텍스트 중첩도에 크게 의존함을 규명하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "BLEU",
+            "value": "",
+            "unit": "",
+            "target": "Test Set B (파인튜닝 데이터 샘플링)"
+          },
+          {
+            "name": "ROUGE-L F1",
+            "value": "",
+            "unit": "",
+            "target": "Test Set B (파인튜닝 데이터 샘플링)"
+          },
+          {
+            "name": "METEOR",
+            "value": "",
+            "unit": "",
+            "target": "Test Set B (파인튜닝 데이터 샘플링)"
+          },
+          {
+            "name": "BERTScore F1",
+            "value": "",
+            "unit": "",
+            "target": "Test Set B (파인튜닝 데이터 샘플링)"
+          }
+        ],
+        "approach": "Qwen3-14B 모델을 대상으로 전체 파라미터 미세 조정(FPFT) 및 효율적 파라미터 미세 조정(PEFT)을 수행하고, 다양한 텍스트 중첩 조건의 테스트 세트를 통해 성능을 비교하였다.",
+        "improvement": "훈련 데이터와 평가 데이터 간의 텍스트 중첩이 높은 경우, 기본 모델 대비 FPFT와 PEFT 전략 모두 모든 지표에서 유의미한 성능 향상을 보였으나, 텍스트 중첩이 낮은 경우 일관된 개선 효과는 나타나지 않았다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "중국어-영어 정치 담론 번역을 위해 Qwen3-14B 모델을 대상으로 전체 파라미터 미세조정(FPFT)과 효율적 파라미터 미세조정(PEFT) 전략을 비교 분석하여, 미세조정의 성능 향상이 도메인 유사성보다는 학습 데이터와 평가 데이터 간의 텍스트 중첩도에 크게 의존함을 규명하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "BLEU",
+            "value": "상세 수치 미제시",
+            "unit": "",
+            "target": "중국어-영어 정치 담론 번역"
+          },
+          {
+            "name": "ROUGE-L F1",
+            "value": "상세 수치 미제시",
+            "unit": "",
+            "target": "중국어-영어 정치 담론 번역"
+          },
+          {
+            "name": "METEOR",
+            "value": "상세 수치 미제시",
+            "unit": "",
+            "target": "중국어-영어 정치 담론 번역"
+          },
+          {
+            "name": "BERTScore F1",
+            "value": "상세 수치 미제시",
+            "unit": "",
+            "target": "중국어-영어 정치 담론 번역"
+          }
+        ],
+        "approach": "Qwen3-14B 모델을 기반으로 전체 파라미터 미세조정(FPFT)과 효율적 파라미터 미세조정(PEFT)을 수행하고, 텍스트 중첩도가 다른 세 가지 테스트 세트(Test Set A, B, C)를 통해 성능을 평가하였다.",
+        "improvement": "학습 데이터와 평가 데이터 간의 텍스트 중첩도가 높은 경우(Test Set B), 미세조정 모델이 기본 모델 대비 모든 지표에서 성능이 크게 향상되었음을 확인하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "중국어-영어 정치 담화 특화 기계번역에서 Qwen3-14B 모델에 대한 전매개변수 미세조정(FPFT)과 매개변수 효율적 미세조정(PEFT)의 성능을 비교하고, 미세조정 이득이 도메인 유사성보다 훈련-평가 데이터 간 텍스트 중첩에 의해 좌우됨을 실증적으로 규명했다.",
+        "achievement_type": "성능향상",
+        "metrics": [
+          {
+            "name": "BLEU",
+            "value": null,
+            "unit": "",
+            "target": "Test Set B (미세조정 코퍼스에서 샘플링)"
+          },
+          {
+            "name": "ROUGE-L F1",
+            "value": null,
+            "unit": "",
+            "target": "Test Set B (미세조정 코퍼스에서 샘플링)"
+          },
+          {
+            "name": "METEOR",
+            "value": null,
+            "unit": "",
+            "target": "Test Set B (미세조정 코퍼스에서 샘플링)"
+          },
+          {
+            "name": "BERTScore F1",
+            "value": null,
+            "unit": "",
+            "target": "Test Set B (미세조정 코퍼스에서 샘플링)"
+          }
+        ],
+        "approach": "중국어-영어 정치 담화 코퍼스와 Qwen3-14B 모델을 사용하여 전매개변수 미세조정(FPFT)과 매개변수 효율적 미세조정(PEFT)을 비교하였다.",
+        "improvement": "Test Set B에서 두 미세조정 모델 모두 기본 모델 대비 네 가지 지표 모두에서 상당한 성능 향상을 보였으며, FPFT가 최고 점수를 달성했고 PEFT는 계산 효율적 대안을 제공했다."
+      }
+    },
+    {
+      "title": "Dequantizing Short-Path Quantum Algorithms",
+      "gemini t=1.0": {
+        "tech_summary": "기존 단경로(short-path) 양자 알고리즘의 기초가 되는 명시적인 고전적 메커니즘을 식별하여 해당 알고리즘의 양자 이점을 부정하는 고전 알고리즘을 개발했다. 이를 통해 특정 제약 만족 문제(MAX-k-CSP)에 대해 기존 양자 알고리즘보다 빠른 연산 복잡도를 갖는 고전 알고리즘을 제시했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "연산 복잡도",
+            "value": "2^((1-c')n)",
+            "unit": "",
+            "target": "제약 만족 문제(MAX-k-CSPs)"
+          }
+        ],
+        "approach": "단경로 양자 알고리즘의 기저에 있는 명시적인 고전적 메커니즘을 식별하고 이를 활용한 양자 영감(quantum-inspired) 접근법을 적용했다.",
+        "improvement": "기존 단경로 양자 알고리즘이 가졌던 초이차(super-quadratic) 양자 이점 주장을 반박하고, 동일한 제약 만족 문제 클래스에서 기존보다 개선된 복잡도(2^((1-c')n) vs 2^((1-c)n/2))를 가지는 고전 알고리즘을 도출했다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "제약 충족 문제(MAX-k-CSPs)에 대한 기존 단기 경로 양자 알고리즘의 복잡도를 능가하는 고전 알고리즘을 개발하여, 해당 양자 알고리즘이 초이차 양자 우위를 달성하지 못함을 증명하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "시간 복잡도",
+            "value": "2^{(1-c')n}",
+            "unit": "",
+            "target": "제약 충족 문제(MAX-k-CSPs) 해결을 위한 고전 알고리즘"
+          }
+        ],
+        "approach": "기존 단기 경로 양자 알고리즘의 기저에 있는 명시적인 고전적 메커니즘을 식별하여 이를 고전 알고리즘으로 탈양자화(dequantization)하였다.",
+        "improvement": "기존 단기 경로 양자 알고리즘의 복잡도인 2^{(1-c)n/2} 대비 더 빠른 2^{(1-c')n}의 시간 복잡도를 달성하여, 해당 양자 알고리즘이 초이차 양자 우위를 제공하지 않음을 보였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "Hastings의 short-path 양자 알고리즘과 Dalzell 등의 후속 연구에서 제안된 MAX-k-CSP 문제 해결을 위한 양자 알고리즘의 핵심 메커니즘을 분석하여, 동일한 문제 클래스에 대해 기존 양자 알고리즘보다 더 나은 지수 시간 복잡도 2^(1-c')n (c'>c)을 달성하는 고전 알고리즘을 개발했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "양자 알고리즘의 성능 이점을 뒷받침하는 명시적인 고전적 메커니즘을 규명하고 이를 기반으로 한 '양자 영감(quantum-inspired)' 방식의 고전 알고리즘 설계 기법을 적용했다.",
+        "improvement": "기존 short-path 양자 알고리즘의 시간 복잡도 2^(1-c)n/2에 비해, 새로 제안된 고전 알고리즘은 2^(1-c')n (c'>c)의 시간 복잡도를 달성하여 해당 문제들에서 양자 알고리즘이 초이차(super-quadratic) 이점을 갖지 못함을 보였다."
+      }
+    },
+    {
+      "title": "Recent Progress and Future Perspectives of MNb2O6 Nanomaterials for Photocatalytic Water Splitting",
+      "gemini t=1.0": {
+        "tech_summary": "MNb2O6 기반 나노소재의 광촉매 물 분해 성능을 분석하고, 이들의 합성 전략과 밴드 구조 제어를 통한 수소 생산 효율 향상 메커니즘을 규명하였다.",
+        "achievement_type": "기타",
+        "metrics": [
+          {
+            "name": "수소 생산 속도",
+            "value": "146",
+            "unit": "mmol/h/g",
+            "target": "MNb2O6 복합체 광촉매"
+          }
+        ],
+        "approach": "열수, 용매열 합성, 전기방사 등 다양한 합성 경로와 이종접합 설계, 결함 공학, 조촉매 도입을 통해 전하 분리 및 가시광 흡수 범위를 최적화하였다.",
+        "improvement": "기존의 일반적인 광촉매 시스템 대비 MNb2O6 기반 소재의 가시광 구동 수소 생산 성능과 전하 분리 효율을 비교 분석하여 개선하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "MNb2O6 나노물질 기반의 광촉매를 활용하여 가시광선 구동 수소 생산 효율을 향상시켰으며, 특히 복합체 시스템에서 높은 수소 생산 속도를 달성하였다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "수소 생산 속도",
+            "value": "146",
+            "unit": "mmol/h/g",
+            "target": "MNb2O6 기반 복합체 시스템"
+          }
+        ],
+        "approach": "수열합성, 용매열합성, 전기방사 등의 합성 경로를 통해 MNb2O6의 결정 구조, 전자적 특성, 밴드갭을 조절하고 g-C3N4나 TiO2와 같은 물질과의 이종접합 설계 및 결함 공학을 적용하였다.",
+        "improvement": "기존의 일반적인 광촉매 시스템과 비교하여 가시광선 영역에서의 광 흡수 및 전하 분리 효율을 개선하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "MNb2O6 나노소재 기반 광촉매의 합성 전략, 구조·전자·광학 특성과 광촉매 성능 간 관계, 수소 발생 향상 메커니즘을 체계적으로 정리하고, 복합 시스템에서 최대 146 mmol/h/g의 수소 생성 속도를 달성한 사례를 보고하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [
+          {
+            "name": "수소 생성 속도",
+            "value": "146",
+            "unit": "mmol/h/g",
+            "target": "MNb2O6 복합 시스템"
+          }
+        ],
+        "approach": "MnNb2O6, CuNb2O6 및 g-C3N4, TiO2 기반 이종접합 설계와 가시광 흡수 확장, 결함 공학, 조촉매 도입을 통해 전하 분리와 촉매 수명을 개선하였다.",
+        "improvement": "기존 광촉매 시스템 대비 가시광 구동 수소 발생 성능을 벤치마킹하여 MNb2O6 기반 복합 시스템의 우수한 수소 생성 속도를 확인하였다."
+      }
+    },
+    {
+      "title": "Secure CNN Inference with Adaptive Activation Functions Based on Mutual Information Optimization",
+      "gemini t=1.0": {
+        "tech_summary": "상호 정보량 최적화를 기반으로 한 적응형 다항식 활성화 함수를 도입하여 암호문 상태에서의 CNN 추론 정확도와 계산 효율성을 동시에 달성하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "추론 정확도",
+            "value": "98.13",
+            "unit": "%",
+            "target": "MNIST 데이터셋 암호문 추론"
+          },
+          {
+            "name": "추론 정확도",
+            "value": "95.31",
+            "unit": "%",
+            "target": "Fashion-MNIST 데이터셋 암호문 추론"
+          }
+        ],
+        "approach": "CKKS 동형 암호 알고리즘을 기반으로 상호 정보량을 활용해 각 신경망 계층의 특징과 레이블 간 상관관계를 정량화하고, 이에 따라 다항식 활성화 함수의 차수와 계수를 동적으로 매칭하였다.",
+        "improvement": "기존의 고정 차수 다항식 활성화 함수 방식 대비 암호문 환경에서 모델의 표현력과 계산 효율성의 균형을 개선하여 더 높은 추론 정확도를 확보하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "상호 정보량(Mutual Information)을 기반으로 다항식 활성화 함수의 차수와 계수를 동적으로 최적화하여 암호문 상태에서의 CNN 추론 정확도와 효율성을 개선하였다. CKKS 동형 암호 알고리즘을 활용하여 암호화된 데이터 환경에서 모델의 표현력과 연산 효율 간의 균형을 달성하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "추론 정확도",
+            "value": "98.13",
+            "unit": "%",
+            "target": "MNIST 데이터셋 암호문 추론"
+          },
+          {
+            "name": "추론 정확도",
+            "value": "95.31",
+            "unit": "%",
+            "target": "Fashion-MNIST 데이터셋 암호문 추론"
+          }
+        ],
+        "approach": "상호 정보량을 활용해 신경망 각 층의 중요도를 분류하고, 이를 바탕으로 다항식 활성화 함수의 차수와 계수를 동적으로 매칭하며 TenSEAL 암호화 프레임워크를 통합하였다.",
+        "improvement": "기존의 고정 차수 다항식 활성화 함수 방식 대비 암호문 상태에서의 추론 정확도와 연산 효율성을 향상시켰다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "CKKS 동형암호 기반 CNN 추론에서 상호정보량으로 계층별 중요도를 분류하고 다항식 활성화 함수의 차수와 계수를 적응적으로 최적화하여, 128비트 보안 수준에서 암호문 추론 정확도와 계산 효율을 동시에 개선했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "평문 모델 정확도",
+            "value": "98.34",
+            "unit": "%",
+            "target": "MNIST"
+          },
+          {
+            "name": "평문 모델 정확도",
+            "value": "95.62",
+            "unit": "%",
+            "target": "Fashion-MNIST"
+          },
+          {
+            "name": "암호문 추론 정확도",
+            "value": "98.13",
+            "unit": "%",
+            "target": "MNIST"
+          },
+          {
+            "name": "암호문 추론 정확도",
+            "value": "95.31",
+            "unit": "%",
+            "target": "Fashion-MNIST"
+          }
+        ],
+        "approach": "상호정보량으로 각 신경망 계층의 기능적 중요도를 분류하고, 종단 간 학습으로 다항식 계수를 최적화한 뒤 임계 필터링과 수치 스케일링을 암호문 도메인에 적용하는 적응형 다항식 활성화 함수를 사용했다.",
+        "improvement": "고정 차수 다항식 활성화 기법 대비 암호문 추론 정확도와 계산 효율이 유의하게 향상되었다."
+      }
+    },
+    {
+      "title": "Attention augmented recurrent architectures for solar energy production forecasting",
+      "gemini t=1.0": {
+        "tech_summary": "메타휴리스틱 최적화 기법을 적용하여 경량 순환 신경망 모델의 하이퍼파라미터 튜닝 문제를 해결하고, 어텐션 메커니즘을 결합하여 태양광 발전량을 예측하는 모델을 개발했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "평균제곱오차(MSE)",
+            "value": "0.007713",
+            "unit": "",
+            "target": "태양광 발전량 예측 모델"
+          }
+        ],
+        "approach": "게이트 순환 유닛(GRU)에 어텐션 메커니즘을 결합하고, 적응형 메타휴리스틱 최적화 기법을 사용하여 하이퍼파라미터를 튜닝했다.",
+        "improvement": "기존의 전통적인 예측 기법이 가진 비선형 의존성 처리 문제와 딥러닝 모델의 하이퍼파라미터 튜닝 민감성 문제를 개선했다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "태양광 발전량 예측을 위해 어텐션 메커니즘을 결합한 경량 순환 신경망 모델을 제안하고, 메타휴리스틱 최적화 기법을 통해 하이퍼파라미터 튜닝 문제를 해결하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "평균제곱오차(MSE)",
+            "value": "0.007713",
+            "unit": "",
+            "target": "태양광 발전량 예측 모델"
+          }
+        ],
+        "approach": "게이트 순환 유닛(GRU)에 어텐션 메커니즘을 결합하고, 적응형 메타휴리스틱 최적화 기법을 적용하여 모델을 구성하였다.",
+        "improvement": "기존의 전통적인 예측 방식이 가진 비선형 의존성 문제와 딥러닝 모델의 하이퍼파라미터 튜닝 민감성 문제를 개선하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "게이트 순환 유닛(GRU)과 어텐션 메커니즘을 결합한 경량 순환 신경망 모델에 메타휴리스틱 최적화 기법을 적용하여 태양광 발전량 예측 성능을 향상시켰다. 실제 데이터셋을 사용한 시뮬레이션에서 평균 제곱 오차(MSE) 0.007713을 달성했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "평균제곱오차(MSE)",
+            "unit": "",
+            "target": "태양광 발전량 예측",
+            "value": "0.007713"
+          }
+        ],
+        "approach": "메타휴리스틱 최적화 기법으로 하이퍼파라미터를 튜닝하고, 게이트 순환 유닛(GRU)에 어텐션 메커니즘을 결합한 경량 순환 신경망 구조를 사용했다.",
+        "improvement": "하이퍼파라미터 튜닝에 민감한 기존 딥러닝 접근법의 한계를 개선하고, 비선형 의존성에 취약한 전통적 예측 방법보다 우수한 성능을 보였다."
+      }
+    },
+    {
+      "title": "A deep learning model for inferring the reverse intersystem crossing rate of TADF organic light-emitting diodes, overcoming the uncertainty of recombination dynamics",
+      "gemini t=1.0": {
+        "tech_summary": "TADF 유기 발광 다이오드(OLED)의 역계간교차(RISC) 속도를 추론하기 위해 재결합 역학의 불확실성을 극복하는 탠덤 심층 신경망(DNN) 모델을 개발했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "결정계수(R-squared)",
+            "value": "0.985",
+            "unit": "",
+            "target": "탠덤 심층 신경망(DNN) 모델"
+          }
+        ],
+        "approach": "재결합 속도를 분석하는 첫 번째 모델과 이를 기반으로 RISC 속도를 추론하기 위해 사전 학습된 후보 모델 중 하나를 자동으로 선택하는 두 번째 모델을 결합한 탠덤 구조의 알고리즘을 설계했다.",
+        "improvement": "폴라론 재결합 역학의 불확실성을 극복하여 RISC 속도 추론의 정확도를 높였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "TADF 유기발광다이오드(OLED)의 역계간교차(RISC) 속도를 추론하기 위해 재결합 및 엑시톤 역학을 분석하는 탠덤 심층신경망(DNN) 모델을 개발하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "결정계수",
+            "value": "0.985",
+            "unit": "",
+            "target": "탠덤 DNN 모델"
+          }
+        ],
+        "approach": "재결합 속도 결과를 바탕으로 사전 학습된 후보 모델 중 최적의 모델을 자동으로 선택하여 RISC 속도를 추론하는 알고리즘을 설계하였다.",
+        "improvement": "폴라론 재결합 역학의 불확실성을 극복하여 RISC 속도를 추론하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "재결합 동역학의 불확실성을 극복하고 TADF OLED의 역계간교차(RISC) 속도를 추론하는 탠덤 심층신경망 모델을 개발하여 결정계수 0.985를 달성했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "결정계수(R2)",
+            "unit": "",
+            "target": "탠덤 DNN 모델의 RISC 속도 추론",
+            "value": "0.985"
+          }
+        ],
+        "approach": "첫 번째 모델의 재결합 속도 결과를 기반으로 사전 학습된 후보 모델 중 두 번째 모델을 자동 선택하는 알고리즘을 설계한 탠덤 DNN 구조를 사용했다.",
+        "improvement": "폴라론 재결합 동역학의 불확실성을 극복하여 기존 단일 모델 대비 RISC 속도 추론의 정확도를 높였다."
+      }
+    },
+    {
+      "title": "High Incidence of Cytomegalovirus Infection in Patients Receiving Standard of Care CD19- or BCMA-Targeted CAR-T Cell Therapies for Hematologic Malignancies",
+      "gemini t=1.0": {
+        "tech_summary": "CD19 및 BCMA 표적 CAR-T 세포 치료를 받은 환자들에서 거대세포바이러스(CMV) 감염 발생률과 그 위험 요인을 규명하였다. 연구 결과 30일 시점에 16%, 100일 시점에 20%의 CMV 감염 누적 발생률을 확인하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [
+          {
+            "name": "CMV 감염 누적 발생률",
+            "value": "16",
+            "unit": "%",
+            "target": "CAR-T 치료 후 30일 시점"
+          },
+          {
+            "name": "CMV 감염 누적 발생률",
+            "value": "20",
+            "unit": "%",
+            "target": "CAR-T 치료 후 100일 시점"
+          },
+          {
+            "name": "조정 위험비(aHR)",
+            "value": "8.3",
+            "unit": "",
+            "target": "항체 양성(CMV IgG positive) 환자"
+          },
+          {
+            "name": "조정 위험비(aHR)",
+            "value": "2.2",
+            "unit": "",
+            "target": "CAR-T 치료 후 코르티코스테로이드 투여 환자"
+          }
+        ],
+        "approach": "2021년 5월부터 2023년 7월까지 상용 CAR-T 치료를 받은 환자 239명을 대상으로 후향적 차트 리뷰를 수행하고 다변량 콕스 비례 위험 모델을 적용하였다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "CAR-T 세포 치료 후 거대세포바이러스(CMV) 감염 발생률을 분석하고, 치료 전 CMV IgG 양성 여부와 치료 후 코르티코스테로이드 투여가 감염 위험을 높이는 주요 요인임을 규명하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [
+          {
+            "name": "거대세포바이러스 감염 발생률",
+            "value": "16",
+            "unit": "%",
+            "target": "CAR-T 세포 치료 후 30일 시점"
+          },
+          {
+            "name": "거대세포바이러스 감염 발생률",
+            "value": "20",
+            "unit": "%",
+            "target": "CAR-T 세포 치료 후 100일 시점"
+          }
+        ],
+        "approach": "2021년 5월부터 2023년 7월까지 상용 CAR-T 치료를 받은 환자 239명을 대상으로 후향적 차트 리뷰를 수행하고 다변량 콕스 비례 위험 모델을 적용하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "CAR-T 세포 치료 후 거대세포바이러스(CMV) 감염의 누적 발생률을 30일 시점 16%, 100일 시점 20%로 보고하고, 다변량 Cox 비례위험모형을 통해 림프구 제거 전 CMV IgG 양성 및 CAR-T 후 코르티코스테로이드 투여가 CMV 감염의 위험인자임을 확인했다.",
+        "achievement_type": "이론/해석",
+        "metrics": [
+          {
+            "name": "누적 발생률",
+            "value": "16",
+            "unit": "%",
+            "target": "CMV 감염, CAR-T 후 30일"
+          },
+          {
+            "name": "누적 발생률",
+            "value": "20",
+            "unit": "%",
+            "target": "CMV 감염, CAR-T 후 100일"
+          },
+          {
+            "name": "보정 위험비(aHR)",
+            "value": "8.3",
+            "unit": "",
+            "target": "림프구 제거 전 CMV IgG 양성"
+          },
+          {
+            "name": "보정 위험비(aHR)",
+            "value": "2.2",
+            "unit": "",
+            "target": "CAR-T 후 코르티코스테로이드 투여"
+          }
+        ],
+        "approach": "상업용 CAR-T 치료를 받은 혈액암 환자 239명을 대상으로 후향적 차트 리뷰를 수행하고, 다변량 Cox 비례위험모형을 적합하여 CMV 감염의 발생률과 위험인자를 분석했다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "LHD fig_h2 #54780.1 (analyzed)",
+      "gemini t=1.0": {
+        "tech_summary": "핵융합로 내 다이버터 내부의 중성 입자 압력을 고속 이온화 게이지를 통해 측정하고 수소 가스를 이용하여 보정하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "고속 이온화 게이지를 사용하여 다이버터 내부의 중성 입자 압력을 측정하고 수소 가스(H2)를 사용하여 보정을 수행하였다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "핵융합로의 다이버터 내부 중성 입자 압력을 고속 이온화 게이지를 사용하여 측정하고 수소 가스로 보정하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "고속 이온화 게이지를 사용하고 수소 가스(H2)를 이용해 보정하는 방식을 적용하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "핵융합로 진공용기 내부에서 가장 높은 부하를 받는 부품 중 하나인 디버터 내부의 중성입자 압력을 고속 이온화 게이지로 측정하고, 수소 가스(H2)를 이용해 교정하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "고속 이온화 게이지를 사용하여 디버터 내부의 중성입자 압력을 측정하고 수소 가스(H2)로 교정하였다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "Stable comprehensive dopants for efficient and scalable perovskite solar cells",
+      "gemini t=1.0": {
+        "tech_summary": "페로세늄 산화제를 스피로-OMeTAD 정공 수송층을 위한 새로운 도판트로 도입하여 페로브스카이트 태양전지의 전력변환효율을 향상시키고 우수한 동작 안정성을 확보했다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "전력변환효율(PCE)",
+            "value": "26.13",
+            "unit": "%",
+            "target": "페로브스카이트 태양전지 소자"
+          },
+          {
+            "name": "전력변환효율(PCE)",
+            "value": "22.21",
+            "unit": "%",
+            "target": "페로브스카이트 태양전지 모듈"
+          },
+          {
+            "name": "효율 유지율",
+            "value": "95",
+            "unit": "%",
+            "target": "상온에서 1,000시간 연속 동작 후"
+          },
+          {
+            "name": "효율 유지율",
+            "value": "87",
+            "unit": "%",
+            "target": "65도에서 1,000시간 연속 동작 후"
+          }
+        ],
+        "approach": "페로세늄의 환원 전위를 조절하여 스피로-OMeTAD를 거의 정량적으로 변환함으로써 최적의 전자적 및 에너지적 특성을 구현했다.",
+        "improvement": "기존의 흡습성 및 휘발성이 강한 리튬 기반 다성분계 도핑 방식의 문제를 해결하고, 기존 소자 대비 높은 효율과 우수한 동작 안정성을 달성했다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "페로센 기반의 산화제를 페로브스카이트 태양전지(PSC)의 정공 수송층인 Spiro-OMeTAD를 위한 고성능 도펀트로 도입하여 소자 및 모듈 효율을 향상시키고 우수한 동작 안정성을 확보했다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "전력변환효율(PCE)",
+            "value": "26.13",
+            "unit": "%",
+            "target": "페로브스카이트 태양전지 소자"
+          },
+          {
+            "name": "전력변환효율(PCE)",
+            "value": "22.21",
+            "unit": "%",
+            "target": "페로브스카이트 태양전지 모듈"
+          },
+          {
+            "name": "효율 유지율",
+            "value": "95",
+            "unit": "%",
+            "target": "1,000시간 연속 동작 후(상온)"
+          },
+          {
+            "name": "효율 유지율",
+            "value": "87",
+            "unit": "%",
+            "target": "1,000시간 연속 동작 후(65도)"
+          }
+        ],
+        "approach": "페로센의 환원 전위를 조절하여 Spiro-OMeTAD를 거의 정량적으로 산화시킴으로써 최적의 전자적 및 에너지적 특성을 구현했다.",
+        "improvement": "기존의 흡습성 및 휘발성 문제가 있는 리튬 기반 다성분 도핑 방식 대신, 초저농도 도핑으로도 기존 소자 대비 높은 효율과 우수한 동작 안정성을 달성했다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "페로세늄 산화제 기반의 새로운 Spiro-OMeTAD 도펀트를 개발하여 페로브스카이트 태양전지에서 26.13%의 소자 효율과 22.21%의 모듈 효율을 달성했으며, 1000시간 연속 작동 후 초기 효율의 95%(비가열) 및 87%(65°C 유지)를 유지하는 작동 안정성을 확보했다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "전력변환효율(PCE)",
+            "value": 26.13,
+            "unit": "%",
+            "target": "페로브스카이트 태양전지 소자"
+          },
+          {
+            "name": "전력변환효율(PCE)",
+            "value": 22.21,
+            "unit": "%",
+            "target": "페로브스카이트 태양전지 모듈"
+          },
+          {
+            "name": "효율 유지율",
+            "value": 95,
+            "unit": "%",
+            "target": "비가열 조건, 1000시간 연속 작동 후"
+          },
+          {
+            "name": "효율 유지율",
+            "value": 87,
+            "unit": "%",
+            "target": "65°C 유지 조건, 1000시간 연속 작동 후"
+          }
+        ],
+        "approach": "페로세늄 환원 전위를 조정하여 Spiro-OMeTAD의 정공 산화를 거의 정량적으로 유도하는 맞춤형 페로세늄 산화제 도펀트를 사용했다.",
+        "improvement": "기존 리튬 기반 다성분 도핑 방식 대비 초저 도펀트 로딩으로도 기존 소자보다 높은 효율과 우수한 작동 안정성을 달성했다."
+      }
+    },
+    {
+      "title": "Deep Learning-Derived Left Ventricular Circumferential Strain for Cardiac MRI Diagnosis of Acute Myocarditis with Preserved Ejection Fraction",
+      "gemini t=1.0": {
+        "tech_summary": "PPIM-Net 기반의 심층 학습 모델을 개발하여 심장 자기공명영상에서 좌심실 원주 변형률을 자동 측정함으로써, 심박출률이 보존된 급성 심근염 환자를 진단하는 새로운 생체지표를 제시하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "곡선하 면적(AUC)",
+            "value": "0.887",
+            "unit": "",
+            "target": "심층 학습 기반 좌심실 원주 변형률(DL-LVCS)"
+          },
+          {
+            "name": "민감도",
+            "value": "85.9",
+            "unit": "%",
+            "target": "심층 학습 기반 좌심실 원주 변형률(DL-LVCS)"
+          },
+          {
+            "name": "특이도",
+            "value": "79.2",
+            "unit": "%",
+            "target": "심층 학습 기반 좌심실 원주 변형률(DL-LVCS)"
+          },
+          {
+            "name": "곡선하 면적(AUC)",
+            "value": "0.806",
+            "unit": "",
+            "target": "기존 특징 추적 기반 좌심실 원주 변형률(FT-LVCS)"
+          },
+          {
+            "name": "민감도",
+            "value": "67.2",
+            "unit": "%",
+            "target": "기존 특징 추적 기반 좌심실 원주 변형률(FT-LVCS)"
+          },
+          {
+            "name": "특이도",
+            "value": "84.5",
+            "unit": "%",
+            "target": "기존 특징 추적 기반 좌심실 원주 변형률(FT-LVCS)"
+          }
+        ],
+        "approach": "세그멘테이션을 위한 PPIM-Net과 움직임 추적을 위한 U-Net을 통합한 심층 학습 모델을 활용하였다.",
+        "improvement": "기존의 특징 추적(FT-LVCS) 방식보다 조작자 의존성과 분석 시간을 줄였으며, 심박출률이 보존된 급성 심근염 환자 진단에서 더 높은 민감도와 AUC를 나타냈다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "심장 MRI 영상에서 좌심실 원주 변형률을 자동으로 산출하는 딥러닝 모델(DL-LVCS)을 개발하여, 박출률이 보존된 급성 심근염 환자를 진단하는 데 있어 기존 방식보다 높은 민감도와 진단 성능을 확보했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "곡선하 면적(AUC)",
+            "value": "0.887",
+            "unit": "",
+            "target": "DL-LVCS 기반 급성 심근염 진단"
+          },
+          {
+            "name": "민감도",
+            "value": "85.9",
+            "unit": "%",
+            "target": "DL-LVCS 기반 급성 심근염 진단"
+          },
+          {
+            "name": "특이도",
+            "value": "79.2",
+            "unit": "%",
+            "target": "DL-LVCS 기반 급성 심근염 진단"
+          }
+        ],
+        "approach": "세그멘테이션을 위한 PPIM-Net과 움직임 추적을 위한 U-Net을 통합한 딥러닝 모델을 개발하여 좌심실 원주 변형률을 산출했다.",
+        "improvement": "기존의 특징 추적(FT-LVCS) 방식 대비 작업자 의존도와 분석 시간을 줄였으며, 급성 심근염 진단에 있어 더 높은 AUC와 민감도를 달성했다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "심장 MRI에서 딥러닝 기반 좌심실 원주방향 변형률(DL-LVCS)을 산출하여 박출률이 보존된 급성 심근염 환자를 진단하는 데 있어 기존 feature tracking 방식보다 높은 진단 성능을 달성했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "곡선하면적(AUC)",
+            "value": "0.887",
+            "unit": "",
+            "target": "DL-LVCS 기반 급성 심근염(pEF) 진단"
+          },
+          {
+            "name": "민감도",
+            "value": "85.9",
+            "unit": "%",
+            "target": "DL-LVCS 기반 급성 심근염(pEF) 진단"
+          },
+          {
+            "name": "특이도",
+            "value": "79.2",
+            "unit": "%",
+            "target": "DL-LVCS 기반 급성 심근염(pEF) 진단"
+          },
+          {
+            "name": "곡선하면적(AUC)",
+            "value": "0.806",
+            "unit": "",
+            "target": "FT-LVCS 기반 급성 심근염(pEF) 진단"
+          },
+          {
+            "name": "민감도",
+            "value": "67.2",
+            "unit": "%",
+            "target": "FT-LVCS 기반 급성 심근염(pEF) 진단"
+          },
+          {
+            "name": "특이도",
+            "value": "84.5",
+            "unit": "%",
+            "target": "FT-LVCS 기반 급성 심근염(pEF) 진단"
+          }
+        ],
+        "approach": "PPIM-Net(Pyramid Progressive Image Mapping Network) 기반 분할과 U-Net 기반 움직임 추적을 통합한 딥러닝 모델을 사용하여 좌심실 원주방향 변형률(DL-LVCS)을 계산했다.",
+        "improvement": "기존 feature tracking 기반 변형률(FT-LVCS) 대비 AUC가 0.806에서 0.887로, 민감도가 67.2%에서 85.9%로 유의하게 향상되었다(DeLong P < 0.01)."
+      }
+    },
+    {
+      "title": "Recycling and Value-Added Utilization of Bayan Obo Tailings: Mechanisms, Technologies, and Prospects",
+      "gemini t=1.0": {
+        "tech_summary": "바이안오보(Bayan Obo) 광산의 미광(tailings) 내 희토류, 니오븀, 형석의 자원적 가치를 분석하고 이를 회수하기 위한 분리 기술 및 고부가가치 소재 활용 경로를 정리하였다. 또한 철, 희토류, 니오븀 원소가 소재 합성 과정에서 결정화 및 결정립 미세화에 미치는 메커니즘을 규명하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [
+          {
+            "name": "희토류 산화물 함량",
+            "value": "7",
+            "unit": "%",
+            "target": "바이안오보 미광"
+          },
+          {
+            "name": "오산화니오븀 함량",
+            "value": "0.138",
+            "unit": "%",
+            "target": "바이안오보 미광"
+          },
+          {
+            "name": "형석 함량",
+            "value": "22.28",
+            "unit": "%",
+            "target": "바이안오보 미광"
+          }
+        ],
+        "approach": "물리적 분리, 화학적 추출, 복합 공정 기술을 적용하고, 소재 합성 시 Fe3+/Fe2+ 변환, La/Ce 복합 산화물 나노 클러스터 형성, Nb2O5의 핵 생성제 역할을 활용하였다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "바얀 오보 광미 내 희토류, 니오븀, 형석 등 유용 자원의 회수 기술과 이를 활용한 고부가가치 소재(유리 세라믹, 촉매, 흡착제) 제조 경로를 체계적으로 정리하였다. 또한 소재 합성 과정에서 철, 희토류, 니오븀의 결정화 및 나노 구조 형성에 미치는 메커니즘을 규명하였다.",
+        "achievement_type": "기타",
+        "metrics": [
+          {
+            "name": "희토류산화물(REO) 함량",
+            "value": "7",
+            "unit": "%",
+            "target": "바얀 오보 광미"
+          },
+          {
+            "name": "오산화니오븀(Nb2O5) 함량",
+            "value": "0.138",
+            "unit": "%",
+            "target": "바얀 오보 광미"
+          },
+          {
+            "name": "형석(CaF2) 함량",
+            "value": "22.28",
+            "unit": "%",
+            "target": "바얀 오보 광미"
+          }
+        ],
+        "approach": "물리적 선별, 화학적 추출, 복합 공정을 통한 유용 성분 회수와 광미를 원료로 한 고부가가치 소재 합성 메커니즘 분석을 수행하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "바얀오보 광미의 자원 특성, 회수 기술, 고부가가치 활용 경로 및 메커니즘을 체계적으로 검토하고, Fe, La, Ce, Nb 성분이 재료 합성 과정에서 결정화 촉진, 나노클러스터 형성 유도, 결정립 미세화 등에 기여하는 기작을 규명하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [
+          {
+            "name": "희토류 산화물(REO) 품위",
+            "target": "바얀오보 광미",
+            "unit": "%"
+          },
+          {
+            "name": "오산화니오븀(Nb2O5) 품위",
+            "target": "바얀오보 광미",
+            "unit": "%"
+          },
+          {
+            "name": "형석(CaF2) 품위",
+            "target": "바얀오보 광미",
+            "unit": "%"
+          }
+        ],
+        "approach": "물리적 선별, 화학적 추출, 복합 공정을 통한 유가 성분 회수와 글라스 세라믹, 촉매 재료, 흡착제 등 고부가가치 제품 생산 경로를 검토하였다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "LLM-based Intelligent Evaluation Agent with Knowledge Graph Construction for Human-Machine Interactive Learning *",
+      "gemini t=1.0": {
+        "tech_summary": "대규모 언어 모델(LLM)과 신뢰할 수 있는 AI 대화 엔진(TAIDE)을 기반으로 한 지능형 평가 에이전트(IEA)를 제안하여, 인간-기계 상호작용 학습(HMIL)에서 학습 데이터 준비부터 평가까지의 과정을 자동화하고 개인화된 학습을 지원하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "유전 알고리즘과 신경망(GANN) 학습 메커니즘을 결합하여 지능형 평가 모델을 최적화하고, LLM 기반 지식 그래프를 통해 학습 진행 상황의 분석 및 시각화를 지원하는 방식을 사용하였다.",
+        "improvement": "제안된 지능형 평가 에이전트(IEA)를 통해 학기 말 학생들의 학습 상태를 평가하는 교사의 업무 부담을 효과적으로 감소시켰다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "대규모 언어 모델(LLM)과 신뢰할 수 있는 AI 대화 엔진(TAIDE)을 기반으로 지식 그래프를 구축하여 개인화된 인간-기계 상호작용 학습(HMIL)을 지원하는 지능형 평가 에이전트(IEA)를 개발하였다. 이 에이전트는 유전 알고리즘 및 신경망(GANN) 학습 메커니즘을 통해 인간 지능(HI)과 기계 지능(MI)을 통합하여 학습 데이터를 분석하고 평가한다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "LLM 기반의 지식 그래프 구축과 유전 알고리즘 및 신경망(GANN) 학습 메커니즘을 통합하여 학습 데이터를 처리하고 평가 모델을 최적화하였다.",
+        "improvement": "제안된 IEA는 학기 말 학생들의 학습 상태를 평가하는 교사의 업무 부담을 효과적으로 줄여준다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "LLM과 TAIDE 기반의 지능형 평가 에이전트(IEA)를 제안하고, 지식 그래프 구축을 통해 인간-기계 상호작용 학습(HMIL)에서 학습 데이터 생성·전처리·분석·평가를 수행하며 교사의 학기말 학습 상태 평가 부담을 줄이고 개인화 학습을 지원함.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "LLM 기반 지식 그래프 에이전트와 HI/MI 통합 평가, MI 기반 GANN 학습 메커니즘을 활용하여 지능형 평가 모델을 최적화함.",
+        "improvement": "제안된 IEA는 학기말 학생 학습 상태 평가에 대한 교사의 업무 부담을 효과적으로 줄이고, HMIL 모델을 통해 개인화 학습을 지원함."
+      }
+    },
+    {
+      "title": "Mitochondrial perspectives on environmental pollutant-induced male reproductive toxicity",
+      "gemini t=1.0": {
+        "tech_summary": "환경 오염물질이 고환의 미토콘드리아 기능을 저해함으로써 남성 생식 독성을 유발하는 핵심 기전을 종합적으로 규명하였다. 산화 스트레스, 대사 교란, 미토콘드리아 역학 불균형 등 다양한 경로가 상호작용하여 다단계 연쇄 반응을 통해 생식 손상을 일으키는 통합적 네트워크를 제시하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "중금속, 대기 오염물질, 유기 오염물질, 미세플라스틱, 농약 등 다양한 환경 오염물질이 고환 미토콘드리아에 미치는 영향과 관련된 기존 연구 증거들을 합성하고 분석하는 방식을 사용하였다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "환경 오염물질이 미토콘드리아 기능 장애를 유발하여 남성 생식 독성을 일으키는 핵심 기전인 산화 스트레스, 대사 장애, 세포 사멸, 미토콘드리아 역학 불균형 등을 종합적으로 규명하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "중금속, 대기 오염물질, 유기 오염물질, 내분비 교란 물질, 미세(나노)플라스틱, 살충제, 곰팡이 독소 등 다양한 오염물질이 고환 미토콘드리아에 미치는 영향과 관련 기전을 합성하여 분석하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "환경 오염물질이 고환 미토콘드리아에 손상을 일으켜 남성 생식 독성을 유발하는 수렴적 기전(산화 스트레스, 대사 교란, 미토콘드리아 의존성 세포자멸사, 미토콘드리아 역학 불균형, 생합성 억제, 마이토파지 조절 이상)을 규명하고, 이들이 상호 교차·증폭되어 다단계 연쇄 네트워크를 형성함을 밝혔다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "중금속, 대기오염물질, 유기오염물질, 내분비교란물질, 미세·나노플라스틱, 살충제, 마이코톡신이 고환 미토콘드리아를 손상시키는 기전에 대한 기존 증거를 종합·분석하였다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "Holding the Line: A Digital Twin Framework Supporting Policy Design for U.S. Power Grid Resilience",
+      "gemini t=1.0": {
+        "tech_summary": "개별 가구 수준의 인구 통계 및 전력 수요 프로파일을 배전망과 결합하여, 정책에 따른 수요 반응 효과를 가구 및 변전소 단위에서 평가할 수 있는 고해상도 디지털 트윈 프레임워크를 개발했다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "피크 부하 감축률",
+            "value": "4-5",
+            "unit": "%",
+            "target": "Virginia’s Eastern Shore 사례 연구"
+          }
+        ],
+        "approach": "합성 인구 데이터, 시간별 전력 수요 프로파일, 배전망 모델을 결합한 디지털 트윈 프레임워크와 확률적 채택 모델 및 수요 재할당 알고리즘을 사용했다.",
+        "improvement": "기존의 광역 단위로 부하 감소를 합산하여 평가하던 방식과 달리, 가구 및 변전소 수준의 세부적인 전력망 영향 분석이 가능하다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "가계 단위의 전력 수요 변화를 배전망 수준의 부하 감소로 연결하는 고해상도 디지털 트윈 프레임워크를 개발하여, 가격 기반 수요 반응(PBDR) 정책의 효과를 정밀하게 평가할 수 있게 하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "피크 부하 감소율",
+            "value": "4-5",
+            "unit": "%",
+            "target": "버지니아주 이스턴 쇼어 지역의 전력망"
+          }
+        ],
+        "approach": "합성 인구 데이터, 시간별 전력 수요 프로파일, 배전망 모델을 결합한 디지털 트윈 프레임워크와 가계 인구 통계학적 특성을 반영한 확률적 채택 모델 및 수요 재할당 알고리즘을 사용하였다.",
+        "improvement": "기존의 서비스 지역 전체 부하 감소량을 합산하는 방식과 달리, 가계 및 변전소 수준에서 부하 변화를 정밀하게 분석할 수 있게 개선하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "가구 단위 수요반응 효과를 변전소 수준까지 해상도 있게 재현하는 디지털 트윈 프레임워크를 개발하고, 버지니아 동부 해안 사례연구에서 4~5%의 피크 부하 저감을 달성했다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "피크 부하 저감률",
+            "unit": "%",
+            "target": "버지니아 동부 해안 배전망",
+            "value": "4-5"
+          }
+        ],
+        "approach": "합성 인구, 시간별 전력 수요 프로파일, 배전망을 결합한 고해상도 디지털 트윈과 확률적 도입 모델 및 수요 재할당 알고리즘을 사용했다.",
+        "improvement": "기존 평가가 서비스 지역 전체의 부하 저감만 집계하던 것과 달리, 가구 및 변전소 수준에서 수요 이동을 해상도 있게 구분하면서도 기존 문헌과 일치하는 저감 효과를 재현했다."
+      }
+    },
+    {
+      "title": "Tailoring electrolyte solvation structure to enhance rate capability, cycle life, and safety in Prussian-blue-based sodium-ion battery",
+      "gemini t=1.0": {
+        "tech_summary": "NaFSI 기반의 국소 고농도 전해질(LHCE)을 설계하여 프러시안 블루 양극과 하드 카본 음극을 사용하는 나트륨 이온 배터리의 고속 충방전 성능, 수명 및 안전성을 향상시켰다. 이 전해질은 음이온이 풍부한 나트륨 이온 용매화 구조를 유도하여 계면 화학을 조절하고 전극 계면의 부산물을 억제한다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "용량 유지율",
+            "value": "80",
+            "unit": "%",
+            "target": "HC||PB 풀셀 (2 C, 1200 사이클)"
+          },
+          {
+            "name": "용량 유지율",
+            "value": "82",
+            "unit": "%",
+            "target": "다층 파우치 셀 (500 사이클)"
+          },
+          {
+            "name": "가스 발생량",
+            "value": "0.26",
+            "unit": "mL/Ah",
+            "target": "다층 파우치 셀"
+          }
+        ],
+        "approach": "디글라임(diglyme) 내 NaFSI와 비용매성 불소화 희석제(TTE)를 사용하는 국소 고농도 전해질(LHCE)을 설계하여 나트륨 이온의 용매화 구조를 제어하였다.",
+        "improvement": "희석된 에테르 전해질(DE) 및 고농도 에테르 전해질(HCE) 대비 고속 충방전 내구성이 우수하며, 기존 탄산염 기반 전해질(CBE) 대비 열적 안전성을 개선하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "프러시안 블루 기반 나트륨 이온 배터리의 전해질 용매화 구조를 제어하여 고속 충방전 성능, 수명, 안전성을 동시에 향상시켰다. 국소 고농도 전해질(LHCE)을 도입하여 전극 계면의 부반응을 억제하고 안정적인 고체 전해질 계면(SEI/CEI)을 형성하였다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "용량 유지율",
+            "value": "80",
+            "unit": "%",
+            "target": "HC||PB 풀셀 (2 C, 1200 사이클)"
+          },
+          {
+            "name": "용량 유지율",
+            "value": "82",
+            "unit": "%",
+            "target": "다층 파우치 셀 (500 사이클)"
+          },
+          {
+            "name": "쿨롱 효율",
+            "value": "99.3",
+            "unit": "%",
+            "target": "다층 파우치 셀"
+          },
+          {
+            "name": "가스 발생량",
+            "value": "0.26",
+            "unit": "mL/Ah",
+            "target": "다층 파우치 셀"
+          }
+        ],
+        "approach": "NaFSI와 디글라임 기반의 국소 고농도 전해질(LHCE)을 사용하여 나트륨 이온의 용매화 구조 내 음이온 참여도를 높이고 무기물 위주의 SEI/CEI를 형성하였다.",
+        "improvement": "기존의 희석된 에테르 전해질(DE) 및 고농도 에테르 전해질(HCE) 대비 고속 충방전 내구성과 수명 특성을 크게 향상시켰으며, 기존 탄산염 기반 전해질(CBE) 대비 열적 안전성을 개선하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "NaFSI/diglyme 기반 localized high-concentration electrolyte(LHCE)를 개발하여 Prussian-blue/hard carbon 소듐이온전지의 고율 내구성, 수명, 안전성을 동시에 향상시켰다. HC||PB 풀셀에서 2 C로 약 1200사이클 동안 80% 용량 유지, 파우치셀에서 500사이클 후 82% 용량 유지 및 0.26 mL/Ah의 가스 발생을 달성했다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "용량 유지율",
+            "value": "80",
+            "unit": "%",
+            "target": "HC||PB full cell, 2 C, ~1200 cycles"
+          },
+          {
+            "name": "용량 유지율",
+            "value": "82",
+            "unit": "%",
+            "target": "multilayer pouch cell, 500 cycles"
+          },
+          {
+            "name": "쿨롱 효율",
+            "value": "99.3",
+            "unit": "%",
+            "target": "multilayer pouch cell"
+          },
+          {
+            "name": "가스 발생량",
+            "value": "0.26",
+            "unit": "mL/Ah",
+            "target": "multilayer pouch cell"
+          }
+        ],
+        "approach": "NaFSI를 diglyme에 녹이고 비용매성 불소화 희석제 TTE를 첨가한 localized high-concentration electrolyte(LHCE)를 사용하여 Na+ 1차 용매화 껍질에서 음이온 관여를 높이고 접촉이온쌍(CIP)/회합체(AGG) 비율을 증가시켰다.",
+        "improvement": "희석 에터 전해질(DE) 및 고농도 에터 전해질(HCE) 대비 고율 사이클 수명이 크게 향상되었고, 기존 카보네이트 기반 전해질(CBE) 대비 열적 안전성이 개선되었다."
+      }
+    },
+    {
+      "title": "GA Enniskillen 1 coring services (digital dataset)",
+      "gemini t=1.0": {
+        "tech_summary": "GA Enniskillen 1 시추공을 통해 총 3,023m 깊이까지 도달하여 976m의 코어 시료와 지질학적 데이터를 확보하고 시추 서비스 보고서를 생성하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "총 시추 깊이",
+            "value": "3023",
+            "unit": "m",
+            "target": "GA Enniskillen 1 시추공"
+          },
+          {
+            "name": "시추 코어 길이",
+            "value": "976",
+            "unit": "m",
+            "target": "GA Enniskillen 1 시추공"
+          }
+        ],
+        "approach": "National Oilwell Varco(NOV)의 로터리 코어링 서비스를 활용하여 시추공을 설치하고 코어를 채취하였다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "Adavale Basin의 지질학적 탐사를 위해 GA Enniskillen 1 시추공을 3,023미터 깊이까지 성공적으로 시추하고 976미터의 시추 코어 및 관련 지질 데이터를 확보하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "시추 깊이",
+            "value": "3023",
+            "unit": "m",
+            "target": "GA Enniskillen 1 시추공"
+          },
+          {
+            "name": "코어 회수 길이",
+            "value": "976",
+            "unit": "m",
+            "target": "Adavale Basin 시추 코어"
+          }
+        ],
+        "approach": "National Oilwell Varco(NOV)의 로터리 코어링 서비스를 활용하여 시추 장비 설정 및 코어 회수 작업을 수행하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "GA Enniskillen 1 시추공에서 총 3,023m 깊이까지 시추하여 976m의 Adavale Basin 드릴 코어, 암석 칩, 지하수 시료 및 종합 지구물리 로그를 확보하고, 회전 코어링 서비스 데이터를 디지털 데이터셋으로 제공하였다.",
+        "achievement_type": "기타",
+        "metrics": [
+          {
+            "name": "시추 깊이",
+            "value": "3023",
+            "unit": "m",
+            "target": "GA Enniskillen 1 borehole"
+          },
+          {
+            "name": "드릴 코어 길이",
+            "value": "976",
+            "unit": "m",
+            "target": "Adavale Basin"
+          }
+        ],
+        "approach": "회전 코어링 서비스를 통해 드릴 코어를 획득하고 코어링 장비 설정, 코어 회수 통계, 자연 감마 측정 데이터를 수집하였다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "LHD fig_h2 #122076.1 (analyzed)",
+      "gemini t=1.0": {
+        "tech_summary": "핵융합로 진공 용기 내부의 다이버터 영역에 있는 중성 입자 압력을 고속 이온화 게이지(fast ionization gauges)를 이용하여 측정하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "수소 가스(H2)를 사용하여 교정한 고속 이온화 게이지를 통해 측정하였다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "핵융합로 진공 용기 내 가장 부하가 심한 부품 중 하나인 다이버터 내부의 중성 입자 압력을 고속 이온화 게이지를 사용하여 측정하고 수소 가스로 보정하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "고속 이온화 게이지를 사용하고 수소 가스(H2)를 이용해 보정하는 방식을 적용하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "핵융합로 진공용기 내부에서 가장 높은 부하를 받는 부품 중 하나인 디버터 내부의 중성입자 압력을 고속 이온화 게이지로 측정하고 수소 가스(H2)를 사용하여 교정하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "고속 이온화 게이지를 사용하여 디버터 내부의 중성입자 압력을 측정하고, 수소 가스(H2)로 교정하였다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "Advances in ligand-targeted nanodelivery systems for leukemia therapy: from single- to dual-ligand strategies",
+      "gemini t=1.0": {
+        "tech_summary": "리간드 표적 나노전달시스템의 단일 리간드 및 이중 리간드 전략을 체계적으로 분석하여, 이중 리간드 시스템이 단일 리간드 시스템보다 우수한 표적 효율과 치료 성능을 보인다는 점을 확인했다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "단일 리간드 및 이중 리간드 전략을 포함한 다양한 리간드 기능화 나노캐리어 구축 전략을 비교 분석했다.",
+        "improvement": "단일 리간드 시스템과 비교하여 이중 리간드 시스템이 더 높은 표적 효율 및 치료 성능을 나타냄을 제시했다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "백혈병 치료를 위해 나노운반체 표면에 리간드를 수식하여 종양 세포를 정밀하게 인식하고 약물을 전달하는 리간드 표적 나노전달 시스템의 연구 현황과 전략을 체계적으로 정리하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "항체, 압타머, 단백질, 펩타이드, 소분자 등의 리간드를 나노운반체 표면에 수식하는 방식을 사용하였다.",
+        "improvement": "단일 리간드 시스템 대비 이중 리간드 시스템이 더 우수한 표적 효율과 치료 성능을 나타냄을 확인하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "백혈병 치료를 위한 리간드 표적 나노전달 시스템에서 단일 리간드 및 이중 리간드 전략의 기초 연구와 임상 진전을 체계적으로 정리하고, 대부분의 연구에서 이중 리간드 시스템이 단일 리간드 시스템보다 표적 효율과 치료 성능이 우수함을 확인하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "항체, 앱타머, 단백질, 펩타이드, 소분자 등의 리간드로 나노운반체 표면을 개질하여 종양 세포를 정밀 인식하고 표적 전달하는 리간드 표적 나노전달 시스템을 분석하였다.",
+        "improvement": "대부분의 연구에서 이중 리간드 시스템이 단일 리간드 시스템보다 표적 효율과 치료 성능이 우수한 것으로 나타났다."
+      }
+    },
+    {
+      "title": "DRPA-MPPI: Dynamic Repulsive Potential Augmented MPPI for Reactive Navigation in Unstructured Environments",
+      "gemini t=1.0": {
+        "tech_summary": "비정형 환경에서의 로봇 경로 계획을 위해 국소 최적해(local minima)를 감지하고 동적으로 척력 기반의 비용 함수로 전환하는 DRPA-MPPI 알고리즘을 제안하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "예측된 경로 상의 잠재적 덫(entrapment)을 실시간으로 감지하고, 국소 최적해 발생 시 목표 지향적 최적화에서 국소 최적해로부터 멀어지는 척력을 생성하는 수정된 비용 함수로 자동 전환하는 방식을 사용하였다.",
+        "improvement": "기존의 휴리스틱 비용 설계나 시나리오 기반 사전 학습 방식과 비교하여, 새로운 환경에 대한 적응성을 높이고 계산 부담을 줄이면서도 향상된 탐색 성능과 안전성을 확보하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "DRPA-MPPI는 예측된 경로에서 잠재적인 갇힘 현상을 동적으로 감지하고, 국소 최적해(local minima) 발생 시 목표 지향적 최적화와 척력을 생성하는 수정된 비용 함수 간의 자동 전환을 통해 반응형 내비게이션을 수행한다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "예측된 경로상의 잠재적 갇힘을 동적으로 감지하고, 국소 최적해 발생 시 척력을 생성하는 수정된 비용 함수로 전환하는 DRPA-MPPI 알고리즘을 도입하였다.",
+        "improvement": "기존의 휴리스틱 비용 설계나 시나리오별 사전 학습 방식 대비, 새로운 환경에 대한 적응력이 높고 계산 부담이 적으며 내비게이션 성능과 안전성이 우수하다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "예측 궤적에서 국소 최소점(local minima) 함정을 동적으로 감지하고, 감지 시 목표 지향 최적화와 척력 기반 수정 비용 함수를 자동 전환하는 DRPA-MPPI 기법을 개발하여 비정형 환경에서의 반응형 내비게이션 성능과 안전성을 향상시켰다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "동적 척력 포텐셜 증강 MPPI(DRPA-MPPI)를 통해 예측 궤적의 국소 최소점을 감지하고 척력을 생성하는 수정 비용 함수로 전환",
+        "improvement": "기존 휴리스틱 비용 설계나 사전 학습 기반 방법 대비 장애물이 많은 환경에서 더 우수한 내비게이션 성능과 안전성을 보이면서 계산 부담은 더 적음"
+      }
+    },
+    {
+      "title": "Solution-Processed Perovskite/Polymer Nanocomposites for Advanced Optoelectronic Devices",
+      "gemini t=1.0": {
+        "tech_summary": "페로브스카이트와 고분자를 결합한 나노복합체를 통해 결정화 제어 및 결함 감소, 환경 안정성 확보, 기계적 유연성 향상을 달성했습니다. 이를 통해 광변환 구조, 태양전지, 발광다이오드, 광검출기 등 차세대 광전자 소자 구현의 기반을 마련했습니다.",
+        "achievement_type": "신소재",
+        "metrics": [],
+        "approach": "금속 이온과 고분자 간의 배위 화학(coordination chemistry)을 활용한 용액 공정을 통해 페로브스카이트/고분자 나노복합체를 형성하였습니다.",
+        "improvement": "기존 페로브스카이트의 취약점인 빠른 결정화로 인한 결함, 기계적 변형에 대한 취약성, 수분 민감성으로 인한 환경 안정성 문제를 고분자 복합화를 통해 개선하였습니다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "페로브스카이트/고분자 나노복합체를 활용하여 페로브스카이트의 결정화 제어, 결함 감소, 기계적 유연성 확보 및 환경 안정성을 향상시켰다.",
+        "achievement_type": "신소재",
+        "metrics": [],
+        "approach": "금속 이온-고분자 착물 형성을 위한 배위 화학을 활용하여 페로브스카이트와 고분자를 복합화하는 방식을 사용하였다.",
+        "improvement": "기존 페로브스카이트의 문제점인 제어되지 않는 결정화, 높은 원자 결함 밀도, 기계적 변형 시 파손 취약성 및 낮은 환경 안정성을 개선하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "페로브스카이트/고분자 나노복합체의 합성 원리를 정리하고, 금속 이온-고분자 배위화학이 복합체 형성과 공정성에 미치는 역할을 규명하여 광변환·광도파 구조, 기계적으로 변형 가능한 태양전지, 발광다이오드, 광검출기 등 용액공정 기반 광전자 소자 응용 가능성을 제시하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "페로브스카이트 시스템에 고분자를 도입하고 금속 이온-고분자 착물의 배위화학을 활용하여 나노복합체를 형성·공정하는 전략을 사용하였다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "From Field to Market: Evolution of Strawberry-Harvesting Techniques and Research Progress in Intelligent Robotic Systems",
+      "gemini t=1.0": {
+        "tech_summary": "딸기 수확 기술의 진화 과정을 분석하고, 지능형 로봇 수확 시스템의 구성 요소인 인식, 동작 계획, 조작, 제어 기술 간의 유기적인 통합이 효과적인 자동 수확에 필수적임을 고찰하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "이동 플랫폼, 로봇 매니퓰레이터, 경로 계획 및 장애물 회피, 엔드 이펙터, 시각 인식, 다중 스펙트럼 센싱 및 소프트웨어 제어 등 주요 로봇 수확 기술을 통합적으로 분석하였다.",
+        "improvement": "인력 의존도가 높은 기존의 수확 방식에서 벗어나, 재배 시스템, 인식, 동작 계획, 조작 및 제어 기술이 조화롭게 설계된 지능형 로봇 수확 시스템으로의 전환 방향을 제시하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "딸기 수확 로봇 시스템의 핵심 기술인 이동 플랫폼, 매니퓰레이터, 경로 계획, 시각 인식, 다중 스펙트럼 센싱 및 소프트웨어 제어 기술의 발전 과정을 분석하고, 효율적인 로봇 수확을 위한 재배 시스템과 로봇 설계의 통합적 접근 방안을 제시하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "재배 환경, 생산 패턴, 작물 관리 방식에 따른 로봇 수확 기술의 역사적 변천과 주요 구성 요소(이동 플랫폼, 매니퓰레이터, 인식 및 제어 기술 등)를 종합적으로 검토하였다.",
+        "improvement": "기존의 노동 집약적인 수확 방식에서 벗어나, 재배 시스템과 로봇 설계의 조화로운 통합을 통해 수확 효율성을 높이는 방향을 제시하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "딸기 수확 로봇의 핵심 기술(이동 플랫폼, 매니퓰레이터, 경로 계획, 엔드이펙터, 시각 인식, 다중분광 센싱, 소프트웨어 제어)을 종합적으로 검토하고, 고설재배와 이랑재배용 로봇 시스템을 비교하여 재배 방식이 플랫폼 구성과 수확 전략에 미치는 영향을 규명하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "재배 환경, 수확 방법, 로봇 시스템, 수확 후 처리, 지속가능한 생산의 관점에서 기존 연구를 체계적으로 분석·비교하는 리뷰 방법론을 사용하였다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "A Review on Numerical Simulation and Modeling Techniques in Blast Furnace Ironmaking",
+      "gemini t=1.0": {
+        "tech_summary": "고로 조업 상태를 파악하고 운영 변수를 최적화하기 위해 수치 시뮬레이션 및 수학적 모델링 기술의 발전 과정을 정리하고, 현대적인 다차원·하이브리드 시뮬레이션 접근법의 성능을 분석했다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "충전층 유동 모델, 응집대 재구성 기법, CFD, DEM, 디지털 트윈 및 데이터 기반 모델링 등 다양한 수치 모델링 기법을 종합하여 분석했다.",
+        "improvement": "전통적인 단순화 모델 대비 현대의 다차원 및 하이브리드 접근법은 비대칭적인 고로 내부 상태, 다상 수송 거동 및 조업 변수 효과를 기술하는 능력이 향상되었다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "고로 제선 공정의 내부 상태를 이해하고 운영 매개변수를 최적화하기 위한 수치 시뮬레이션 및 수학적 모델링 기술의 발전 현황을 정리하였다. 1차원 정상 상태 모델에서 현대적인 3차원 다유체 및 하이브리드 시뮬레이션으로의 진화 과정을 분석하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "전산유체역학(CFD), 이산요소법(DEM), 디지털 트윈, 데이터 기반 모델링 등 현대적인 다차원 및 하이브리드 시뮬레이션 기법을 활용하였다.",
+        "improvement": "기존의 단순화된 모델 대비 비대칭적인 고로 내부 상태, 다상 수송 거동, 산업 조건에서의 운영 매개변수 효과를 묘사하는 능력이 향상되었다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "고로 제선 공정의 수치해석 및 모델링 기법을 종합적으로 검토하여, 1차원 정상상태 모델에서 3차원 다중유체·하이브리드 시뮬레이션으로의 발전과 CFD, DEM, 디지털 트윈, 데이터 기반 모델링의 최신 동향을 정리하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "충전층 유동 모델, 연화융착대 재구성, 장입물 분포 모델, 온도장 예측 기법 및 CFD·DEM·디지털 트윈·데이터 기반 모델링을 종합적으로 검토하였다.",
+        "improvement": "기존 단순화 모델 대비 현대적 다차원·하이브리드 접근법은 산업 조건에서 비대칭 노내 상태, 다상 수송 거동, 조업 변수 영향을 더 잘 기술할 수 있다."
+      }
+    },
+    {
+      "title": "A Portable Dual-Mode Aptasensor for Rapid Detection of Influenza A Hemagglutinin",
+      "gemini t=1.0": {
+        "tech_summary": "인플루엔자 A 바이러스의 헤마글루티닌을 검출하기 위해 미세유체 종이 기반 분석 장치(μPAD)를 이용한 비색법과 3전극 시스템을 이용한 전기화학적 방식의 이중 모드 앱타센서 플랫폼을 개발하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "검출한계",
+            "value": "0.62",
+            "unit": "ug/mL",
+            "target": "비색 검출 (완충액)"
+          },
+          {
+            "name": "검출한계",
+            "value": "8.5",
+            "unit": "ng/mL",
+            "target": "전기화학 검출 (완충액)"
+          },
+          {
+            "name": "검출한계",
+            "value": "1.0",
+            "unit": "ug/mL",
+            "target": "비색 검출 (인공 타액)"
+          },
+          {
+            "name": "검출한계",
+            "value": "14.9",
+            "unit": "ng/mL",
+            "target": "전기화학 검출 (인공 타액)"
+          },
+          {
+            "name": "검출한계",
+            "value": "1.04",
+            "unit": "ug/mL",
+            "target": "비색 검출 (희석된 인간 타액)"
+          },
+          {
+            "name": "검출한계",
+            "value": "4.11",
+            "unit": "ng/mL",
+            "target": "전기화학 검출 (희석된 인간 타액)"
+          },
+          {
+            "name": "신호유지율",
+            "value": "97.3",
+            "unit": "%",
+            "target": "비색 검출 (30일 경과)"
+          },
+          {
+            "name": "신호유지율",
+            "value": "113.1",
+            "unit": "%",
+            "target": "전기화학 검출 (7일 경과)"
+          }
+        ],
+        "approach": "미세유체 종이 기반 분석 장치와 유연하고 소형화된 3전극 시스템을 하나의 마이크로유체 홀더 내에 캡슐화하여 구현하였다.",
+        "improvement": "단일 모드 방식에 비해 비색법과 전기화학적 검출을 결합함으로써 위양성 및 위음성 가능성을 낮추고 검출 감도를 향상시켰다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "인플루엔자 A 바이러스의 헤마글루티닌(HA)을 검출하기 위해 미세유체 종이 기반 분석 장치(μPAD)와 3전극 시스템을 결합한 휴대용 이중 모드 앱타센서 플랫폼을 개발하였다. 비색법과 전기화학적 임피던스 분광법을 동시에 활용하여 검출 성능과 신뢰성을 확보하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "검출한계(LOD)",
+            "value": "0.62",
+            "unit": "ug/mL",
+            "target": "비색법(버퍼)"
+          },
+          {
+            "name": "검출한계(LOD)",
+            "value": "8.5",
+            "unit": "ng/mL",
+            "target": "전기화학법(버퍼)"
+          },
+          {
+            "name": "검출한계(LOD)",
+            "value": "1.0",
+            "unit": "ug/mL",
+            "target": "비색법(인공 타액)"
+          },
+          {
+            "name": "검출한계(LOD)",
+            "value": "14.9",
+            "unit": "ng/mL",
+            "target": "전기화학법(인공 타액)"
+          },
+          {
+            "name": "검출한계(LOD)",
+            "value": "1.04",
+            "unit": "ug/mL",
+            "target": "비색법(희석된 인간 타액)"
+          },
+          {
+            "name": "검출한계(LOD)",
+            "value": "4.11",
+            "unit": "ng/mL",
+            "target": "전기화학법(희석된 인간 타액)"
+          }
+        ],
+        "approach": "미세유체 종이 기반 분석 장치(μPAD)와 유연한 3전극 시스템을 하나의 마이크로유체 홀더에 통합하여 시료 흐름을 제어하고 검출을 수행하였다.",
+        "improvement": "전기화학적 구성 요소를 추가함으로써 비색법 단독 사용 대비 검출 한계를 ng/mL 수준으로 크게 향상시켰으며, 5개의 테스트 영역을 통해 위양성/위음성 가능성을 감소시켰다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "인플루엔자 A 바이러스의 헤마글루티닌(HA)을 검출하기 위해 비색법과 전기화학적 측정을 결합한 휴대용 듀얼모드 앱타센서를 개발하고, 완충액과 인공 타액 및 희석 인간 타액에서의 검출 한계와 안정성을 확인하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "검출한계",
+            "value": "0.62",
+            "unit": "ug/mL",
+            "target": "비색법, 완충액 내 인플루엔자 A 헤마글루티닌",
+            "is_primary": true
+          },
+          {
+            "name": "검출한계",
+            "value": "8.5",
+            "unit": "ng/mL",
+            "target": "전기화학법, 완충액 내 인플루엔자 A 헤마글루티닌",
+            "is_primary": true
+          },
+          {
+            "name": "검출한계",
+            "value": "1.0",
+            "unit": "ug/mL",
+            "target": "비색법, 인공 타액 내 인플루엔자 A 헤마글루티닌",
+            "is_primary": false
+          },
+          {
+            "name": "검출한계",
+            "value": "14.9",
+            "unit": "ng/mL",
+            "target": "전기화학법, 인공 타액 내 인플루엔자 A 헤마글루티닌",
+            "is_primary": false
+          },
+          {
+            "name": "검출한계",
+            "value": "1.04",
+            "unit": "ug/mL",
+            "target": "비색법, 희석 인간 타액 내 인플루엔자 A 헤마글루티닌",
+            "is_primary": false
+          },
+          {
+            "name": "검출한계",
+            "value": "4.11",
+            "unit": "ng/mL",
+            "target": "전기화학법, 희석 인간 타액 내 인플루엔자 A 헤마글루티닌",
+            "is_primary": false
+          },
+          {
+            "name": "신호 유지율",
+            "value": "97.3",
+            "unit": "%",
+            "target": "비색법, 30일 후",
+            "is_primary": false
+          },
+          {
+            "name": "신호 유지율",
+            "value": "113.1",
+            "unit": "%",
+            "target": "전기화학법, 7일 후",
+            "is_primary": false
+          }
+        ],
+        "approach": "마이크로플루이딕 종이 기반 분석 장치(μPAD)의 비색 검출부와 소형화된 3전극 시스템의 전기화학적 임피던스 분광법을 하나의 마이크로플루이딕 홀더에 통합하여 HA 앱타머-표적 인식을 측정하였다.",
+        "improvement": "비색법 단독 사용 시 검출 한계 0.62 μg/mL에서 전기화학적 측정을 추가함으로써 완충액 내 검출 한계를 8.5 ng/mL로 개선하였다."
+      }
+    },
+    {
+      "title": "Synthesis and Evaluation of Metal–Organic Framework Nanoarray Electrocatalyst for Oxygen Evolution Reaction: An Inquiry-Based Experiment for Undergraduates",
+      "gemini t=1.0": {
+        "tech_summary": "수전해 산소발생반응(OER)을 위한 금속유기골격체(MOF) 나노어레이를 합성하고, 기존 벌크 분말 형태와 비교하여 나노구조가 촉매 성능에 미치는 영향을 평가하는 교육용 실험 모델을 제시함.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "Ni-벤젠디카복실레이트(Ni-BDC) MOF를 기판 성장형 나노어레이 형태와 일반적인 벌크 분말 형태로 각각 합성하여 비교 분석하는 기법을 사용함.",
+        "improvement": "기존 벌크 분말 형태 대비 나노어레이 구조가 산소발생반응 촉매 활성, 반응 속도, 내구성에 미치는 결정적 영향을 실험적으로 규명함."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "금속-유기 골격체(MOF) 기반의 산소 발생 반응(OER) 전기촉매를 합성하고, 벌크 분말 형태와 기판 성장 나노어레이 형태 간의 성능을 비교 평가하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "Ni-벤젠디카르복실레이트(Ni-BDC) MOF를 기존의 벌크 분말 형태와 기판 성장 나노어레이 형태로 각각 합성하여 전기화학적 성능을 비교하였다.",
+        "improvement": "나노어레이 구조가 촉매 활성, 반응 속도론, 내구성에 미치는 영향을 직접 비교하여 구조-물성-성능 관계를 규명하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "Ni-BDC MOF를 벌크 분말과 기판 성장 나노어레이 형태로 합성하고 OER 전기화학 평가를 비교하여, 나노구조가 촉매 활성·반응속도·내구성에 미치는 영향을 실험적으로 규명하는 학부 실험을 구현하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "Ni-benzenedicarboxylate(Ni-BDC) MOF를 벌크 분말과 기판 성장 나노어레이 두 형태로 합성하여 비교 평가하는 탐구 기반 실험 설계를 사용하였다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "Neuromorphic Parameter Estimation for Power Converter Health Monitoring Using Spiking Neural Networks",
+      "gemini t=1.0": {
+        "tech_summary": "전력 변환기의 상태 모니터링을 위해 스파이킹 신경망(SNN)의 시간적 처리와 미분 가능한 ODE 솔버의 물리적 제약 조건을 분리하여 초저전력 매개변수 추정 기술을 구현하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "저항 오차",
+            "value": "10.2",
+            "unit": "%",
+            "target": "EMI 환경 동기식 벅 컨버터"
+          },
+          {
+            "name": "에너지 절감",
+            "value": "270",
+            "unit": "배",
+            "target": "뉴로모픽 하드웨어 기반 추론"
+          },
+          {
+            "name": "스파이크 희소성",
+            "value": "93",
+            "unit": "%",
+            "target": "아키텍처"
+          }
+        ],
+        "approach": "3계층 leaky integrate-and-fire SNN을 사용하여 수동 소자 매개변수를 추정하고, ODE 물리 손실 함수를 언롤링된 스파이킹 루프에서 분리하는 미분 가능한 ODE 솔버를 적용하였다.",
+        "improvement": "기존 피드포워드 방식 대비 저항 추정 오차를 25.8%에서 10.2%로 감소시켰다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "전력 변환기 상태 모니터링을 위해 스파이킹 신경망(SNN)을 활용하여 수동 소자 파라미터를 추정하고, 미분 가능한 ODE 솔버를 통해 물리적 일관성을 확보한 추론 시스템을 구현했다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "저항 오차",
+            "value": "10.2",
+            "unit": "%",
+            "target": "EMI-corrupted synchronous buck converter"
+          },
+          {
+            "name": "에너지 절감",
+            "value": "270",
+            "unit": "x",
+            "target": "neuromorphic hardware"
+          },
+          {
+            "name": "스파이크 희소성",
+            "value": "93",
+            "unit": "%",
+            "target": "architecture"
+          }
+        ],
+        "approach": "3계층 Leaky Integrate-and-Fire SNN을 사용하여 시간적 처리를 수행하고, ODE 물리 손실을 스파이킹 루프와 분리하여 미분 가능한 ODE 솔버로 학습시키는 방식을 사용했다.",
+        "improvement": "기존 피드포워드 베이스라인 대비 저항 추정 오차를 25.8%에서 10.2%로 개선했다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "3층 leaky integrate-and-fire 스파이킹 신경망(SNN)과 미분가능한 ODE 솔버를 결합하여 전력 변환기의 수동 소자 파라미터를 추정하고, 뉴로모픽 하드웨어에서 약 270배 에너지 절감이 가능한 서브밀리와트급 상시 엣지 추론 성능을 달성했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "저항 오차",
+            "value": "10.2",
+            "unit": "%",
+            "target": "EMI가 유입된 동기 벅 컨버터의 집중 저항"
+          },
+          {
+            "name": "에너지 절감",
+            "value": "270",
+            "unit": "x",
+            "target": "뉴로모픽 하드웨어 투영치"
+          },
+          {
+            "name": "스파이크 희소성",
+            "value": "93",
+            "unit": "%",
+            "target": ""
+          }
+        ],
+        "approach": "3층 leaky integrate-and-fire SNN이 수동 소자 파라미터를 추정하고, 미분가능한 ODE 솔버가 ODE 물리 손실을 스파이킹 전개 루프에서 분리하여 물리 일관적 학습을 제공한다.",
+        "improvement": "피드포워드 기준 모델 대비 집중 저항 오차를 25.8%에서 10.2%로 줄였고, 이는 수동 소자의 ±10% 제조 공차 범위 이내에 해당한다."
+      }
+    },
+    {
+      "title": "<b>TRANSTORNO DO ESPECTRO AUTISTA: AVANÇOS RECENTES NA EPIDEMIOLOGIA, ETIOLOGIA, DIAGNÓSTICO E INTERVENÇÕES</b>",
+      "gemini t=1.0": {
+        "tech_summary": "자폐 스펙트럼 장애(ASD)에 대한 2024~2026년 최신 연구를 종합하여 역학, 병인, 진단 및 치료 전략의 발전을 분석하고 임상적 시사점을 도출했다. 바이오마커, 원격 선별 검사 및 인공지능 모델이 진단을 보완하는 도구로 주목받고 있음을 확인했다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "체계적 문헌 고찰, 메타 분석 및 감시 연구를 포함한 방법론적 엄밀성이 높은 연구들을 분석했다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "자폐 스펙트럼 장애(ASD)에 대한 최신 연구 동향을 종합하여 역학, 병인, 진단 및 중재 분야의 발전 사항을 정리하고 임상적 시사점을 도출하였다. 특히 바이오마커, 원격 선별 검사, 인공지능 모델의 활용 가능성과 조기 맞춤형 중재의 중요성을 확인하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "2024년부터 2026년까지 발표된 체계적 문헌 고찰, 메타 분석, 감시 연구 및 합성 리뷰를 분석하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "2024-2026년 사이에 발표된 자폐 스펙트럼 장애(ASD) 관련 연구를 검토하여 역학, 병인, 신경생물학, 진단, 중재 분야의 최신 진전을 종합적으로 요약하고, 바이오마커, 원격 선별, 인공지능 모델의 발전과 조기 맞춤형 중재 전략의 유효성을 확인했다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "체계적 문헌고찰, 메타분석, 감시 연구, 종합 리뷰 등 방법론적 엄격성이 높은 2024-2026년 발표 증거들을 서사적으로 검토하고 종합하는 방식을 사용했다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "GLAD: A Graph-LLM augmented framework for out-of-scope intent detection",
+      "gemini t=1.0": {
+        "tech_summary": "GLAD는 LLM에서 생성된 의도 프로토타입을 경량 동적 그래프에 주입하고, 질의 인식 하위 그래프 샘플링 및 비용 인식 하이브리드 라우팅 메커니즘을 사용하여 의도 분류 성능을 향상시킨다.",
+        "achievement_type": "아키텍처",
+        "metrics": [
+          {
+            "name": "F1-OPEN",
+            "value": "가장 높음",
+            "unit": "%",
+            "target": "Out-of-Scope Intent Detection"
+          }
+        ],
+        "approach": "LLM이 생성한 의도 프로토타입을 경량 동적 그래프에 주입하여 관계형 추론을 수행하고, 다중 레벨 대조 학습 목표를 통해 발화와 클래스 프로토타입을 정렬하며, 비용 인식 하이브리드 라우팅으로 LLM 사용을 최소화했다.",
+        "improvement": "기존 방식들이 의도 간 구조를 무시하거나 LLM에 과도하게 의존했던 문제를 해결하여, 모든 테스트된 커버리지 수준에서 가장 강력한 F1-OPEN 성능을 달성했다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "GLAD는 대규모 언어 모델(LLM)이 생성한 의도 프로토타입을 경량 동적 그래프에 주입하여 관계형 추론을 수행함으로써, 작업 지향 대화 시스템에서 범위 내(IS) 및 범위 외(OOS) 의도 분류 성능을 향상시켰다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "F1-OPEN",
+            "value": "최고 수준",
+            "unit": "N/A",
+            "target": "범위 외(OOS) 의도 탐지"
+          }
+        ],
+        "approach": "LLM 생성 의도 프로토타입을 경량 동적 그래프에 주입하고, 히스테리시스 기반 엣지 업데이트와 지수 이동 평균을 통해 그래프를 정제하며, 쿼리 인식 서브그래프 샘플링과 비용 인식 하이브리드 라우팅 메커니즘을 도입했다.",
+        "improvement": "의도 간 구조를 무시하거나 LLM에 과도하게 의존하던 기존 방식과 달리, 그래프 기반 추론과 LLM 검증기를 선별적으로 사용하여 LLM 사용량을 낮추면서도 모든 테스트된 커버리지 수준에서 가장 강력한 F1-OPEN 성능을 달성했다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "GLAD는 LLM이 생성한 의도 프로토타입을 경량 동적 그래프에 주입하고 다단계 대조 학습과 비용 인지형 하이브리드 라우팅을 결합하여, 세 개의 공개 벤치마크에서 모든 테스트 커버리지 수준에서 가장 높은 F1-OPEN을 달성하면서도 LLM 사용량을 낮게 유지했다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "F1-OPEN",
+            "unit": "",
+            "target": "",
+            "value": "",
+            "is_best": true
+          }
+        ],
+        "approach": "LLM이 생성한 의도 프로토타입을 경량 동적 그래프에 주입하고, 히스테리시스 기반 엣지 업데이트와 지수 이동 평균으로 그래프를 정제하며, 다단계 대조 목적함수와 쿼리 인지 서브그래프 샘플링, 비용 인지형 하이브리드 라우팅을 사용한다.",
+        "improvement": "기존 방법들이 의도 간 구조를 무시하거나 LLM에 과도하게 의존한 것과 달리, GLAD는 모든 테스트 커버리지 수준에서 가장 강한 F1-OPEN을 기록했고 특히 저커버리지·세분화된 설정에서 효과적이면서 LLM 사용량을 낮게 유지했다."
+      }
+    },
+    {
+      "title": "FAWEN-based agrivoltaic integration framework for climate-resilient development in Sudan",
+      "gemini t=1.0": {
+        "tech_summary": "수단의 건조 및 반건조 환경에서 식량-농업-물-에너지 넥서스(FAWEN) 프레임워크를 적용하여 영농형 태양광(AV) 시스템의 기술적 타당성과 거버넌스 연계성을 평가하고, 이를 통해 기후 탄력적 개발을 위한 자원 통합 최적화 방안을 제시하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "전역수평일사량(GHI)",
+            "value": "5.8-6.8",
+            "unit": "kWh/m2/day",
+            "target": "수단 건조지역"
+          },
+          {
+            "name": "태양광발전량(PVOUT)",
+            "value": "1.6-2.0",
+            "unit": "MWh/kWp/yr",
+            "target": "수단 건조지역"
+          },
+          {
+            "name": "토지이용효율(LER)",
+            "value": "1.3 이상",
+            "unit": "ratio",
+            "target": "영농형 태양광 시스템"
+          },
+          {
+            "name": "물사용효율",
+            "value": "20-35",
+            "unit": "%",
+            "target": "영농형 태양광 시스템"
+          }
+        ],
+        "approach": "태양광 자원 매핑, 기술-경제 및 생태학적 증거 합성, 기존 영농형 태양광 사례 연구, 문헌 계량 분석을 통합한 다학제적 방법론을 사용하였다.",
+        "improvement": "기존 연구들이 태양광 에너지, 관개, 농업 적응을 개별적으로 검토하던 한계를 넘어, 식량-농업-물-에너지 간의 자원을 통합 관리하는 FAWEN 프레임워크를 적용하여 자원 공동 최적화를 제시하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "수단 건조 지역의 기후 회복력 있는 개발을 위해 식량-농업-물-에너지 넥서스(FAWEN) 프레임워크를 적용하여 영농형 태양광(AV) 시스템의 기술적 타당성과 거버넌스 적합성을 평가하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [
+          {
+            "name": "전 지구 수평 일사량(GHI)",
+            "value": "5.8-6.8",
+            "unit": "kWh/m2/day",
+            "target": "수단 지역"
+          },
+          {
+            "name": "태양광 발전량(PVOUT)",
+            "value": "1.6-2.0",
+            "unit": "MWh/kWp/yr",
+            "target": "수단 지역"
+          },
+          {
+            "name": "토지 이용 효율(LER)",
+            "value": "1.3 이상",
+            "unit": "",
+            "target": "영농형 태양광 시스템"
+          },
+          {
+            "name": "물 사용 효율 개선율",
+            "value": "20-35",
+            "unit": "%",
+            "target": "영농형 태양광 시스템"
+          }
+        ],
+        "approach": "태양광 자원 매핑, 기술경제 및 생태학적 증거 합성, 영농형 태양광 사례 연구, 서지 분석을 결합한 학제간 방법론을 사용하였다.",
+        "improvement": "기존의 태양광, 관개, 농업 적응을 개별적으로 다루던 연구들과 달리, 식량-농업-물-에너지 넥서스(FAWEN) 프레임워크를 통해 자원 관리의 통합적 최적화를 제시하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "수단의 건조·반건조 환경에서 농업형 태양광(AV) 시스템의 기술적 타당성과 거버넌스 적용 가능성을 FAWEN 프레임워크로 평가하고, 태양광 자원 지도화와 사례·문헌 분석을 통해 배치를 위한 핵심 시너지와 여건을 도출하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [
+          {
+            "name": "수평면 전일사량(GHI)",
+            "value": "5.8-6.8",
+            "unit": "kWh/m2/day",
+            "target": "수단",
+            "is_range": true
+          },
+          {
+            "name": "태양광 발전량(PVOUT)",
+            "value": "1.6-2.0",
+            "unit": "MWh/kWp/yr",
+            "target": "수단",
+            "is_range": true
+          },
+          {
+            "name": "토지등가비율(LER)",
+            "value": "1.3",
+            "unit": "",
+            "target": "유사 기후 지역의 농업형 태양광 시스템",
+            "is_range": false
+          },
+          {
+            "name": "물사용효율 개선율",
+            "value": "20-35",
+            "unit": "%",
+            "target": "유사 기후 지역의 농업형 태양광 시스템",
+            "is_range": true
+          }
+        ],
+        "approach": "FAWEN(Food–Agriculture–Water–Energy Nexus) 프레임워크를 적용하고 태양광 자원 매핑, 기술·경제·생태 증거 종합, 사례 연구, 계량서지학적 분석을 결합한 학제적 방법론을 사용하였다.",
+        "improvement": "기존 연구가 태양광, 관개, 농업 적응을 개별적으로 다룬 것과 달리, 농업을 규제 인터페이스로 위치시킨 통합적 FAWEN 거버넌스 프레임워크를 제시하여 수단 건조지 환경에서의 조정된 자원 공동 최적화 경로를 제시하였다."
+      }
+    },
+    {
+      "title": "Generation–grid–load–storage coordination for a park-level integrated energy microgrid under new-type power systems",
+      "gemini t=1.0": {
+        "tech_summary": "단지 단위 통합 에너지 마이크로그리드(IEM)에서 풍력 발전의 변동성과 불확실성을 해결하기 위해 발전-전력망-부하-저장(GGLS) 협력 조정 프레임워크를 개발하였다. 또한, 이를 효율적으로 해결하기 위해 역전파 신경망 기반 시나리오 축소 기법과 양자 영감 진화 알고리즘-유전 알고리즘(QIEA-GA) 하이브리드 최적화 전략을 도입하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "역전파 신경망(BPNN)을 사용하여 대규모 불확실성 시나리오를 차원 축소하고 대표 시나리오를 추출하며, 양자 영감 진화 알고리즘(QIEA)과 유전 알고리즘(GA)을 결합한 하이브리드 전략으로 다목적 최적화 모델을 해결하였다.",
+        "improvement": "풍력 발전의 불확실성이 존재하는 환경에서 기존 방식 대비 경제적 효율성, 에너지 활용도 및 운영 견고성을 개선하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "단지 단위 통합 에너지 마이크로그리드(IEM)를 위한 발전-계통-부하-저장(GGLS) 협력 조정 프레임워크를 개발하여 풍력 발전의 불확실성 속에서도 에너지 할당 효율과 운영 경제성을 향상시켰다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "역전파 신경망(BPNN)을 이용한 시나리오 차원 축소와 양자 영감 진화 알고리즘(QIEA) 및 유전 알고리즘(GA)을 결합한 하이브리드 전략을 통해 다목적 최적화 모델을 해결하였다.",
+        "improvement": "기존 방식 대비 풍력 발전의 확률적 변동성을 효과적으로 처리하여 경제적 성과, 에너지 활용도 및 운영 견고성을 개선하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "고풍력 침투율과 확률적 변동성 하에서 파크급 통합 에너지 마이크로그리드의 운영을 위한 발전-계통-부하-저장(GGLS) 협조 프레임워크를 개발하고, 경제성, 에너지 이용률, 운영 강건성을 향상시켰다.",
+        "achievement_type": "알고리즘",
+        "metrics": [],
+        "approach": "확률적 기회제약 계획법으로 풍력 변동성을 모델링하고, 역전파 신경망(BPNN)으로 시나리오를 축소했으며, 양자 영감 진화 알고리즘(QIEA)과 유전 알고리즘(GA)을 결합한 하이브리드 최적화 기법을 적용했다.",
+        "improvement": "기존 방식 대비 경제적 성능, 에너지 이용률, 운영 강건성이 향상되고 풍력 불확실성의 부정적 영향이 완화되었다."
+      }
+    },
+    {
+      "title": "The regulatory trilemma of AI-driven cybersecurity in the European Union: reconciling the AI Act, DORA, and fundamental rights",
+      "gemini t=1.0": {
+        "tech_summary": "유럽연합의 AI 법과 디지털 운영 복원력법(DORA) 사이에서 발생하는 AI 기반 사이버 보안의 규제적 딜레마를 분석하고, 이를 해결하기 위한 '교정된 자율성(calibrated autonomy)' 개념과 구체적인 정책적 제언을 제시하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "AI법의 투명성·인간 통제 요구와 DORA의 자동화된 운영 복원력 요구, 기본권 간의 삼중적 긴장 관계를 규제적 딜레마로 정의하고 위협 심각도·데이터 민감도·결정 가역성에 기반한 교정된 자율성 모델을 제안함.",
+        "improvement": "기존의 이분법적 규제 갈등 논의를 넘어, AI법과 DORA를 통합적인 도식 안에서 분석하여 시스템적으로 중요한 금융 행위자가 겪는 규제적 딜레마를 규명함."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "유럽연합의 AI법(AI Act)과 디지털 운영 복원력법(DORA) 간의 규제적 삼중 딜레마를 분석하고, 위협 심각도와 데이터 민감도에 따라 AI 자율성 수준을 결정하는 '보정된 자율성(calibrated autonomy)' 개념을 제안하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "AI법의 투명성 요구사항, DORA의 자동화된 운영 복원력 요구사항, 그리고 기본권 헌장의 권리 보장 간의 상충 관계를 분석하는 법적·규제적 프레임워크를 적용하였다.",
+        "improvement": "기존의 개별 규제 분석을 넘어 AI법과 DORA를 단일 교리적 틀로 통합하여 규제 간 상충으로 발생하는 실질적인 준수 딜레마를 규명하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "AI법과 DORA, EU 기본권 헌장이 결합될 때 발생하는 규제 트릴레마를 규명하고, 위협 심각도·데이터 민감도·결정 가역성에 따라 AI 자율성의 허용 정도를 조정하는 '보정된 자율성(calibrated autonomy)' 해석·규범안을 제시하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "AI법과 DORA를 단일 교리적 틀로 통합하고, GDPR·DSA·AI법을 잇는 권리-혁신 균형 담론 및 디지털 주권 담론 속에서 딜레마를 위치지은 뒤, 비례성에 기반한 보정된 자율성 개념을 구성하였다.",
+        "improvement": "기존의 양자적 긴장 관계로 환원되던 논의와 달리, AI법·DORA·기본권 헌장의 상호작용이 실제 컴플라이언스 딜레마를 구성함을 보이고, 유럽 감독당국의 공동 지침, ENISA의 조화된 사고 분류체계, 제한적 준법 안전항, 부문별 자문위원회 등의 개혁안을 제시하였다."
+      }
+    },
+    {
+      "title": "Anti-oncogenic and immunological functions of ATP23 in CMS4 colon adenocarcinoma based on a machine learning computational framework",
+      "gemini t=1.0": {
+        "tech_summary": "결장암(COAD)에서 ATP23의 발현이 종양 세포의 증식, 이동, 침윤을 억제하며, 높은 ATP23 발현이 환자의 생존율 향상과 연관되어 있음을 확인하였다. 또한, ATP23 발현 감소가 T 세포의 산화적 인산화를 저해하여 면역 회피 환경을 조성하고 치료 효과를 떨어뜨릴 수 있음을 규명하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "6개의 공공 데이터셋에서 수집한 결장암 환자의 전사체 프로파일 및 임상 데이터를 기계 학습 기반의 생물정보학 분석 방법으로 분석하고, 추가적으로 시험관 내(in vitro) 실험을 통해 검증하였다.",
+        "improvement": ""
+      },
+      "gemini t=0.0": {
+        "tech_summary": "ATP23의 발현이 결장 선암종(COAD) 환자의 생존율과 양의 상관관계가 있음을 규명하고, ATP23이 암세포의 증식, 이동, 침윤을 억제하며 T세포의 산화적 인산화를 조절하여 면역 억제 환경 형성에 관여함을 확인하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "전사체 프로파일링, 생물정보학적 분석, Kaplan-Meier 생존 분석 및 체외(in vitro) 실험을 통해 ATP23의 발현 수준과 임상적 예후 및 세포 기능 간의 상관관계를 분석하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "ATP23이 대장선암종(COAD), 특히 CMS4 아형에서 종양 조직 내 발현이 유의하게 낮고, ATP23 발현이 높을수록 환자 생존율이 개선됨을 확인했으며, 시험관 실험에서 ATP23이 COAD 세포의 증식·이동·침윤을 억제함을 입증했다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "6개 공개 데이터셋의 전사체 프로파일과 임상 변수를 후향적으로 분석하고, ATP23 고발현군과 저발현군 간 경로·면역세포 침윤·세포 간 통신·TIDE 점수를 비교한 뒤 시험관 실험으로 검증했다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "Data for: Electron readout contrast enhancement in the parallel nuclear regime of an exchange-coupled donor spin qubit system",
+      "gemini t=1.0": {
+        "tech_summary": "교환 결합된 도너 스핀 큐비트 시스템에서 병렬 핵 스핀 구성 시 나타나는 전자 판독 대비(readout contrast) 향상 현상을 분석하고, 이를 설명하는 물리적 메커니즘을 제시함.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "병렬 핵 스핀 구성 시 단일 읽기 주기 동안 단일 전자 트랜지스터(SET)로의 추가적인 전자 터널링 이벤트가 발생한다는 점을 기반으로 물리적 메커니즘을 제안함.",
+        "improvement": "기존 시스템에서 관찰되었으나 설명되지 않았던 병렬 핵 스핀 구성 시의 판독 대비 향상 현상에 대한 물리적 원인을 규명함."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "교환 결합된 도너 스핀 큐비트 시스템에서 평행 핵 스핀 구성 시 전자 판독 대비가 향상되는 물리적 메커니즘을 규명하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "평행 핵 스핀 구성 시 단일 판독 주기 동안 단일 전자 트랜지스터(SET)로의 추가적인 전자 터널링 이벤트가 발생한다는 점을 통해 판독 대비 향상 원인을 분석하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "교환 결합된 도너 스핀 큐비트 시스템에서 핵 스핀이 평행 배열일 때 전자 판독 대비가 증가하는 현상의 물리적 메커니즘을 규명하고, 이를 단일 판독 주기 동안 SET으로의 추가적인 전자 터널링 사건에 기인한 것으로 설명했다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "평행 핵 스핀 배열 상태의 교환 결합 도너 시스템을 분석하여 Elzerman 방식 판독 중 발생하는 추가 전자 터널링 사건을 메커니즘으로 제시했다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "MICCAI STS 2024 challenge: Semi-supervised instance-level tooth segmentation in panoramic X-ray and CBCT images",
+      "gemini t=1.0": {
+        "tech_summary": "치과용 파노라마 X-ray(OPG) 및 CBCT 이미지에서의 치아 인스턴스 분할을 위한 준지도 학습(SSL) 프레임워크를 벤치마킹하고 고도화하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "인스턴스 친화도(IA)",
+            "value": "44",
+            "unit": "%p",
+            "target": "2D OPG 트랙 준지도 학습 모델"
+          },
+          {
+            "name": "인스턴스 다이스(Dice) 점수",
+            "value": "61",
+            "unit": "%p",
+            "target": "3D CBCT 트랙 준지도 학습 모델"
+          }
+        ],
+        "approach": "기초 모델(SAM)과 다단계 조대-미세(coarse-to-fine) 정제 파이프라인을 결합한 하이브리드 준지도 학습 프레임워크를 사용하였다.",
+        "improvement": "기존의 완전지도 학습 기반 nnU-Net 모델 대비 인스턴스 분할 성능을 크게 향상시켰다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "반지도학습(SSL)을 활용하여 파노라마 X-ray 및 CBCT 영상에서 치아 인스턴스 분할 성능을 크게 향상시켰으며, 대규모 데이터셋과 벤치마크를 구축하였다.",
+        "achievement_type": "알고리즘",
+        "metrics": [
+          {
+            "name": "인스턴스 친화도(IA)",
+            "value": "44",
+            "unit": "%p",
+            "target": "2D OPG 치아 분할"
+          },
+          {
+            "name": "인스턴스 다이스(Instance Dice)",
+            "value": "61",
+            "unit": "%p",
+            "target": "3D CBCT 치아 분할"
+          }
+        ],
+        "approach": "기초 모델(SAM)의 지식과 다단계의 조대-미세(coarse-to-fine) 정제 파이프라인을 결합한 하이브리드 반지도학습 프레임워크를 사용하였다.",
+        "improvement": "라벨링된 데이터만으로 학습한 완전지도학습 nnU-Net 베이스라인 모델 대비 인스턴스 분할 성능을 크게 향상시켰다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "치과 파노라마 X선(OPG) 및 CBCT 영상의 반지도 학습 기반 치아 인스턴스 분할에서, 최고 성능 모델이 완전지도 nnU-Net 기준선 대비 OPG 트랙 Instance Affinity(IA) 점수를 44%p 이상, CBCT 트랙 Instance Dice 점수를 61%p 향상시켰다.",
+        "achievement_type": "성능향상",
+        "metrics": [
+          {
+            "name": "Instance Affinity(IA) 점수",
+            "unit": "%p",
+            "target": "2D OPG 치아 인스턴스 분할",
+            "value": 44
+          },
+          {
+            "name": "Instance Dice 점수",
+            "unit": "%p",
+            "target": "3D CBCT 치아 인스턴스 분할",
+            "value": 61
+          }
+        ],
+        "approach": "SAM과 같은 기반 모델의 지식을 다단계 coarse-to-fine 정제 파이프라인과 결합한 하이브리드 반지도 학습 프레임워크를 사용했다.",
+        "improvement": "라벨링된 데이터만으로 학습한 완전지도 nnU-Net 기준선 대비 OPG 트랙 IA 점수 44%p 이상, CBCT 트랙 Instance Dice 점수 61%p 향상되었다."
+      }
+    },
+    {
+      "title": "Assessment of Sialylation of Skeletal Muscle Atrophy due to Simulated Microgravity",
+      "gemini t=1.0": {
+        "tech_summary": "모의 미세중력 환경인 쥐 뒷다리 하중 제거 조건에서 골격근의 시알릴화 변화를 확인하고, 특정 근육의 시알릴화 및 관련 유전자 발현 차이를 규명하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [
+          {
+            "name": "유전자 발현 유의확률(p-value)",
+            "value": "0.0035",
+            "unit": "",
+            "target": "ST3Gal1 유전자"
+          }
+        ],
+        "approach": "뒷다리 하중 제거(hind limb unloading)를 통해 모의 미세중력 환경을 조성한 후 qRT-PCR 및 렉틴 마이크로어레이(lectin microarray)를 사용하여 골격근의 시알릴화를 분석하였다.",
+        "improvement": "기존에 잘 알려지지 않았던 미세중력으로 인한 근위축 과정에서의 시알산 감소 기전을 암컷 쥐의 가자미근에서 시알산 결합 증가 등을 통해 새롭게 확인하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "모의 미세중력 환경(뒷다리 하중 제거)이 골격근의 시알산(sialic acid) 수준과 시알릴화에 미치는 영향을 규명하였다. 암컷 쥐의 가자미근에서 하중 제거 시 핵심 O-글리칸 및 시알산 결합이 증가하고 ST3Gal1 유전자 발현에 유의미한 차이가 있음을 확인하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [
+          {
+            "name": "유전자 발현 차이(p-value)",
+            "value": "0.0035",
+            "unit": "",
+            "target": "ST3Gal1"
+          }
+        ],
+        "approach": "Wistar 쥐를 이용한 뒷다리 하중 제거(hind limb unloading) 모델을 통해 모의 미세중력 환경을 조성하고, qRT-PCR 및 렉틴 마이크로어레이(lectin microarray)를 사용하여 근육 조직의 시알릴화를 분석하였다.",
+        "improvement": ""
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "모의 미세중력(뒷다리 비부하) 조건에서 암컷 쥐의 가자미근에서 코어 O-글리칸 및 시알산 결합이 증가함을 렉틴 마이크로어레이로 확인했고, qRT-PCR로 ST3Gal1 유전자 발현이 부하군과 비부하군 간 유의미하게 다름(p=0.0035)을 밝혔다.",
+        "achievement_type": "이론/해석",
+        "metrics": [
+          {
+            "name": "p값",
+            "value": "0.0035",
+            "unit": "",
+            "target": "ST3Gal1 유전자 발현 비교"
+          }
+        ],
+        "approach": "렉틴 마이크로어레이와 qRT-PCR을 사용하여 시알산 결합 및 시알릴화 관련 유전자 발현을 평가하였다.",
+        "improvement": ""
+      }
+    },
+    {
+      "title": "Charge transfer between the MgH2 and TiO2 surface of the MgH2/TiO2/Ni3ZnC0.7 composite with good cyclic reliability",
+      "gemini t=1.0": {
+        "tech_summary": "수소 저장 특성을 향상시킨 MgH2-TiO2/Ni3ZnC0.7 복합체를 제조하였으며, TiO2의 전하 조절 역할과 Mg2Ni/Mg2NiH4의 수소 펌프 작용을 통해 우수한 사이클 안정성을 확보했다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "수소 흡수량",
+            "value": "4.13",
+            "unit": "wt%",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체(423 K, 600 s)"
+          },
+          {
+            "name": "수소 방출량",
+            "value": "4.02",
+            "unit": "wt%",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체(573 K, 60 min)"
+          },
+          {
+            "name": "수소 흡수 활성화 에너지",
+            "value": "41.92",
+            "unit": "kJ/mol H2",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체"
+          },
+          {
+            "name": "수소 방출 활성화 에너지",
+            "value": "95.18",
+            "unit": "kJ/mol H2",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체"
+          },
+          {
+            "name": "사이클 수명",
+            "value": "110",
+            "unit": "cycles",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체"
+          }
+        ],
+        "approach": "MXene 유래 TiO2 표면에 Ni3ZnC0.7을 균일하게 분산시키고 대나무 형태의 탄소 나노튜브를 도입한 여과 및 하소 공정을 이용하였다.",
+        "improvement": "MgH2의 수소 저장 성능을 향상시키고, 탄소 나노튜브를 통해 Mg/MgH2 입자의 응집 및 성장을 억제하여 우수한 사이클 안정성을 달성하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "MgH2-TiO2/Ni3ZnC0.7 복합체를 제조하여 수소 저장 성능을 향상시키고 110회 사이클 동안 우수한 순환 안정성을 확보하였다. TiO2는 전하 조절자(charge regulator) 역할을 수행하며, 계내 생성된 Mg2Ni/Mg2NiH4는 수소 펌프 역할을 하여 수소 확산 채널을 제공한다.",
+        "achievement_type": "신소재",
+        "metrics": [
+          {
+            "name": "수소 흡수량",
+            "value": "4.13",
+            "unit": "wt%",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체 (423 K, 600 s)"
+          },
+          {
+            "name": "수소 방출량",
+            "value": "4.02",
+            "unit": "wt%",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체 (573 K, 60 min)"
+          },
+          {
+            "name": "수소 흡수 활성화 에너지",
+            "value": "41.92",
+            "unit": "kJ/mol H2",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체"
+          },
+          {
+            "name": "수소 방출 활성화 에너지",
+            "value": "95.18",
+            "unit": "kJ/mol H2",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체"
+          }
+        ],
+        "approach": "여과 및 하소 공정을 통해 대나무 모양의 탄소 나노튜브가 표면에 있는 층상 Ni3ZnC0.7 담지 TiO2 복합체를 제조하였다.",
+        "improvement": "탄소 나노튜브의 존재로 Mg/MgH2 입자의 응집 및 성장을 억제하였으며, Mg2Ni/Mg2NiH4가 수소 확산 채널을 제공하여 수소 저장 특성을 개선하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체를 제조하여 423 K, 600 s에서 4.13 wt%의 수소 흡수와 573 K, 60 min에서 4.02 wt%의 수소 방출을 달성했고, 수소 흡수/방출 활성화 에너지를 각각 41.92 kJ/mol H2와 95.18 kJ/mol H2로 낮추었으며, 110사이클 동안 온도·압력 변화에도 저장 용량이 거의 유지되는 순환 신뢰성을 확보했다.",
+        "achievement_type": "성능향상",
+        "metrics": [
+          {
+            "name": "수소 흡수량",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체",
+            "unit": "wt%",
+            "value": 4.13
+          },
+          {
+            "name": "수소 방출량",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체",
+            "unit": "wt%",
+            "value": 4.02
+          },
+          {
+            "name": "수소 흡수 활성화 에너지",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체",
+            "unit": "kJ/mol",
+            "value": 41.92
+          },
+          {
+            "name": "수소 방출 활성화 에너지",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체",
+            "unit": "kJ/mol",
+            "value": 95.18
+          },
+          {
+            "name": "사이클 수명",
+            "target": "MgH2-2.5 wt% TiO2/Ni3ZnC0.7 복합체",
+            "unit": "cycle",
+            "value": 110
+          }
+        ],
+        "approach": "여과 후 하소 공정으로 대나무형 탄소나노튜브가 표면에 형성된 층상 Ni3ZnC0.7 담지 TiO2 복합체를 제조하여 MgH2에 첨가했으며, in-situ 생성된 Mg2Ni/Mg2NiH4가 수소 확산 채널을 제공하고 TiO2가 전하 조절자로 작용한다.",
+        "improvement": "기존 MgH2 대비 수소 흡수/방출 활성화 에너지가 감소하고 110사이클의 온도·압력 변화 조건에서도 수소 저장 용량 변화가 거의 없는 순환 안정성을 나타냈다."
+      }
+    },
+    {
+      "title": "Biomarker-driven risk stratification and early intervention in acute kidney injury: a comprehensive review from early warning to clinical response",
+      "gemini t=1.0": {
+        "tech_summary": "급성 신장 손상(AKI)을 조기에 감지하고 위험도를 계층화하기 위해 생체지표(biomarker)를 기반으로 한 역동적인 위험 평가와 임상적 대응 전략을 통합한 관리 프레임워크를 제시하였다.",
+        "achievement_type": "기타",
+        "metrics": [],
+        "approach": "신장 구조적 손상, 세포 스트레스, 염증, 대사 지표 등 다차원적 생물학적 신호를 인공지능 기반의 시계열 분석 및 연속 모니터링 기법과 결합하였다.",
+        "improvement": "기존의 혈청 크레아티닌이나 소변량과 같은 지연된 기능적 지표 중심의 진단 방식에서 벗어나, 기능 저하가 나타나기 전의 하위 임상적 손상을 조기에 감지하는 방식으로 관리 패러다임을 전환하였다."
+      },
+      "gemini t=0.0": {
+        "tech_summary": "급성 신장 손상(AKI)의 조기 경보 및 위험 계층화를 위해 생체지표(biomarker)와 인공지능 기반의 동적 위험 평가 모델을 통합한 새로운 관리 패러다임을 제시하였다. 이를 통해 기존의 기능적 지표에 의존하던 방식에서 벗어나 기전 기반의 선제적 치료 대응 체계를 구축하였다.",
+        "achievement_type": "시스템구현",
+        "metrics": [],
+        "approach": "세뇨관 구조 손상, 세포 스트레스, 염증 및 대사 반응을 반영하는 생체지표와 시계열 분석 및 인공지능 기반의 다차원적 임상 정보를 통합하여 활용하였다.",
+        "improvement": "기존의 혈청 크레아티닌이나 소변량과 같은 지연된 기능적 지표에 의존하던 방식에서 벗어나, 기능적 악화 전 단계의 아임상적 신장 손상을 조기에 감지하고 동적인 위험 평가를 가능하게 하였다."
+      },
+      "deepseek-v4-pro:0813 t=0.0": {
+        "tech_summary": "급성 신장 손상(AKI) 바이오마커를 기전별로 계층화하고, 연속 모니터링·시계열 분석·인공지능 기반 방법을 통합하여 정적 예측에서 동적 위험 평가로 전환하는 조기 경보-임상 대응 폐루프 프레임워크를 제시하였다.",
+        "achievement_type": "이론/해석",
+        "metrics": [],
+        "approach": "세뇨관 구조 손상, 세포 스트레스·세포주기 정지, 염증·면역 활성, 대사·산화 스트레스를 반영하는 바이오마커와 연속 모니터링, 시계열 분석, 인공지능 기반 방법을 통합하였다.",
+        "improvement": "기존의 혈청 크레아티닌·소변량 같은 기능 지표 기반의 지연된 탐지와 정적 예측 접근법에 비해, 무증상 신장 손상을 조기에 탐지하고 동적 위험 평가 및 구조화된 임상 중재 경로로 연결할 수 있게 되었다."
+      }
+    }
+  ]
+}
