@@ -321,7 +321,6 @@ export interface DashboardResponse {
   rows: DashboardRow[];
   budget_spent: number;
   budget_limit: number;
-  default_year_range: number; // 최근 N개년(개수)이지 연도 범위가 아니다
 }
 
 // POST /admin/queue의 응답. skipped는 조용히 건너뛰지 않기 위한 것이라

@@ -1177,7 +1177,7 @@ def test_roadmap_judgment_calls_are_deterministic():
     from app.clients import gemini_sync
 
     src = inspect.getsource(gemini_sync.generate)
-    assert "temperature=0" in src and "top_k=1" in src and "seed=settings.gemini_seed" in src
+    assert "temperature=0" in src and "top_k=1" in src and "seed=SEED" in src
     assert "response_schema" in src
 
 

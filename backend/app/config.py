@@ -53,9 +53,6 @@ class Settings(BaseSettings):
     # 출력 단가는 "including thinking tokens" — thinking 토큰이 출력에 포함돼 과금된다.
     # 산문·판정 생성의 seed. 값 자체는 무의미하고 고정돼 있다는 것이 중요하다 —
     # top_k=1과 함께 있을 때만 재현에 기여한다(단독은 무효, gemini_sync.generate 참조).
-    gemini_seed: int = 20260905
-    gemini_batch_input_usd_per_1m: float = 0.125
-    gemini_batch_output_usd_per_1m: float = 0.75
     # 미리보기 시점엔 실제 논문 title/abstract가 없어 길이를 알 수 없으므로 쓰는
     # 논문당 평균 토큰 근사치. 실측 분포가 쌓이면 .env에서 조정한다.
     gemini_avg_input_tokens_per_paper: int = 700
@@ -65,7 +62,6 @@ class Settings(BaseSettings):
     max_extract_attempts: int = 3
     max_search_attempts: int = 3
     reduce_group_threshold: int = 500
-    default_year_range: int = 3
     loop_interval_seconds: int = 30
 
     # 월간 자동 분석 스케줄러 — 기존 30초 잡 루프(runner.loop) 안에서 매 틱마다
