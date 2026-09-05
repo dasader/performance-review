@@ -133,6 +133,13 @@ def estimate_tokens(papers: list[Paper]) -> int:
     )
 
 
+# Gemini batch(map) 단가 — gemini-3.1-flash-lite batch(표준 $0.25/$1.50의 50%),
+# 2026-08-25 가격표. 출력 단가는 thinking 토큰 포함 기준이라 여기가 비용의 70%다.
+# .env 설정이었을 때 운영에 1/4 값이 들어가 비용을 4.3배 과소평가했다 — 상수로 둔다.
+_BATCH_INPUT_USD_PER_1M = 0.125
+_BATCH_OUTPUT_USD_PER_1M = 0.75
+
+
 def estimate_llm_cost_usd(paper_count: int) -> float:
     """미리보기용 map 단계 LLM 비용 상한선 추정(C3).
 
@@ -143,8 +150,8 @@ def estimate_llm_cost_usd(paper_count: int) -> float:
     input_tokens = paper_count * (_INSTRUCTION_TOKENS + settings.gemini_avg_input_tokens_per_paper)
     output_tokens = paper_count * settings.gemini_avg_output_tokens_per_paper
     return (
-        input_tokens / 1_000_000 * settings.gemini_batch_input_usd_per_1m
-        + output_tokens / 1_000_000 * settings.gemini_batch_output_usd_per_1m
+        input_tokens / 1_000_000 * _BATCH_INPUT_USD_PER_1M
+        + output_tokens / 1_000_000 * _BATCH_OUTPUT_USD_PER_1M
     )
 
 

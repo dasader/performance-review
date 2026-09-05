@@ -23,11 +23,7 @@ METRIC_TOP_N = 20
 
 
 def _percentile(values: Sequence[float], pct: float) -> float:
-    if not values:
-        return 0
-    ordered = sorted(values)
-    idx = min(int(len(ordered) * pct), len(ordered) - 1)
-    return ordered[idx]
+    return sorted(values)[min(int(len(values) * pct), len(values) - 1)] if values else 0
 
 
 def _ranked(counter: Counter, n: int) -> list[tuple[str, int]]:

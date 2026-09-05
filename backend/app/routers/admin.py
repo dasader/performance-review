@@ -435,7 +435,6 @@ def dashboard(db: Session = Depends(get_db)):
         "rows": rows,
         "budget_spent": round(budget.spent_today(db), 4),
         "budget_limit": settings.openalex_daily_budget_usd,
-        "default_year_range": settings.default_year_range,
     }
 
 

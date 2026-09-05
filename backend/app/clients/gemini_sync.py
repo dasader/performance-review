@@ -66,6 +66,10 @@ class _RequestBucket:
 
 _bucket = _RequestBucket(settings.sync_rpm)
 
+# 산문 생성 재현용 고정 시드. 설정으로 두지 않는다 — 바꿀 이유가 없고(값 자체에 의미가
+# 없다), .env마다 달라지면 같은 입력의 보고서가 환경마다 갈린다.
+SEED = 20260905
+
 
 _RETRY_CODES = {429, 500, 502, 503, 504}
 
@@ -118,7 +122,7 @@ async def generate(
         max_output_tokens=settings.gemini_max_output_tokens,
         temperature=0,
         top_k=1,
-        seed=settings.gemini_seed,
+        seed=SEED,
         **({"response_mime_type": "application/json",
             "response_schema": schema} if schema else {}),
         # Flex 티어는 batch와 같은 반값이면서 batch의 최대 24시간 대기가 없다

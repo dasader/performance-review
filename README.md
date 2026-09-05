@@ -64,7 +64,6 @@ NN=03. 레지스트리는 `../PORTS.md` 참고 — NN=00은 backend 포트가 80
 | `ADMIN_KEY` | (빈 값) | 관리자 API/화면 인증용 단일 키 |
 | `MAX_PAPERS_PER_ANALYSIS` | `5000` | 검색 결과가 이 값을 넘으면 실행 자체를 차단(하드 가드) |
 | `REDUCE_GROUP_THRESHOLD` | `500` | 세부기술의 추출 건수가 이 값을 넘으면 3단 reduce로 자동 분기 |
-| `DEFAULT_YEAR_RANGE` | `3` | 관리자 대시보드 기본 실행 범위(최근 N개년) |
 | `LOOP_INTERVAL_SECONDS` | `30` | 백그라운드 잡 루프 주기 |
 | `SCHEDULE_ENABLED` / `SCHEDULE_DAY` / `SCHEDULE_HOUR` / `SCHEDULE_YEARS_BACK` | `true` / `10` / `3` / `1` | 월간 자동 분석 스케줄의 **초기 기본값**(최초 실행 시 DB에 한 번만 seed됨) — 이후에는 관리자 화면 "자동 분석 스케줄" 카드에서 재기동 없이 바꾼다. 아래 "월간 자동 분석 스케줄러" 참고 |
 | `SCHEDULE_TIMEZONE` | `Asia/Seoul` | 스케줄 타임존. **DB로 옮기지 않고 `.env` 전용으로 유지** — 변경이 드물고 잘못된 값을 넣으면 `ZoneInfo`가 즉시 실패하므로, 관리자 화면에는 읽기 전용으로만 표시한다 |
