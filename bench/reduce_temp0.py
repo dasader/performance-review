@@ -88,4 +88,5 @@ async def main():
     old = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
     old.update(res); res = old
     p.write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8"); print(f"\n→ {p}")
-asyncio.run(main())
+if __name__ == "__main__":   # majority_reduce.py가 import한다 — 가드 없이는 import만으로 60콜이 나간다(실측)
+    asyncio.run(main())
