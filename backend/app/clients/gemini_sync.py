@@ -84,6 +84,7 @@ async def generate(
     thinking: str,
     max_retries: int = 4,
     schema: dict | None = None,
+    model: str | None = None,
 ) -> str:
     """단일 동기 생성 호출. RPM 버킷 통과 후 발사하고, 429는 지수 백오프.
 
@@ -120,7 +121,7 @@ async def generate(
 
     def _call():
         return _get_client().models.generate_content(
-            model=settings.reduce_model, contents=user, config=config
+            model=model or settings.reduce_model, contents=user, config=config
         )
 
     for attempt in range(max_retries + 1):

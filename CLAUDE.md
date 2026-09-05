@@ -493,7 +493,30 @@ greedy 디코딩의 반복·퇴화는 논문 400건으로 확인했다: 3-gram �
 OpenAlex뿐). 비용 판단이 다시 필요해지면 batch 결과와 sync 응답의 `usage_metadata`를
 `openalex_usage`처럼 누적하는 것이 먼저다.
 
-### 보고서 모델은 추출 모델과 분리돼 있다 — `GEMINI_MODEL_REDUCE`
+### 보고서 모델은 추출 모델과 분리돼 있다 — `GEMINI_MODEL_REDUCE` (그리고 판정은 `GEMINI_MODEL_JUDGE`)
+
+**모델이 셋으로 갈라져 있다** (2026-09-05).
+
+| 설정 | 쓰는 곳 | 비우면 | 현재 |
+|---|---|---|---|
+| `GEMINI_MODEL` | 추출(batch) — **캐시 키** | — | 3.1 flash-lite |
+| `GEMINI_MODEL_REDUCE` | reduce · rollup · 로드맵 서술 | `GEMINI_MODEL` | **3.5 flash-lite** |
+| `GEMINI_MODEL_JUDGE` | 로드맵 **행 단위 판정** | **`GEMINI_MODEL`** (REDUCE가 아님) | (비움 → 3.1) |
+
+reduce를 3.5 flash-lite로 올린 근거: 같은 입력 2회 생성이 3.1은 9/10, **3.5-lite는 10/10
+바이트 동일**, 수치 +40%·인용 +13%·반복률 −31%, 단가 입력 1.2배·출력 1.7배
+(`bench/reduce_temp0.py --model`). 3.5-flash는 수치 2.3배지만 **재현 4/10**이라 부적합 —
+큰 모델일수록 길고 촘촘하게 써서 초반 분기 뒤 발산이 커진다. 재현성은 모델 등급이 아니라
+출력 길이의 함수다.
+
+**판정 모델을 REDUCE로 폴백시키지 않은 이유**: 판정의 재현 1.000·발췌 환각 0 실측이
+3.1 기준이다. REDUCE로 묶으면 reduce를 올리는 순간 판정도 조용히 따라가 실측이 무효가
+된다. 판정을 올리려면 `GEMINI_MODEL_JUDGE`를 명시하고 재현·환각을 다시 잰다
+(`test_judge_model_does_not_follow_reduce_model`이 이 폴백을 고정한다).
+
+`gemini_sync.generate(model=...)`로 호출부가 모델을 고를 수 있고, `reducer.judge_goals`만
+`settings.judge_model`을 넘긴다.
+
 
 `gemini_model`은 추출(batch) 전용이고, 보고서 합성(reduce·rollup·로드맵 점검·국가 비교)은
 `settings.reduce_model`(= `gemini_model_reduce or gemini_model`)을 쓴다. **비워 두면 둘이 같은

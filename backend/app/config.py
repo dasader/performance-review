@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     # 키가 analyses 행 자체라 모델을 바꿔도 재추출이 일어나지 않는다 — 그래서 "보고서만
     # 더 좋은 모델로" 같은 판단을 추출 비용 없이 내릴 수 있어야 한다.
     gemini_model_reduce: str = ""
+    # 로드맵 판정 전용 모델. 비우면 gemini_model(추출 모델)을 쓴다 — reduce_model이 아니다.
+    gemini_model_judge: str = ""
     # thinking_level 허용값은 모델 세대별로 다르다(minimal/low/medium/high 중 일부).
     # API가 값을 거부하면 .env에서 조정한다 — 코드 변경 불필요.
     thinking_map: str = "low"
@@ -96,8 +98,20 @@ class Settings(BaseSettings):
 
     @property
     def reduce_model(self) -> str:
-        """보고서 합성에 실제로 쓰는 모델. 미설정이면 추출과 같은 모델."""
+        """보고서 합성(reduce·rollup·서술)에 실제로 쓰는 모델. 미설정이면 추출과 같은 모델."""
         return self.gemini_model_reduce or self.gemini_model
+
+    @property
+    def judge_model(self) -> str:
+        """로드맵 행 단위 판정에 쓰는 모델. **reduce_model이 아니라 gemini_model로 폴백한다.**
+
+        판정의 재현 1.000·발췌 환각 0 실측(2026-09-05)은 gemini-3.1-flash-lite 기준이다.
+        reduce는 3.5 flash-lite가 낫다고 실측됐지만(재현 10/10·수치 +40%) 판정은 그 모델에서
+        재지 않았다. reduce_model로 폴백하면 GEMINI_MODEL_REDUCE를 올리는 순간 판정도 조용히
+        따라가 실측이 무효가 된다 — 그래서 추출 모델(캐시 키라 좀처럼 안 바뀜)에 묶는다.
+        판정 모델을 올리려면 GEMINI_MODEL_JUDGE를 명시하고 6.8-e를 재측정한다.
+        """
+        return self.gemini_model_judge or self.gemini_model
 
     model_config = SettingsConfigDict(env_file=".env")
 

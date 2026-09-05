@@ -334,6 +334,7 @@ async def judge_goals(
                     roadmap_row_user_text(goal, context),
                     thinking=settings.thinking_reduce,
                     schema=schema,
+                    model=settings.judge_model,   # reduce_model과 분리 — config.judge_model 참조
                 )
                 data = json.loads(text)
                 subs = data.get("하위목표") or []

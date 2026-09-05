@@ -943,7 +943,7 @@ def test_roadmap_check_judges_every_goal_row_separately(client, monkeypatch):
     calls = []
 
     async def fake_generate(system, user, *, thinking, schema=None, **kwargs):
-        calls.append({"system": system, "user": user, "schema": schema})
+        calls.append({"system": system, "user": user, "schema": schema, "model": kwargs.get("model")})
         if schema is None:                       # 서술 절 합성 콜
             return "## 3. 종합 판단\n서술\n\n## 4. 이 점검의 한계\n서술"
         return '{"하위목표": [{"항목": "목표", "발췌": [{"세부기술": "세부기술 A", "문장": "본문 A", "수치": ""}], "판정": "인접"}], "판정": "부분 관련"}'
@@ -956,6 +956,7 @@ def test_roadmap_check_judges_every_goal_row_separately(client, monkeypatch):
 
     judged = [c for c in calls if c["schema"] is not None]
     assert len(judged) == 3, "목표 3행이면 판정 콜도 3번"
+    assert all(c["model"] == settings.judge_model for c in judged), "판정은 judge_model로 나간다"
     # 각 콜은 목표 하나만 싣고, (B)는 전부 싣는다.
     assert sum("목표 하나" in c["user"] for c in judged) == 1
     assert all("본문 A" in c["user"] for c in judged)
@@ -1146,6 +1147,24 @@ def test_roadmap_row_prompt_pins_the_verdict_scale():
         assert "{범위밖}" not in text
         # 근거가 판정보다 먼저 온다 — 키 순서가 곧 사고 순서다.
         assert list(sch["properties"]) == ["하위목표", "판정"]
+
+
+def test_judge_model_does_not_follow_reduce_model(monkeypatch):
+    """판정 모델은 reduce_model이 아니라 추출 모델로 폴백한다.
+
+    reduce를 3.5 flash-lite로 올리면서 판정(재현 1.000·환각 0 실측은 3.1 기준)이 조용히
+    따라가면 안 된다. GEMINI_MODEL_REDUCE만 바꿔도 judge_model은 그대로여야 한다."""
+    from app.config import Settings
+
+    s = Settings(gemini_api_key="k", openalex_api_key="k", admin_key="k",
+                 database_url="sqlite://", gemini_model="m-extract",
+                 gemini_model_reduce="m-reduce")
+    assert s.reduce_model == "m-reduce"
+    assert s.judge_model == "m-extract"
+    s2 = Settings(gemini_api_key="k", openalex_api_key="k", admin_key="k",
+                  database_url="sqlite://", gemini_model="m-extract",
+                  gemini_model_reduce="m-reduce", gemini_model_judge="m-judge")
+    assert s2.judge_model == "m-judge"
 
 
 def test_roadmap_judgment_calls_are_deterministic():
