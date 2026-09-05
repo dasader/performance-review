@@ -82,6 +82,7 @@ def main() -> None:
     ap.add_argument("--year", type=int, default=2026)
     ap.add_argument("--country", default="KR")
     ap.add_argument("--rater", default="", help="평가자 이름(머리말에 표시)")
+    ap.add_argument("--ids", default="", help="쉼표 구분 목표 번호 — 이 행만 싣는다(소규모 판정용)")
     ap.add_argument("--dsn", default="postgresql://perfrev:perfrev@localhost:5403/perfrev")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
@@ -91,6 +92,9 @@ def main() -> None:
     fid, fname = cur.fetchone()
     cur.execute("SELECT content_md FROM roadmaps WHERE field_id = %s", (fid,))
     goals = _rp.parse_goals(cur.fetchone()[0])
+    if a.ids:
+        keep = {int(x) for x in a.ids.split(",") if x.strip()}
+        goals = [g for g in goals if g["id"] in keep]
     cur.execute("""
         SELECT s.name, a.report_md FROM analyses a JOIN subfields s ON s.id = a.subfield_id
         WHERE s.field_id = %s AND a.year = %s AND a.country = %s AND a.status='done'
@@ -135,7 +139,7 @@ def main() -> None:
 {reps}
 </body></html>"""
 
-    out = Path(a.out or REPO / "bench" / f"판정기록지-{a.field}-{a.year}.html")
+    out = Path(a.out or REPO / "bench" / f"판정기록지-{a.field}-{a.year}{'-소규모' if a.ids else ''}.html")
     out.write_text(doc, encoding="utf-8")
 
     # 종이에 적은 것을 다시 입력할 때 쓰는 서식. 채점 스크립트가 이 파일을 그대로 읽는다.
