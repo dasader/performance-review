@@ -33,6 +33,10 @@ async def main():
     db.close()
     dens = [rn.density("\n".join(md for _, md in s)) for s in sets]
     print(f"\n수치 밀도  세트1 {dens[0][1]:.2f}/천자 ({dens[0][0]}개) · 세트2 {dens[1][1]:.2f}/천자 ({dens[1][0]}개)")
+    # 어느 세부기술 보고서가 갈렸는지 — 이것이 없으면 판정 전파의 원인을 못 짚는다(⑦ 1차 실측의 교훈)
+    same_rep = [n for (n, a), (_, b) in zip(sets[0], sets[1]) if a == b]
+    print(f"보고서 동일 {len(same_rep)}/{len(sets[0])} · 갈림: "
+          + ", ".join(n for (n, a), (_, b) in zip(sets[0], sets[1]) if a != b))
 
     ver = []
     for k, reps in enumerate(sets, 1):
@@ -48,7 +52,9 @@ async def main():
     print(f"  분포 세트1 {dict(Counter(a.values()))}\n  분포 세트2 {dict(Counter(b.values()))}")
     ch = Counter(f"{a[i]} → {b[i]}" for i in both if a[i] != b[i])
     for k2, v in ch.most_common(): print(f"  {v:>2}건 {k2}")
-    out = {"수치 밀도": dens, "판정 일치": f"{same}/{len(both)}", "세트1": {str(i): v for i, v in a.items()},
+    out = {"수치 밀도": dens, "판정 일치": f"{same}/{len(both)}",
+           "보고서 동일": f"{len(same_rep)}/{len(sets[0])}", "보고서 갈림": [n for (n, a), (_, b) in zip(sets[0], sets[1]) if a != b],
+           "본문": {n: [a, b] for (n, a), (_, b) in zip(sets[0], sets[1])}, "세트1": {str(i): v for i, v in a.items()},
            "세트2": {str(i): v for i, v in b.items()}, "이동": dict(ch)}
     p = REPO / "bench/results/reduce-variance-propagation-반도체-2026.json"
     p.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8"); print(f"→ {p}")
