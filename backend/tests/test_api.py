@@ -727,6 +727,25 @@ def _seed_done_analysis(client, subfield_name, report_md):
     db.close()
 
 
+def _seed_report_for_existing_subfield(name, year=2026, report_md="본문"):
+    """이미 있는 세부기술에 done 분석을 붙인다(없으면 만든다)."""
+    db = app.dependency_overrides[get_db]()
+    s = db.query(Subfield).filter(Subfield.field_id == 1, Subfield.name == name).first()
+    if s is None:
+        s = Subfield(field_id=1, name=name, query="q")
+        db.add(s)
+        db.flush()
+    row = db.query(Analysis).filter(Analysis.subfield_id == s.id,
+                                    Analysis.year == year).first()
+    if row is None:
+        db.add(Analysis(subfield_id=s.id, year=year, status="done", query_hash="h",
+                        report_md=report_md, stats_json={}))
+    else:
+        row.status, row.report_md = "done", report_md
+    db.commit()
+    db.close()
+
+
 def _drain_report_queue():
     """pending 분야 보고서·로드맵 점검을 전부 처리한다 — runner.loop 없이 테스트에서
     직접 소화한다. POST는 이제 pending 큐잉만 하므로, done을 기대하는 테스트는 이걸
@@ -886,35 +905,64 @@ def test_roadmap_check_refuses_without_subfield_report(client):
     assert r.status_code == 409
 
 
-def test_roadmap_check_injects_goal_count_and_verifies_row_count(client, monkeypatch):
-    """목표 행 수가 프롬프트에 주입되고, 생성된 보고서의 행 수가 그와 일치하면
-    incomplete=False로 저장된다."""
+def test_roadmap_check_uses_only_base_country_reports(client, monkeypatch):
+    """분야 종합·로드맵 점검은 **기준국 보고서만** 대조한다.
+
+    다국 지원이 들어온 뒤 국가 필터가 없어 한 세부기술 보고서가 국가 수만큼 중복으로
+    실렸다 — 실측(2026-09-05) 반도체 2026에서 세부기술 10개에 보고서 40건. 본문에는
+    국가가 박혀 있어("2026년 중국의 …") **한국 로드맵을 타국 연구 서술과 대조**하게 된다.
+    """
+    from app.services.reducer import REPORT_COUNTRY, collect_subfield_reports
+
+    _seed_done_analysis(client, "세부기술 KR", "한국 본문")
+    db = app.dependency_overrides[get_db]()
+    sub = db.query(Subfield).filter(Subfield.name == "세부기술 KR").one()
+    db.add(Analysis(subfield_id=sub.id, year=2026, country="CN", status="done",
+                    query_hash="h", report_md="중국 본문", stats_json={}))
+    db.commit()
+
+    got = collect_subfield_reports(db, 1, 2026)
+    db.close()
+
+    assert REPORT_COUNTRY == "KR"
+    bodies = [md for _, md in got]
+    assert "한국 본문" in bodies and "중국 본문" not in bodies
+    assert len(bodies) == len(set(bodies)), "같은 세부기술이 국가 수만큼 중복되면 안 된다"
+
+
+def test_roadmap_check_judges_every_goal_row_separately(client, monkeypatch):
+    """목표 행마다 **독립 콜**로 판정하고 표는 코드가 조립한다.
+
+    65행 표를 한 콜로 만들던 예전 방식은 temperature 0에서도 재현되지 않았다
+    (실측 2026-09-05: 같은 입력 두 번에 27/65행이 달라짐). 행 단위로 나눈 것이
+    그 대책이므로, 호출이 목표 수만큼 나가는지를 고정한다.
+    """
     _seed_done_analysis(client, "세부기술 A", "본문 A")
     _put_roadmap(client)
 
-    captured = {}
-    # 목표 3행과 같은 3행짜리 점검 표를 돌려준다.
-    good = ("| 단계 | 목표 | 판정 | 근거 |\n|---|---|---|---|\n"
-            "| 1단계 | 목표 하나 | 관련 연구 확인 | 본문 A |\n"
-            "| 2단계 | 목표 둘 | 데이터 없음 | - |\n"
-            "| 통합 | 목표 셋 | 데이터 없음 | - |\n")
+    calls = []
 
-    async def fake_generate(system, user, *, thinking, **kwargs):
-        captured["system"] = system
-        captured["user"] = user
-        return good
+    async def fake_generate(system, user, *, thinking, schema=None, **kwargs):
+        calls.append({"system": system, "user": user, "schema": schema})
+        if schema is None:                       # 서술 절 합성 콜
+            return "## 3. 종합 판단\n서술\n\n## 4. 이 점검의 한계\n서술"
+        return '{"하위목표": [{"항목": "목표", "발췌": [{"세부기술": "세부기술 A", "문장": "본문 A", "수치": ""}], "판정": "인접"}], "판정": "부분 관련"}'
 
     monkeypatch.setattr("app.clients.gemini_sync.generate", fake_generate)
     r = client.post("/api/admin/fields/1/roadmap-check?year=2026",
                     headers={"X-Admin-Key": settings.admin_key})
-    assert r.status_code == 200, r.text
-    assert r.json()["status"] == "pending"
+    assert r.status_code == 200 and r.json()["status"] == "pending"
     _drain_report_queue()
 
-    # 행 수가 프롬프트에 실제로 박혔는지 — 이게 빠지면 모델이 목표를 뭉뚱그린다.
-    assert "총 3개" in captured["system"]
-    # 로드맵(A)과 보고서(B)가 둘 다 입력에 들어갔다.
-    assert "목표 하나" in captured["user"] and "본문 A" in captured["user"]
+    judged = [c for c in calls if c["schema"] is not None]
+    assert len(judged) == 3, "목표 3행이면 판정 콜도 3번"
+    # 각 콜은 목표 하나만 싣고, (B)는 전부 싣는다.
+    assert sum("목표 하나" in c["user"] for c in judged) == 1
+    assert all("본문 A" in c["user"] for c in judged)
+    # 서술 콜은 판정을 다시 만들지 않는다 — 이미 끝난 결과를 받아 읽을 뿐이다.
+    narrative = [c for c in calls if c["schema"] is None]
+    assert len(narrative) == 1
+    assert "판정은 **이미 끝나 있습니다.**" in narrative[0]["system"]
 
     got = client.get("/api/fields/1/roadmap-check?year=2026").json()
     assert got["status"] == "done"
@@ -922,18 +970,75 @@ def test_roadmap_check_injects_goal_count_and_verifies_row_count(client, monkeyp
     assert got["incomplete"] is False
     assert got["stale"] is False
     assert got["roadmap_version"] == "v1"
+    assert "## 1. 점검 개요" in got["report_md"] and "## 2. 중점기술별 목표 점검" in got["report_md"]
+    # 절차 판정의 산출이 보고서에 실린다 — 하위 목표 판정, 발췌, 규칙으로 정한 행 판정.
+    assert "#### 근거 발췌" in got["report_md"]
+    assert "① 목표 → **인접**" in got["report_md"]
+    assert "**부분 관련**" in got["report_md"]
 
 
-def test_roadmap_check_flags_incomplete_when_rows_are_dropped(client, monkeypatch):
-    """모델이 목표를 뭉뚱그려 행이 줄면(실측된 실패 모드) incomplete=True로 남는다."""
+def test_roadmap_check_drops_out_of_scope_verdict_when_all_reports_exist(client, monkeypatch):
+    """세부기술 보고서가 전부 있으면 `분석 범위 밖`은 성립할 수 없다 — 열거형에서 뺀다.
+
+    남겨 두었더니 한 모델이 65행 중 28행을 거기 넣었고 모델 간 일치도가 0에 가까웠다
+    (실측 2026-09-05). 코드가 아는 사실을 모델에게 묻지 않는다.
+    """
     _seed_done_analysis(client, "세부기술 A", "본문 A")
     _put_roadmap(client)
 
-    short = ("| 단계 | 목표 | 판정 | 근거 |\n|---|---|---|---|\n"
-             "| 1~2단계 | 목표 하나~둘 | 관련 연구 확인 | 본문 A |\n")
+    seen = {}
 
-    async def fake_generate(system, user, *, thinking, **kwargs):
-        return short
+    async def fake_generate(system, user, *, thinking, schema=None, **kwargs):
+        if schema is None:
+            return "## 3. 종합 판단\n서술\n\n## 4. 이 점검의 한계\n서술"
+        seen["enum"] = schema["properties"]["판정"]["enum"]
+        seen["system"] = system
+        return '{"하위목표": [{"항목": "목표", "발췌": [{"세부기술": "세부기술 A", "문장": "본문 A", "수치": ""}], "판정": "인접"}], "판정": "부분 관련"}'
+
+    monkeypatch.setattr("app.clients.gemini_sync.generate", fake_generate)
+
+    # ① 보고서가 없는 세부기술이 남아 있으면 `분석 범위 밖`이 살아 있어야 한다.
+    client.post("/api/admin/fields/1/roadmap-check?year=2026",
+                headers={"X-Admin-Key": settings.admin_key})
+    _drain_report_queue()
+    assert "분석 범위 밖" in seen["enum"], "대조 못 한 세부기술이 있으면 이 판정이 필요하다"
+    assert "보고서가 없는 세부기술" in seen["system"]
+
+    # ② 전부 채우면 열거형에서 빠진다.
+    db = app.dependency_overrides[get_db]()
+    covered = {name for (name,) in db.query(Subfield.name)
+               .join(Analysis, Analysis.subfield_id == Subfield.id)
+               .filter(Subfield.field_id == 1, Analysis.year == 2026,
+                       Analysis.status == "done").all()}
+    rest = [s.name for s in db.query(Subfield).filter(Subfield.field_id == 1).all()
+            if s.name not in covered]
+    db.close()
+    for name in rest:
+        _seed_report_for_existing_subfield(name)
+
+    client.post("/api/admin/fields/1/roadmap-check?year=2026",
+                headers={"X-Admin-Key": settings.admin_key})
+    _drain_report_queue()
+    assert seen["enum"] == ["관련 연구 확인", "부분 관련", "데이터 없음"]
+    assert "빠짐없이" in seen["system"]
+
+
+def test_roadmap_check_keeps_row_count_when_a_judgment_fails(client, monkeypatch):
+    """판정 한 건이 실패해도 그 행은 표에 남는다 — 행이 사라지면 "빠진 목표가 없다"로
+    오독된다. 예전 실패 모드(모델이 행을 뭉뚱그림)는 표를 코드가 쓰면서 사라졌지만,
+    호출 실패라는 새 경로가 그 자리를 대신하므로 여기서 막는다."""
+    _seed_done_analysis(client, "세부기술 A", "본문 A")
+    _put_roadmap(client)
+
+    n = {"i": 0}
+
+    async def fake_generate(system, user, *, thinking, schema=None, **kwargs):
+        if schema is None:
+            return "## 3. 종합 판단\n서술\n\n## 4. 이 점검의 한계\n서술"
+        n["i"] += 1
+        if n["i"] == 2:
+            raise RuntimeError("일시 장애")
+        return '{"하위목표": [{"항목": "목표", "발췌": [{"세부기술": "세부기술 A", "문장": "본문 A", "수치": ""}], "판정": "인접"}], "판정": "부분 관련"}'
 
     monkeypatch.setattr("app.clients.gemini_sync.generate", fake_generate)
     client.post("/api/admin/fields/1/roadmap-check?year=2026",
@@ -941,8 +1046,9 @@ def test_roadmap_check_flags_incomplete_when_rows_are_dropped(client, monkeypatc
     _drain_report_queue()
 
     got = client.get("/api/fields/1/roadmap-check?year=2026").json()
-    assert got["goal_count"] == 3 and got["checked_count"] == 1
-    assert got["incomplete"] is True
+    assert got["status"] == "done"
+    assert got["goal_count"] == 3 and got["checked_count"] == 3, "행 수는 유지된다"
+    assert "판정 실패" in got["report_md"], "실패를 표와 개요에 드러낸다"
 
 
 def test_roadmap_check_goes_stale_when_roadmap_version_changes(client, monkeypatch):
@@ -984,17 +1090,75 @@ def test_roadmap_check_requires_admin_key(client):
     assert client.get("/api/admin/fields/1/roadmap").status_code == 401
 
 
-def test_roadmap_instruction_has_only_goal_count_placeholder():
-    """ROADMAP_CHECK_INSTRUCTION은 .format(goal_count=...)으로 렌더된다 — 본문에
-    다른 중괄호를 넣으면(예시 제목에 {연도}를 쓰는 등) 렌더가 통째로 터진다.
-    실제로 한 번 깨뜨렸던 지점이라 자리표시자 집합을 고정한다."""
-    import string
-    from app.prompts import ROADMAP_CHECK_INSTRUCTION
+def test_roadmap_row_verdict_is_a_rule_not_the_models_word():
+    """행 판정은 하위 판정에서 규칙으로 다시 계산한다 — 모델이 뭐라 했든.
 
-    fields = {f for _, f, _, _ in string.Formatter().parse(ROADMAP_CHECK_INSTRUCTION) if f is not None}
-    assert fields == {"goal_count"}
-    # 렌더 자체가 되는지도 확인한다.
-    assert "총 65개" in ROADMAP_CHECK_INSTRUCTION.format(goal_count=65)
+    자유 판정 시절에는 같은 근거 구조("X는 있으나 Y는 없음")가 `데이터 없음`과
+    `부분 관련`로 임의로 갈렸다(실측). 규칙이면 갈릴 수 없다."""
+    from app.prompts import roadmap_row_verdict as v
+
+    assert v([{"판정": "직접"}, {"판정": "없음"}], "데이터 없음", []) == "관련 연구 확인"
+    assert v([{"판정": "인접"}, {"판정": "없음"}], "관련 연구 확인", []) == "부분 관련"
+    assert v([{"판정": "없음"}], "관련 연구 확인", []) == "데이터 없음"
+    # `분석 범위 밖`은 빠진 보고서가 있을 때만, 전부 `없음`일 때만 모델 말을 받는다.
+    assert v([{"판정": "없음"}], "분석 범위 밖", []) == "데이터 없음"
+    assert v([{"판정": "없음"}], "분석 범위 밖", ["세부기술 X"]) == "분석 범위 밖"
+    assert v([{"판정": "인접"}], "분석 범위 밖", ["세부기술 X"]) == "부분 관련"
+
+
+def test_roadmap_excerpt_grounding_marks_fabricated_quotes():
+    """발췌가 (B)에 없으면 ⚠로 드러낸다 — 감추면 절차 판정의 존재 이유가 사라진다."""
+    from app.services.reducer import _assemble_roadmap_report, excerpt_grounded
+
+    ctx = "차세대 메모리반도체 분야에서 1,000단 이상의 초고적층 구조를 구현하기 위해 FinFET을 썼다."
+    assert excerpt_grounded("1,000단 이상의 초고적층 구조를 구현하기 위해 FinFET을", ctx)
+    assert excerpt_grounded("1,000단  이상의 초고적층 구조를 구현하기  위해 FinFET을", ctx)  # 공백 무시
+    assert not excerpt_grounded("2,000단 적층 DRAM을 양산했다는 문장", ctx)
+    # 운영 첫 실행에서 실재하는 발췌 4건이 ⚠로 잘못 표시된 두 경로를 고정한다.
+    assert excerpt_grounded("초고적층 구조를 구현하기 위해 FinFET을 썼다...", ctx), "말줄임표"
+    assert excerpt_grounded("차세대 메모리반도체 분야에서 1,000단 이상의 초고", ctx), "보폭"
+
+    judged = [{"id": 1, "중점기술": "M", "세부항목": "M", "단계": "1단계", "시기": "", "목표": "g",
+               "판정": "관련 연구 확인", "규칙위반": False,
+               "하위목표": [{"항목": "g", "판정": "직접",
+                          "발췌": [{"세부기술": "S", "문장": "지어낸 문장", "실재": False}]}]}]
+    md = _assemble_roadmap_report(judged, ["S"], [], "## 3. 종합 판단\n.\n\n## 4. 이 점검의 한계\n.")
+    assert "⚠ (B)에서 확인 안 됨" in md
+    assert "확인되지 않은 것 1건" in md
+
+
+def test_roadmap_row_prompt_pins_the_verdict_scale():
+    """행 단위 판정 프롬프트와 스키마가 같은 척도를 말해야 한다 — 어긋나면 모델이
+    스키마에 없는 값을 골라 그 행이 통째로 실패한다."""
+    from app.prompts import roadmap_row_instruction, roadmap_row_schema
+
+    for missing in ([], ["세부기술 X"]):
+        text = roadmap_row_instruction(["세부기술 A"], missing)
+        sch = roadmap_row_schema(missing)
+        enum = sch["properties"]["판정"]["enum"]
+        for v in enum:
+            assert f"`{v}`" in text, f"{v}가 프롬프트에 없다"
+        assert ("분석 범위 밖" in enum) is bool(missing)
+        sub_enum = sch["properties"]["하위목표"]["items"]["properties"]["판정"]["enum"]
+        assert sub_enum == ["직접", "인접", "없음"]
+        for v in sub_enum:
+            assert f"`{v}`" in text
+        assert "{범위밖}" not in text
+        # 근거가 판정보다 먼저 온다 — 키 순서가 곧 사고 순서다.
+        assert list(sch["properties"]) == ["하위목표", "판정"]
+
+
+def test_roadmap_judgment_calls_are_deterministic():
+    """판정은 schema 모드로 나가고, schema 모드에는 temperature=0이 박힌다.
+
+    행 단위가 재현되는 근거가 이 한 줄이다(실측: 65/65 완전 재현). 지우면 API 기본값
+    1.0으로 돌아가 같은 입력이 다른 판정을 낸다."""
+    import inspect
+
+    from app.clients import gemini_sync
+
+    src = inspect.getsource(gemini_sync.generate)
+    assert '"temperature": 0' in src and "response_schema" in src
 
 
 def test_fields_reports_current_year_progress(client):

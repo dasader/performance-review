@@ -291,3 +291,26 @@ def test_reduce_calls_use_the_flex_service_tier(monkeypatch):
     asyncio.run(gemini_sync.generate("지시", "입력", thinking="high"))
 
     assert captured["config"].service_tier == types.ServiceTier.FLEX
+
+
+def test_sync_generate_retries_transient_server_errors_but_not_4xx():
+    """429뿐 아니라 5xx도 재시도한다 — 4xx는 아니다.
+
+    행 단위 로드맵 판정은 콜 수가 65배라 일시 503을 그만큼 자주 만난다. 실측
+    (2026-09-05)에서 재시도가 없어 그 행이 판정 없이 남았다. 반대로 4xx를 재시도하면
+    답이 바뀌지 않는 요청을 다섯 번 과금할 뿐이다.
+    """
+    from app.clients.gemini_sync import _is_retryable
+
+    class E(Exception):
+        def __init__(self, code):
+            self.code = code
+
+    assert _is_retryable(E(429))
+    for code in (500, 502, 503, 504):
+        assert _is_retryable(E(code)), code
+    for code in (400, 401, 403, 404, 422):
+        assert not _is_retryable(E(code)), code
+    # SDK가 코드를 노출하지 않고 문자열만 줄 때도 잡는다.
+    assert _is_retryable(Exception("503 UNAVAILABLE. high demand"))
+    assert not _is_retryable(Exception("400 INVALID_ARGUMENT"))

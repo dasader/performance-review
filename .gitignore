@@ -32,3 +32,8 @@ dist/
 # bench/results/*.json이 원시 측정치라면 이쪽은 그것을 논문 서술로 옮긴 것이라
 # 커밋하지 않는다(초안·미검증 해석이 섞이는 곳).
 /paper-research/
+
+# 이번 세션(2026-09-05)부터 bench/results/*.json은 추적하지 않는다 — 원시 측정치는 크고
+# 재실행하면 바뀐다. 논문 서술은 paper-research/에, 수치의 출처는 그 문서의 부록 A에 있다.
+# 그 전에 커밋된 31개는 그대로 둔다(git은 추적 중인 파일에 ignore를 적용하지 않는다).
+/bench/results/*.json

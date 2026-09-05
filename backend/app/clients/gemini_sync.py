@@ -56,16 +56,53 @@ class _RequestBucket:
 _bucket = _RequestBucket(settings.sync_rpm)
 
 
-def _is_rate_limit(e: Exception) -> bool:
-    return getattr(e, "status_code", None) == 429 or getattr(e, "code", None) == 429
+_RETRY_CODES = {429, 500, 502, 503, 504}
 
 
-async def generate(system: str, user: str, *, thinking: str, max_retries: int = 4) -> str:
-    """단일 동기 생성 호출. RPM 버킷 통과 후 발사하고, 429는 지수 백오프."""
+def _is_retryable(e: Exception) -> bool:
+    """일시 장애인가 — 429(과다요청)와 5xx(서버측).
+
+    **4xx를 여기 합치지 말 것.** 잘못된 스키마·만료된 키는 다섯 번 더 불러도 답이
+    바뀌지 않고 과금만 는다. `app/clients/_http.py`가 OpenAlex에 대해 같은 선을 긋는다.
+
+    5xx를 넣은 이유는 실측이다(2026-09-05, 로드맵 행 단위 판정 65행): `503 UNAVAILABLE
+    — This model is currently experiencing high demand`가 산발적으로 떠서 그 행이
+    판정 없이 남았다. 행 단위 구조는 콜 수가 65배라 이런 일시 오류를 그만큼 자주 만난다.
+    """
+    code = getattr(e, "status_code", None) or getattr(e, "code", None)
+    if code in _RETRY_CODES:
+        return True
+    text = str(e)
+    return any(k in text for k in ("UNAVAILABLE", "RESOURCE_EXHAUSTED", "INTERNAL",
+                                   "DEADLINE_EXCEEDED"))
+
+
+async def generate(
+    system: str,
+    user: str,
+    *,
+    thinking: str,
+    max_retries: int = 4,
+    schema: dict | None = None,
+) -> str:
+    """단일 동기 생성 호출. RPM 버킷 통과 후 발사하고, 429는 지수 백오프.
+
+    `schema`를 주면 JSON 모드로 나간다(`response_schema`는 API가 디코딩 단계에서
+    강제하는 **계약**이다 — 프롬프트로 부탁하는 것과 다르다). 로드맵 점검의 행 단위
+    판정이 이것을 쓴다.
+
+    **`temperature=0`은 schema 모드에만 박는다.** 산문 생성(reduce·rollup·비교)에는
+    퇴화 위험이 측정되지 않았고 그쪽은 `analyses` 행 자체가 캐시라 재현성의 값어치도
+    작다. 반면 판정은 같은 입력에 같은 답이 나와야 하며, 실측(2026-09-05)에서 행 단위
+    판정은 temperature 0에서 65/65 완전 재현이었다.
+    """
     config = types.GenerateContentConfig(
         system_instruction=system,
         thinking_config=types.ThinkingConfig(thinking_level=thinking),
         max_output_tokens=settings.gemini_max_output_tokens,
+        **({"response_mime_type": "application/json",
+            "response_schema": schema,
+            "temperature": 0} if schema else {}),
         # Flex 티어는 batch와 같은 반값이면서 batch의 최대 24시간 대기가 없다
         # (표준 $0.25/$1.50 → Flex $0.125/$0.75, gemini-3.1-flash-lite 기준).
         # 대가는 혼잡할 때 큐에 들어갈 수 있다는 것인데, 이 함수의 호출부(reduce·
@@ -86,9 +123,10 @@ async def generate(system: str, user: str, *, thinking: str, max_retries: int = 
             response = await asyncio.get_running_loop().run_in_executor(_executor, _call)
             return response.text or ""
         except Exception as e:
-            if _is_rate_limit(e) and attempt < max_retries:
+            if _is_retryable(e) and attempt < max_retries:
                 delay = 2 ** attempt + random.uniform(0, 1)
-                logger.warning("Gemini 429 (%d/%d), %.1fs 후 재시도", attempt + 1, max_retries, delay)
+                logger.warning("Gemini 일시 오류 (%d/%d), %.1fs 후 재시도: %s",
+                               attempt + 1, max_retries, delay, str(e)[:120])
                 await asyncio.sleep(delay)
                 continue
             raise
