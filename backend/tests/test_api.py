@@ -1149,16 +1149,17 @@ def test_roadmap_row_prompt_pins_the_verdict_scale():
 
 
 def test_roadmap_judgment_calls_are_deterministic():
-    """판정은 schema 모드로 나가고, schema 모드에는 temperature=0이 박힌다.
+    """판정·산문 모두 temperature=0·top_k=1·seed로 나간다.
 
-    행 단위가 재현되는 근거가 이 한 줄이다(실측: 65/65 완전 재현). 지우면 API 기본값
-    1.0으로 돌아가 같은 입력이 다른 판정을 낸다."""
+    행 단위 판정 65/65 재현, reduce 9/10 재현의 근거가 이 세 줄이다. temperature만 두고
+    top_k를 지우면 reduce는 6/10으로 떨어진다(실측)."""
     import inspect
 
     from app.clients import gemini_sync
 
     src = inspect.getsource(gemini_sync.generate)
-    assert '"temperature": 0' in src and "response_schema" in src
+    assert "temperature=0" in src and "top_k=1" in src and "seed=settings.gemini_seed" in src
+    assert "response_schema" in src
 
 
 def test_fields_reports_current_year_progress(client):

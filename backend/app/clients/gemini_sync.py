@@ -91,18 +91,24 @@ async def generate(
     강제하는 **계약**이다 — 프롬프트로 부탁하는 것과 다르다). 로드맵 점검의 행 단위
     판정이 이것을 쓴다.
 
-    **`temperature=0`은 schema 모드에만 박는다.** 산문 생성(reduce·rollup·비교)에는
-    퇴화 위험이 측정되지 않았고 그쪽은 `analyses` 행 자체가 캐시라 재현성의 값어치도
-    작다. 반면 판정은 같은 입력에 같은 답이 나와야 하며, 실측(2026-09-05)에서 행 단위
-    판정은 temperature 0에서 65/65 완전 재현이었다.
+    **산문 생성도 결정적 파라미터로 나간다** (`temperature=0, top_k=1, seed`, 2026-09-05).
+    실측: 세부기술 보고서를 같은 입력으로 두 번 만들면 기본값에서 0/10 동일, temperature 0
+    단독 6/10, seed 단독 무효, **top_k=1+seed에서 9/10** — 이 API의 temperature 0은 근접
+    로짓에서 완전한 argmax가 아니라 top_k=1이 그것을 강제한다. 남는 1/10은 서빙 단.
+    대가는 쟀다(`bench/prose_degeneration.py`): 길이·문장 수·인용 수·수치는 유지 또는
+    증가, 어휘 다양도 −6%, 3-gram 반복률 +158% — 문장이 도는 퇴화가 아니라 소규모
+    세부기술에서 같은 논문을 거듭 인용하는 편중. 표본을 읽고 채택했다.
+    reduce가 재현되지 않으면 로드맵 판정이 논문 변화 없이 23% 흔들린다(전파 0.769).
     """
     config = types.GenerateContentConfig(
         system_instruction=system,
         thinking_config=types.ThinkingConfig(thinking_level=thinking),
         max_output_tokens=settings.gemini_max_output_tokens,
+        temperature=0,
+        top_k=1,
+        seed=settings.gemini_seed,
         **({"response_mime_type": "application/json",
-            "response_schema": schema,
-            "temperature": 0} if schema else {}),
+            "response_schema": schema} if schema else {}),
         # Flex 티어는 batch와 같은 반값이면서 batch의 최대 24시간 대기가 없다
         # (표준 $0.25/$1.50 → Flex $0.125/$0.75, gemini-3.1-flash-lite 기준).
         # 대가는 혼잡할 때 큐에 들어갈 수 있다는 것인데, 이 함수의 호출부(reduce·

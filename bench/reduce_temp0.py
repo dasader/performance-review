@@ -43,6 +43,8 @@ ARMS = {
     "temp0+topk1+seed": {"temperature": 0, "top_k": 1, "seed": 20260905},
 }
 
+MODEL = None
+
 async def gen(client, user, arm, sem):
     cfg = types.GenerateContentConfig(system_instruction=REDUCE_INSTRUCTION,
         thinking_config=types.ThinkingConfig(thinking_level=reducer.settings.thinking_reduce),
@@ -51,7 +53,7 @@ async def gen(client, user, arm, sem):
     async with sem:
         for a in range(4):
             try:
-                r = await asyncio.to_thread(client.models.generate_content, model=reducer.settings.reduce_model, contents=user, config=cfg)
+                r = await asyncio.to_thread(client.models.generate_content, model=MODEL, contents=user, config=cfg)
                 return r.text or ""
             except Exception as e:
                 if a == 3: raise
@@ -60,7 +62,9 @@ async def gen(client, user, arm, sem):
 async def main():
     import argparse
     ap = argparse.ArgumentParser(); ap.add_argument("--field", default="반도체")
-    ap.add_argument("--arms", default="기본(1.0),temp0,temp0+seed"); args = ap.parse_args()
+    ap.add_argument("--arms", default="기본(1.0),temp0,temp0+seed"); ap.add_argument("--model", default=None); args = ap.parse_args()
+    global MODEL; MODEL = args.model or reducer.settings.reduce_model
+    print(f"모델 {MODEL}")
     db = SessionLocal(); f = db.query(Field).filter(Field.name.like(args.field + "%")).one()
     items = list(inputs(db, f.id)); db.close()
     client = genai.Client(api_key=reducer.settings.gemini_api_key); sem = asyncio.Semaphore(4)
@@ -80,7 +84,7 @@ async def main():
                       "본문": {items[i][0]: [r1[i], r2[i]] for i in range(n)}}
         print(f"{label:<10} 동일 {ident}/{n} · 유사도 평균 {sum(sims)/n:.3f} (최소 {min(sims):.3f}) · 수치 {sum(d1)}→{sum(d2)}개 · {time.monotonic()-t0:.0f}s")
         for name, s_, a, b in res[label]["표본"]: print(f"    {name[:20]:<20} 유사도 {s_:.3f}  수치 {a:>2}→{b:<2}")
-    p = REPO / f"bench/results/reduce-temp0-{args.field}-2026.json"
+    p = REPO / f"bench/results/reduce-temp0-{args.field}-2026{'-' + MODEL if args.model else ''}.json"
     old = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
     old.update(res); res = old
     p.write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8"); print(f"\n→ {p}")

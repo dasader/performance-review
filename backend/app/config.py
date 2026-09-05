@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     # gemini-3.1-flash-lite 항목에서 확인(2026-07 기준). Batch는 표준가의 50%.
     # 표준: 입력 $0.25 / 출력 $1.50 → batch: 입력 $0.125 / 출력 $0.75.
     # 출력 단가는 "including thinking tokens" — thinking 토큰이 출력에 포함돼 과금된다.
+    # 산문·판정 생성의 seed. 값 자체는 무의미하고 고정돼 있다는 것이 중요하다 —
+    # top_k=1과 함께 있을 때만 재현에 기여한다(단독은 무효, gemini_sync.generate 참조).
+    gemini_seed: int = 20260905
     gemini_batch_input_usd_per_1m: float = 0.125
     gemini_batch_output_usd_per_1m: float = 0.75
     # 미리보기 시점엔 실제 논문 title/abstract가 없어 길이를 알 수 없으므로 쓰는
