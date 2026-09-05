@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import threading
 import random
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -16,10 +17,20 @@ logger = logging.getLogger(__name__)
 _client: genai.Client | None = None
 
 
+_client_lock = threading.Lock()
+
+
 def _get_client() -> genai.Client:
+    """지연 생성 + **잠금**. 잠금이 없으면 첫 호출이 동시에 들어올 때(로드맵 행 단위 판정은
+    동시성 6) 스레드마다 Client를 만들고 밀려난 인스턴스가 GC되며 진행 중 요청의 연결을
+    닫는다 — 실측(2026-09-05, 컨테이너 재시작 직후 첫 틱): 판정 3행이
+    `Cannot send a request, as the client has been closed`로 실패. 24시간 로그에서 그 3건뿐.
+    """
     global _client
     if _client is None:
-        _client = genai.Client(api_key=settings.gemini_api_key)
+        with _client_lock:
+            if _client is None:
+                _client = genai.Client(api_key=settings.gemini_api_key)
     return _client
 
 

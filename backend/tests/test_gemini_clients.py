@@ -314,3 +314,27 @@ def test_sync_generate_retries_transient_server_errors_but_not_4xx():
     # SDK가 코드를 노출하지 않고 문자열만 줄 때도 잡는다.
     assert _is_retryable(Exception("503 UNAVAILABLE. high demand"))
     assert not _is_retryable(Exception("400 INVALID_ARGUMENT"))
+
+
+def test_sync_client_singleton_survives_concurrent_first_calls(monkeypatch):
+    """첫 호출이 동시에 6개 들어와도 Client는 하나만 만들어진다.
+
+    잠금이 없던 시절 컨테이너 재시작 직후 첫 틱에서 판정 3행이 "client has been closed"로
+    죽었다 — 스레드마다 만든 Client 중 밀려난 것이 GC되며 연결을 닫은 것."""
+    import threading
+    from app.clients import gemini_sync
+
+    made = []
+
+    class FakeClient:
+        def __init__(self, api_key):
+            made.append(api_key)
+
+    monkeypatch.setattr(gemini_sync.genai, "Client", FakeClient)
+    monkeypatch.setattr(gemini_sync, "_client", None)
+    got = []
+    ts = [threading.Thread(target=lambda: got.append(gemini_sync._get_client())) for _ in range(6)]
+    for t in ts: t.start()
+    for t in ts: t.join()
+    assert len(made) == 1, f"Client가 {len(made)}번 만들어졌다"
+    assert all(g is got[0] for g in got)
