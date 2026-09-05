@@ -75,7 +75,9 @@ async def main():
         sims = [difflib.SequenceMatcher(None, a, b).ratio() for a, b in zip(r1, r2)]
         d1 = [rn.density(a)[0] for a in r1]; d2 = [rn.density(b)[0] for b in r2]
         res[label] = {"동일": f"{ident}/{n}", "유사도 평균": round(sum(sims)/n, 3), "유사도 최소": round(min(sims), 3),
-                      "수치 개수 1회차": sum(d1), "수치 개수 2회차": sum(d2), "표본": [(items[i][0], round(sims[i],3), d1[i], d2[i]) for i in range(n)]}
+                      "수치 개수 1회차": sum(d1), "수치 개수 2회차": sum(d2), "표본": [(items[i][0], round(sims[i],3), d1[i], d2[i]) for i in range(n)],
+                      # 본문을 남긴다 — 퇴화(반복·길이·어휘) 지표는 본문 없이는 사후 계산이 안 된다
+                      "본문": {items[i][0]: [r1[i], r2[i]] for i in range(n)}}
         print(f"{label:<10} 동일 {ident}/{n} · 유사도 평균 {sum(sims)/n:.3f} (최소 {min(sims):.3f}) · 수치 {sum(d1)}→{sum(d2)}개 · {time.monotonic()-t0:.0f}s")
         for name, s_, a, b in res[label]["표본"]: print(f"    {name[:20]:<20} 유사도 {s_:.3f}  수치 {a:>2}→{b:<2}")
     p = REPO / f"bench/results/reduce-temp0-{args.field}-2026.json"
