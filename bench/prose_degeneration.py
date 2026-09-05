@@ -12,7 +12,12 @@ import json, re, sys
 from collections import Counter
 from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
-d = json.loads((REPO / "bench/results/reduce-temp0-반도체-2026.json").read_text(encoding="utf-8"))
+# 인자: [--file 결과JSON] [arm ...]. 모델 비교(`--model`로 만든 파일)도 같은 지표로 본다.
+_args = sys.argv[1:]
+_file = REPO / "bench/results/reduce-temp0-반도체-2026.json"
+if "--file" in _args:
+    i = _args.index("--file"); _file = Path(_args[i + 1]); _args = _args[:i] + _args[i + 2:]
+d = json.loads(_file.read_text(encoding="utf-8"))
 NUM = re.compile(r"\d[\d,.]*\s*(nm|㎚|μm|um|mm|fJ|pJ|mJ|ns|ps|ms|%|배|단|층|TOPS|W/mK|mA|μA|A|V|K|GHz|MHz|nF|pF|Ω|Wh/kg|mAh|cd/m2|㎠|건|편)")
 CITE = re.compile(r"\(([^()]{15,200})\)")
 
@@ -27,7 +32,7 @@ def metrics(t):
             "수치/천자": len(NUM.findall(t))/max(1,len(t))*1000, "인용 수": len(CITE.findall(t)),
             "최다 반복 3gram": longest}
 
-arms = [a for a in sys.argv[1:]] or ["기본(1.0)", "temp0+topk1+seed"]
+arms = _args or ["기본(1.0)", "temp0+topk1+seed"]
 rows = {}
 for arm in arms:
     if arm not in d or "본문" not in d[arm]:
@@ -41,5 +46,5 @@ for k in keys:
     ch = (v[-1]-v[0])/v[0]*100 if v[0] else 0
     fmt = (lambda x: f"{x:.3f}") if k in ("3gram 반복률","어휘 다양도") else (lambda x: f"{x:,.1f}")
     print(f"{k:<16}" + "".join(f"{fmt(x):>22}" for x in v) + f"{ch:>+9.1f}%")
-out = REPO / "bench/results/prose-degeneration-반도체-2026.json"
+out = _file.with_name(_file.stem.replace("reduce-temp0", "prose-degeneration") + ".json")
 out.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8"); print(f"\n→ {out}")
