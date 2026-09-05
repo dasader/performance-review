@@ -33,13 +33,21 @@ def inputs(db, field_id):
         papers = {p.paper_key: p for p in db.query(Paper).filter(Paper.paper_key.in_(keys)).all()}
         if ex: yield sub.name, f"[세부기술: {sub.name} / 2026 / KR]\n" + reducer.format_extractions(ex, papers)
 
-async def gen(client, user, temp, sem):
+ARMS = {
+    "기본(1.0)":        {},
+    "temp0":            {"temperature": 0},
+    "temp0+seed":       {"temperature": 0, "seed": 20260905},
+    "temp0+topk1":      {"temperature": 0, "top_k": 1},
+    "temp0+topp0":      {"temperature": 0, "top_p": 0.0},
+    "temp0+topk1+topp0": {"temperature": 0, "top_k": 1, "top_p": 0.0},
+    "temp0+topk1+seed": {"temperature": 0, "top_k": 1, "seed": 20260905},
+}
+
+async def gen(client, user, arm, sem):
     cfg = types.GenerateContentConfig(system_instruction=REDUCE_INSTRUCTION,
         thinking_config=types.ThinkingConfig(thinking_level=reducer.settings.thinking_reduce),
         max_output_tokens=reducer.settings.gemini_max_output_tokens,
-        service_tier=types.ServiceTier.FLEX,
-        **({"temperature": 0} if temp is not None else {}),
-        **({"seed": 20260905} if temp == "seed" else {}))
+        service_tier=types.ServiceTier.FLEX, **ARMS[arm])
     async with sem:
         for a in range(4):
             try:
@@ -50,14 +58,16 @@ async def gen(client, user, temp, sem):
                 await asyncio.sleep(2 ** a * 2)
 
 async def main():
-    db = SessionLocal(); f = db.query(Field).filter(Field.name.like("반도체%")).one()
+    import argparse
+    ap = argparse.ArgumentParser(); ap.add_argument("--field", default="반도체")
+    ap.add_argument("--arms", default="기본(1.0),temp0,temp0+seed"); args = ap.parse_args()
+    db = SessionLocal(); f = db.query(Field).filter(Field.name.like(args.field + "%")).one()
     items = list(inputs(db, f.id)); db.close()
     client = genai.Client(api_key=reducer.settings.gemini_api_key); sem = asyncio.Semaphore(4)
     print(f"세부기술 {len(items)}건 × {{기본, temp0}} × 2회\n")
     res = {}
-    import sys as _s
-    plan = [("temp0+seed", "seed")] if "--seed-only" in _s.argv else [("기본(1.0)", None), ("temp0", 0), ("temp0+seed", "seed")]
-    for label, temp in plan:
+    for label in [x.strip() for x in args.arms.split(",")]:
+        temp = label
         t0 = time.monotonic()
         outs = await asyncio.gather(*[gen(client, u, temp, sem) for _ in (0, 1) for _, u in items])
         n = len(items); r1, r2 = outs[:n], outs[n:]
@@ -68,9 +78,8 @@ async def main():
                       "수치 개수 1회차": sum(d1), "수치 개수 2회차": sum(d2), "표본": [(items[i][0], round(sims[i],3), d1[i], d2[i]) for i in range(n)]}
         print(f"{label:<10} 동일 {ident}/{n} · 유사도 평균 {sum(sims)/n:.3f} (최소 {min(sims):.3f}) · 수치 {sum(d1)}→{sum(d2)}개 · {time.monotonic()-t0:.0f}s")
         for name, s_, a, b in res[label]["표본"]: print(f"    {name[:20]:<20} 유사도 {s_:.3f}  수치 {a:>2}→{b:<2}")
-    p = REPO / "bench/results/reduce-temp0-반도체-2026.json"
-    if "--seed-only" in _s.argv:
-        old = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
-        old.update(res); res = old
+    p = REPO / f"bench/results/reduce-temp0-{args.field}-2026.json"
+    old = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    old.update(res); res = old
     p.write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8"); print(f"\n→ {p}")
 asyncio.run(main())
